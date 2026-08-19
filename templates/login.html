@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width: 380px; margin: 40px auto;">
+  <h2>Ingresar</h2>
+  <form method="post">
+    <label>Usuario</label>
+    <input type="text" name="usuario" required autofocus>
+    <label>Clave</label>
+    <input type="password" name="clave" required>
+    <button type="submit">Ingresar</button>
+  </form>
+</div>
+{% endblock %}

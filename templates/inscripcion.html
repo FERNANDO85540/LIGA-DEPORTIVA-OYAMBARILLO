@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card">
+  <h2>Inscripción de jugadores — Categoría {{ categoria }}</h2>
+  <form method="post">
+    <label>Cédula</label>
+    <input type="text" name="cedula" required>
+
+    <label>Nombres</label>
+    <input type="text" name="nombres" required>
+
+    <label>Apellidos</label>
+    <input type="text" name="apellidos" required>
+
+    <label>Fecha de nacimiento</label>
+    <input type="date" name="fecha_nacimiento">
+
+    <label>Equipo</label>
+    <select name="equipo" required>
+      <option value="">Seleccione...</option>
+      {% for e in equipos %}
+        <option value="{{ e }}">{{ e }} ({{ cupos[e] }}/{{ cupo_maximo }})</option>
+      {% endfor %}
+    </select>
+
+    <label>Teléfono (opcional)</label>
+    <input type="text" name="telefono">
+
+    <button type="submit">Inscribir jugador</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Cupos por equipo</h2>
+  <div class="cupos-grid">
+    {% for e in equipos %}
+      <div class="cupo-item">
+        <strong>{{ e }}</strong>
+        {{ cupos[e] }} / {{ cupo_maximo }}
+        {% if cupos[e] >= cupo_maximo %}
+          <span class="badge badge-full">Cupo lleno</span>
+        {% else %}
+          <span class="badge badge-ok">Disponible</span>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>Jugadores inscritos ({{ jugadores|length }})</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Equipo</th><th>Nac.</th><th>Teléfono</th><th>Registrado</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for j in jugadores %}
+      <tr>
+        <td>{{ j.cedula }}</td>
+        <td>{{ j.nombres }}</td>
+        <td>{{ j.apellidos }}</td>
+        <td>{{ j.equipo }}</td>
+        <td>{{ j.fecha_nacimiento or '-' }}</td>
+        <td>{{ j.telefono or '-' }}</td>
+        <td>{{ j.fecha_registro }}</td>
+        <td>
+          <form method="post" action="{{ url_for('eliminar_jugador', jugador_id=j.id) }}" onsubmit="return confirm('¿Eliminar este jugador?');">
+            <button type="submit" class="btn-del">Eliminar</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8">Aún no hay jugadores inscritos.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

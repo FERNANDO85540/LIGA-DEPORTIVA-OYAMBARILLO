@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Liga Deportiva Oyambarillo{% endblock %}</title>
+<style>
+  :root {
+    --verde: #1e7d32;
+    --verde-osc: #14532d;
+    --fondo: #f4f6f5;
+    --borde: #dfe3e0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: var(--fondo);
+    color: #1c1c1c;
+  }
+  header {
+    background: linear-gradient(135deg, var(--verde), var(--verde-osc));
+    color: white;
+    padding: 18px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  header h1 { margin: 0; font-size: 1.3rem; }
+  header a { color: white; text-decoration: none; font-size: 0.9rem; opacity: 0.9; }
+  header a:hover { opacity: 1; text-decoration: underline; }
+  main { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
+  .card {
+    background: white;
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .flash {
+    background: #fff8e1;
+    border: 1px solid #ffe082;
+    color: #6d4c00;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+  label { display: block; margin: 10px 0 4px; font-weight: 600; font-size: 0.9rem; }
+  input, select {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    font-size: 0.95rem;
+  }
+  button {
+    background: var(--verde);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    margin-top: 14px;
+  }
+  button:hover { background: var(--verde-osc); }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--borde); }
+  th { background: #eef3ee; }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .badge-ok { background: #e6f4ea; color: var(--verde-osc); }
+  .badge-full { background: #fdecea; color: #a13a2f; }
+  .btn-del {
+    background: transparent;
+    color: #a13a2f;
+    border: 1px solid #a13a2f;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    margin: 0;
+  }
+  .btn-del:hover { background: #fdecea; }
+  .cupos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 8px; }
+  .cupo-item { border: 1px solid var(--borde); border-radius: 8px; padding: 10px 12px; font-size: 0.85rem; }
+  .cupo-item strong { display: block; font-size: 0.95rem; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚽ Liga Deportiva Oyambarillo</h1>
+  {% if session.get('logged_in') %}
+    <a href="{{ url_for('logout') }}">Cerrar sesión</a>
+  {% endif %}
+</header>
+<main>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      {% for m in messages %}
+        <div class="flash">{{ m }}</div>
+      {% endfor %}
+    {% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>
