@@ -16,7 +16,7 @@ ADMIN_PASS = os.environ.get("ADMIN_PASS", "Oyambarillo2026")
 CUPO_MAXIMO_EQUIPO = 35
 CATEGORIA_ACTIVA = "Sub 45"
 
-EQUIPOS = [
+EQUIPOS_INICIALES = [
     "San Juan", "El Progreso", "La Union", "Santa Rosa",
     "Los Andes", "Independiente", "Deportivo Central", "Juventud",
 ]
@@ -51,6 +51,16 @@ def init_db():
             fecha_registro TEXT NOT NULL
         )
     """)
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS equipos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT NOT NULL UNIQUE
+        )
+    """)
+    count = db.execute("SELECT COUNT(*) c FROM equipos").fetchone()[0]
+    if count == 0:
+        for nombre in EQUIPOS_INICIALES:
+            db.execute("INSERT INTO equipos (nombre) VALUES (?)", (nombre,))
     db.commit()
     db.close()
 
@@ -85,6 +95,57 @@ def logout():
 @app.route("/")
 def index():
     return redirect(url_for("inscripcion")) if session.get("logged_in") else redirect(url_for("login"))
+
+
+@app.route("/equipos/agregar", methods=["POST"])
+@login_required
+def agregar_equipo():
+    db = get_db()
+    nombre = request.form.get("nombre", "").strip()
+    if nombre:
+        try:
+            db.execute("INSERT INTO equipos (nombre) VALUES (?)", (nombre,))
+            db.commit()
+            flash(f"Equipo '{nombre}' agregado.")
+        except sqlite3.IntegrityError:
+            flash(f"Ya existe un equipo llamado '{nombre}'.")
+    return redirect(url_for("inscripcion"))
+
+
+@app.route("/equipos/<int:equipo_id>/renombrar", methods=["POST"])
+@login_required
+def renombrar_equipo(equipo_id):
+    db = get_db()
+    nuevo_nombre = request.form.get("nombre", "").strip()
+    if nuevo_nombre:
+        actual = db.execute("SELECT nombre FROM equipos WHERE id = ?", (equipo_id,)).fetchone()
+        if actual:
+            try:
+                db.execute("UPDATE equipos SET nombre = ? WHERE id = ?", (nuevo_nombre, equipo_id))
+                db.execute("UPDATE jugadores SET equipo = ? WHERE equipo = ?", (nuevo_nombre, actual["nombre"]))
+                db.commit()
+                flash(f"Equipo renombrado a '{nuevo_nombre}'.")
+            except sqlite3.IntegrityError:
+                flash(f"Ya existe un equipo llamado '{nuevo_nombre}'.")
+    return redirect(url_for("inscripcion"))
+
+
+@app.route("/equipos/<int:equipo_id>/eliminar", methods=["POST"])
+@login_required
+def eliminar_equipo(equipo_id):
+    db = get_db()
+    equipo = db.execute("SELECT nombre FROM equipos WHERE id = ?", (equipo_id,)).fetchone()
+    if equipo:
+        jugadores_count = db.execute(
+            "SELECT COUNT(*) c FROM jugadores WHERE equipo = ?", (equipo["nombre"],)
+        ).fetchone()["c"]
+        if jugadores_count > 0:
+            flash(f"No se puede eliminar '{equipo['nombre']}': tiene {jugadores_count} jugador(es) inscritos.")
+        else:
+            db.execute("DELETE FROM equipos WHERE id = ?", (equipo_id,))
+            db.commit()
+            flash(f"Equipo '{equipo['nombre']}' eliminado.")
+    return redirect(url_for("inscripcion"))
 
 
 @app.route("/inscripcion", methods=["GET", "POST"])
@@ -130,18 +191,20 @@ def inscripcion():
         "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos", (CATEGORIA_ACTIVA,)
     ).fetchall()
 
+    equipos_rows = db.execute("SELECT * FROM equipos ORDER BY nombre").fetchall()
+
     cupos = {}
-    for equipo in EQUIPOS:
+    for equipo in equipos_rows:
         c = db.execute(
             "SELECT COUNT(*) c FROM jugadores WHERE equipo = ? AND categoria = ?",
-            (equipo, CATEGORIA_ACTIVA),
+            (equipo["nombre"], CATEGORIA_ACTIVA),
         ).fetchone()["c"]
-        cupos[equipo] = c
+        cupos[equipo["nombre"]] = c
 
     return render_template(
         "inscripcion.html",
         jugadores=jugadores,
-        equipos=EQUIPOS,
+        equipos=equipos_rows,
         cupos=cupos,
         cupo_maximo=CUPO_MAXIMO_EQUIPO,
         categoria=CATEGORIA_ACTIVA,

@@ -10,9 +10,25 @@
   <h2>Equipos participantes</h2>
   <div class="cupos-grid">
     {% for e in equipos %}
-      <div class="cupo-item"><strong>{{ e }}</strong></div>
+      <div class="cupo-item">
+        <form method="post" action="{{ url_for('renombrar_equipo', equipo_id=e.id) }}" style="display:flex; gap:6px; align-items:center;">
+          <input type="text" name="nombre" value="{{ e.nombre }}" style="padding:4px 6px; font-size:0.85rem;">
+          <button type="submit" class="btn-del" style="color: var(--verde-osc); border-color: var(--verde-osc); padding:4px 8px;">Guardar</button>
+        </form>
+        <form method="post" action="{{ url_for('eliminar_equipo', equipo_id=e.id) }}" onsubmit="return confirm('¿Eliminar el equipo {{ e.nombre }}?');" style="margin-top:6px;">
+          <button type="submit" class="btn-del" style="padding:4px 8px;">Eliminar</button>
+        </form>
+      </div>
     {% endfor %}
   </div>
+
+  <form method="post" action="{{ url_for('agregar_equipo') }}" style="margin-top:16px; display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+    <div style="flex:1; min-width:200px;">
+      <label>Agregar nuevo equipo</label>
+      <input type="text" name="nombre" placeholder="Nombre del equipo" required>
+    </div>
+    <button type="submit">Agregar equipo</button>
+  </form>
 </div>
 
 <div class="card">
@@ -34,7 +50,7 @@
     <select name="equipo" required>
       <option value="">Seleccione...</option>
       {% for e in equipos %}
-        <option value="{{ e }}">{{ e }} ({{ cupos[e] }}/{{ cupo_maximo }})</option>
+        <option value="{{ e.nombre }}">{{ e.nombre }} ({{ cupos[e.nombre] }}/{{ cupo_maximo }})</option>
       {% endfor %}
     </select>
 
@@ -50,9 +66,9 @@
   <div class="cupos-grid">
     {% for e in equipos %}
       <div class="cupo-item">
-        <strong>{{ e }}</strong>
-        {{ cupos[e] }} / {{ cupo_maximo }}
-        {% if cupos[e] >= cupo_maximo %}
+        <strong>{{ e.nombre }}</strong>
+        {{ cupos[e.nombre] }} / {{ cupo_maximo }}
+        {% if cupos[e.nombre] >= cupo_maximo %}
           <span class="badge badge-full">Cupo lleno</span>
         {% else %}
           <span class="badge badge-ok">Disponible</span>
