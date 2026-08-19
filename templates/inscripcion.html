@@ -1,6 +1,20 @@
 {% extends "base.html" %}
 {% block content %}
 
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.6rem;">CAMPEONATO SUB 45</h1>
+  <p style="margin:6px 0 0; font-size:1.05rem; opacity:0.95;">LIGA DEPORTIVA OYAMBARILLO</p>
+</div>
+
+<div class="card">
+  <h2>Equipos participantes</h2>
+  <div class="cupos-grid">
+    {% for e in equipos %}
+      <div class="cupo-item"><strong>{{ e }}</strong></div>
+    {% endfor %}
+  </div>
+</div>
+
 <div class="card">
   <h2>Inscripción de jugadores — Categoría {{ categoria }}</h2>
   <form method="post">
