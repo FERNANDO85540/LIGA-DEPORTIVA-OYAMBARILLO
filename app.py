@@ -15,7 +15,9 @@ ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "Oyambarillo2026")
 
 CUPO_MAXIMO_EQUIPO = 35
+CUPO_MAXIMO_JUVENIL = 3
 CATEGORIA_ACTIVA = "Sub 45"
+SUBCATEGORIAS = ["Sub 45", "Juvenil"]
 
 EQUIPOS_INICIALES = [
     "San Juan", "El Progreso", "La Union", "Santa Rosa",
@@ -48,10 +50,13 @@ def init_db():
             fecha_nacimiento TEXT,
             equipo TEXT NOT NULL,
             categoria TEXT NOT NULL,
-            telefono TEXT,
+            subcategoria TEXT NOT NULL DEFAULT 'Sub 45',
             fecha_registro TEXT NOT NULL
         )
     """)
+    jcols = [r[1] for r in db.execute("PRAGMA table_info(jugadores)").fetchall()]
+    if "subcategoria" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN subcategoria TEXT NOT NULL DEFAULT 'Sub 45'")
     db.execute("""
         CREATE TABLE IF NOT EXISTS equipos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,6 +83,13 @@ def _to_float(value):
         return round(float(str(value).replace(",", ".").strip()), 2)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _contar_juveniles(db, equipo):
+    return db.execute(
+        "SELECT COUNT(*) c FROM jugadores WHERE equipo = ? AND categoria = ? AND subcategoria = 'Juvenil'",
+        (equipo, CATEGORIA_ACTIVA),
+    ).fetchone()["c"]
 
 
 def login_required(f):
@@ -178,6 +190,7 @@ def detalle_equipo(equipo_id):
     ).fetchall()
 
     saldo = equipo["valor_inscripcion"] - equipo["abono"]
+    juveniles_count = _contar_juveniles(db, equipo["nombre"])
 
     return render_template(
         "detalle_equipo.html",
@@ -186,6 +199,8 @@ def detalle_equipo(equipo_id):
         saldo=saldo,
         cupo_maximo=CUPO_MAXIMO_EQUIPO,
         categoria=CATEGORIA_ACTIVA,
+        juveniles_count=juveniles_count,
+        cupo_maximo_juvenil=CUPO_MAXIMO_JUVENIL,
     )
 
 
@@ -237,6 +252,8 @@ def subir_nomina(equipo_id):
     agregados = 0
     duplicados = 0
     incompletos = 0
+    omitidos_cupo_juvenil = 0
+    juveniles_actuales = _contar_juveniles(db, equipo["nombre"])
     filas = list(ws.iter_rows(min_row=2, values_only=True))
 
     for fila in filas:
@@ -251,7 +268,6 @@ def subir_nomina(equipo_id):
         nombres = str(fila[1]).strip() if len(fila) > 1 and fila[1] is not None else ""
         apellidos = str(fila[2]).strip() if len(fila) > 2 and fila[2] is not None else ""
         fecha_nac = fila[3] if len(fila) > 3 else None
-        telefono = str(fila[4]).strip() if len(fila) > 4 and fila[4] is not None else ""
 
         if hasattr(fecha_nac, "strftime"):
             fecha_nac = fecha_nac.strftime("%Y-%m-%d")
@@ -264,13 +280,21 @@ def subir_nomina(equipo_id):
             incompletos += 1
             continue
 
+        subcategoria = "Juvenil" if fecha_nac.startswith("1982") else "Sub 45"
+
+        if subcategoria == "Juvenil":
+            if juveniles_actuales >= CUPO_MAXIMO_JUVENIL:
+                omitidos_cupo_juvenil += 1
+                continue
+            juveniles_actuales += 1
+
         try:
             db.execute(
                 """INSERT INTO jugadores
-                   (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, telefono, fecha_registro)
+                   (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, fecha_registro)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (cedula, nombres, apellidos, fecha_nac, equipo["nombre"], CATEGORIA_ACTIVA,
-                 telefono, datetime.now().strftime("%Y-%m-%d %H:%M")),
+                 subcategoria, datetime.now().strftime("%Y-%m-%d %H:%M")),
             )
             agregados += 1
         except sqlite3.IntegrityError:
@@ -283,6 +307,8 @@ def subir_nomina(equipo_id):
         mensaje += f" {duplicados} omitido(s) por cédula ya registrada."
     if incompletos:
         mensaje += f" {incompletos} fila(s) omitida(s) por datos incompletos."
+    if omitidos_cupo_juvenil:
+        mensaje += f" {omitidos_cupo_juvenil} omitido(s) por superar el cupo máximo de {CUPO_MAXIMO_JUVENIL} Juvenil."
     flash(mensaje)
 
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
@@ -299,7 +325,9 @@ def inscripcion():
         apellidos = request.form.get("apellidos", "").strip()
         fecha_nacimiento = request.form.get("fecha_nacimiento", "").strip()
         equipo = request.form.get("equipo", "").strip()
-        telefono = request.form.get("telefono", "").strip()
+        subcategoria = request.form.get("subcategoria", "Sub 45").strip()
+        if subcategoria not in SUBCATEGORIAS:
+            subcategoria = "Sub 45"
 
         if not (cedula and nombres and apellidos and equipo):
             flash("Cédula, nombres, apellidos y equipo son obligatorios.")
@@ -311,14 +339,16 @@ def inscripcion():
 
             if count >= CUPO_MAXIMO_EQUIPO:
                 flash(f"El equipo {equipo} ya alcanzó el cupo máximo de {CUPO_MAXIMO_EQUIPO} jugadores en {CATEGORIA_ACTIVA}.")
+            elif subcategoria == "Juvenil" and _contar_juveniles(db, equipo) >= CUPO_MAXIMO_JUVENIL:
+                flash(f"El equipo {equipo} ya alcanzó el cupo máximo de {CUPO_MAXIMO_JUVENIL} jugadores Juvenil.")
             else:
                 try:
                     db.execute(
                         """INSERT INTO jugadores
-                           (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, telefono, fecha_registro)
+                           (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, fecha_registro)
                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                         (cedula, nombres, apellidos, fecha_nacimiento, equipo, CATEGORIA_ACTIVA,
-                         telefono, datetime.now().strftime("%Y-%m-%d %H:%M")),
+                         subcategoria, datetime.now().strftime("%Y-%m-%d %H:%M")),
                     )
                     db.commit()
                     flash(f"Jugador {nombres} {apellidos} inscrito correctamente en {equipo}.")
@@ -348,6 +378,7 @@ def inscripcion():
         cupos=cupos,
         cupo_maximo=CUPO_MAXIMO_EQUIPO,
         categoria=CATEGORIA_ACTIVA,
+        subcategorias=SUBCATEGORIAS,
     )
 
 

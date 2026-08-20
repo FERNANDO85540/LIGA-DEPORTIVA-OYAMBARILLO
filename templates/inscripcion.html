@@ -57,8 +57,12 @@
       {% endfor %}
     </select>
 
-    <label>Teléfono (opcional)</label>
-    <input type="text" name="telefono">
+    <label>Categoría</label>
+    <select name="subcategoria">
+      {% for s in subcategorias %}
+        <option value="{{ s }}">{{ categoria }}{% if s == 'Juvenil' %} - Juvenil (1982){% endif %}</option>
+      {% endfor %}
+    </select>
 
     <button type="submit">Inscribir jugador</button>
   </form>
@@ -86,7 +90,7 @@
   <table>
     <thead>
       <tr>
-        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Equipo</th><th>Nac.</th><th>Teléfono</th><th>Registrado</th><th></th>
+        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Equipo</th><th>Categoría</th><th>Nac.</th><th>Registrado</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -96,8 +100,8 @@
         <td>{{ j.nombres }}</td>
         <td>{{ j.apellidos }}</td>
         <td>{{ j.equipo }}</td>
+        <td>{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
         <td>{{ j.fecha_nacimiento or '-' }}</td>
-        <td>{{ j.telefono or '-' }}</td>
         <td>{{ j.fecha_registro }}</td>
         <td>
           <form method="post" action="{{ url_for('eliminar_jugador', jugador_id=j.id) }}" onsubmit="return confirm('¿Eliminar este jugador?');">
