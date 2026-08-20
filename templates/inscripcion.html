@@ -11,6 +11,9 @@
   <div class="cupos-grid">
     {% for e in equipos %}
       <div class="cupo-item">
+        <a href="{{ url_for('detalle_equipo', equipo_id=e.id) }}" style="display:block; margin-bottom:6px; font-weight:600; color: var(--verde-osc); text-decoration:none;">
+          🔎 Ver equipo ({{ cupos[e.nombre] }}/{{ cupo_maximo }})
+        </a>
         <form method="post" action="{{ url_for('renombrar_equipo', equipo_id=e.id) }}" style="display:flex; gap:6px; align-items:center;">
           <input type="text" name="nombre" value="{{ e.nombre }}" style="padding:4px 6px; font-size:0.85rem;">
           <button type="submit" class="btn-del" style="color: var(--verde-osc); border-color: var(--verde-osc); padding:4px 8px;">Guardar</button>

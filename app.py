@@ -4,6 +4,7 @@ from datetime import datetime
 from functools import wraps
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g
+from openpyxl import load_workbook
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "cambia-esta-clave-en-produccion")
@@ -54,15 +55,29 @@ def init_db():
     db.execute("""
         CREATE TABLE IF NOT EXISTS equipos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT NOT NULL UNIQUE
+            nombre TEXT NOT NULL UNIQUE,
+            valor_inscripcion REAL NOT NULL DEFAULT 0,
+            abono REAL NOT NULL DEFAULT 0
         )
     """)
+    cols = [r[1] for r in db.execute("PRAGMA table_info(equipos)").fetchall()]
+    if "valor_inscripcion" not in cols:
+        db.execute("ALTER TABLE equipos ADD COLUMN valor_inscripcion REAL NOT NULL DEFAULT 0")
+    if "abono" not in cols:
+        db.execute("ALTER TABLE equipos ADD COLUMN abono REAL NOT NULL DEFAULT 0")
     count = db.execute("SELECT COUNT(*) c FROM equipos").fetchone()[0]
     if count == 0:
         for nombre in EQUIPOS_INICIALES:
             db.execute("INSERT INTO equipos (nombre) VALUES (?)", (nombre,))
     db.commit()
     db.close()
+
+
+def _to_float(value):
+    try:
+        return round(float(str(value).replace(",", ".").strip()), 2)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def login_required(f):
@@ -146,6 +161,131 @@ def eliminar_equipo(equipo_id):
             db.commit()
             flash(f"Equipo '{equipo['nombre']}' eliminado.")
     return redirect(url_for("inscripcion"))
+
+
+@app.route("/equipo/<int:equipo_id>", methods=["GET"])
+@login_required
+def detalle_equipo(equipo_id):
+    db = get_db()
+    equipo = db.execute("SELECT * FROM equipos WHERE id = ?", (equipo_id,)).fetchone()
+    if not equipo:
+        flash("Equipo no encontrado.")
+        return redirect(url_for("inscripcion"))
+
+    jugadores = db.execute(
+        "SELECT * FROM jugadores WHERE equipo = ? AND categoria = ? ORDER BY apellidos",
+        (equipo["nombre"], CATEGORIA_ACTIVA),
+    ).fetchall()
+
+    saldo = equipo["valor_inscripcion"] - equipo["abono"]
+
+    return render_template(
+        "detalle_equipo.html",
+        equipo=equipo,
+        jugadores=jugadores,
+        saldo=saldo,
+        cupo_maximo=CUPO_MAXIMO_EQUIPO,
+        categoria=CATEGORIA_ACTIVA,
+    )
+
+
+@app.route("/equipo/<int:equipo_id>/pago", methods=["POST"])
+@login_required
+def actualizar_pago_equipo(equipo_id):
+    db = get_db()
+    valor_inscripcion = _to_float(request.form.get("valor_inscripcion", "0"))
+    abono = _to_float(request.form.get("abono", "0"))
+    db.execute(
+        "UPDATE equipos SET valor_inscripcion = ?, abono = ? WHERE id = ?",
+        (valor_inscripcion, abono, equipo_id),
+    )
+    db.commit()
+    flash("Datos de pago actualizados.")
+    return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
+
+
+@app.route("/equipo/<int:equipo_id>/subir_nomina", methods=["POST"])
+@login_required
+def subir_nomina(equipo_id):
+    db = get_db()
+    equipo = db.execute("SELECT * FROM equipos WHERE id = ?", (equipo_id,)).fetchone()
+    if not equipo:
+        flash("Equipo no encontrado.")
+        return redirect(url_for("inscripcion"))
+
+    archivo = request.files.get("archivo")
+    if not archivo or not archivo.filename:
+        flash("Selecciona un archivo Excel (.xlsx) para subir.")
+        return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
+
+    if not archivo.filename.lower().endswith(".xlsx"):
+        flash("El archivo debe ser formato .xlsx (Excel).")
+        return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
+
+    try:
+        wb = load_workbook(archivo, data_only=True)
+        ws = wb.active
+    except Exception:
+        flash("No se pudo leer el archivo. Verifica que sea un Excel válido.")
+        return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
+
+    cupo_actual = db.execute(
+        "SELECT COUNT(*) c FROM jugadores WHERE equipo = ? AND categoria = ?",
+        (equipo["nombre"], CATEGORIA_ACTIVA),
+    ).fetchone()["c"]
+
+    agregados = 0
+    duplicados = 0
+    incompletos = 0
+    filas = list(ws.iter_rows(min_row=2, values_only=True))
+
+    for fila in filas:
+        if cupo_actual + agregados >= CUPO_MAXIMO_EQUIPO:
+            flash(f"Se alcanzó el cupo máximo de {CUPO_MAXIMO_EQUIPO}. No se cargaron todas las filas.")
+            break
+
+        if not fila or all(c is None or str(c).strip() == "" for c in fila):
+            continue
+
+        cedula = str(fila[0]).strip() if len(fila) > 0 and fila[0] is not None else ""
+        nombres = str(fila[1]).strip() if len(fila) > 1 and fila[1] is not None else ""
+        apellidos = str(fila[2]).strip() if len(fila) > 2 and fila[2] is not None else ""
+        fecha_nac = fila[3] if len(fila) > 3 else None
+        telefono = str(fila[4]).strip() if len(fila) > 4 and fila[4] is not None else ""
+
+        if hasattr(fecha_nac, "strftime"):
+            fecha_nac = fecha_nac.strftime("%Y-%m-%d")
+        elif fecha_nac is not None:
+            fecha_nac = str(fecha_nac).strip()
+        else:
+            fecha_nac = ""
+
+        if not (cedula and nombres and apellidos):
+            incompletos += 1
+            continue
+
+        try:
+            db.execute(
+                """INSERT INTO jugadores
+                   (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, telefono, fecha_registro)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (cedula, nombres, apellidos, fecha_nac, equipo["nombre"], CATEGORIA_ACTIVA,
+                 telefono, datetime.now().strftime("%Y-%m-%d %H:%M")),
+            )
+            agregados += 1
+        except sqlite3.IntegrityError:
+            duplicados += 1
+
+    db.commit()
+
+    mensaje = f"{agregados} jugador(es) cargado(s) correctamente."
+    if duplicados:
+        mensaje += f" {duplicados} omitido(s) por cédula ya registrada."
+    if incompletos:
+        mensaje += f" {incompletos} fila(s) omitida(s) por datos incompletos."
+    flash(mensaje)
+
+    return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
 
 @app.route("/inscripcion", methods=["GET", "POST"])
