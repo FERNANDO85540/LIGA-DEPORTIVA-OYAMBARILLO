@@ -51,9 +51,12 @@
       <p style="color:#888;">Sin foto cargada aún.</p>
     {% endif %}
 
-    <div style="margin-top:20px;">
+    <div style="margin-top:20px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
       <a href="{{ url_for('carnet_jugador', jugador_id=jugador.id) }}" target="_blank">
-        <button type="button">🪪 Generar / ver carnet</button>
+        <button type="button">🪪 Ver carnet</button>
+      </a>
+      <a href="{{ url_for('carnet_jugador_pdf', jugador_id=jugador.id) }}">
+        <button type="button">⬇️ Descargar PDF</button>
       </a>
     </div>
   </div>

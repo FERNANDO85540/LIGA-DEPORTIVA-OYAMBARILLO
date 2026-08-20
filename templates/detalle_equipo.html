@@ -53,6 +53,34 @@
 {% endif %}
 
 <div class="card">
+  <h2>Registrar nuevo jugador</h2>
+  <form method="post" action="{{ url_for('agregar_jugador_equipo', equipo_id=equipo.id) }}">
+    <label>Cédula</label>
+    <input type="text" name="cedula" required>
+
+    <label>Nombres</label>
+    <input type="text" name="nombres" required>
+
+    <label>Apellidos</label>
+    <input type="text" name="apellidos" required>
+
+    <label>Fecha de nacimiento</label>
+    <input type="date" name="fecha_nacimiento">
+
+    <label>Categoría</label>
+    <select name="subcategoria">
+      <option value="Sub 45">{{ categoria }}</option>
+      <option value="Juvenil">{{ categoria }} - Juvenil (1982)</option>
+    </select>
+
+    <label>Número de camiseta (opcional)</label>
+    <input type="text" name="numero_camiseta" maxlength="3">
+
+    <button type="submit">Registrar jugador</button>
+  </form>
+</div>
+
+<div class="card">
   <h2>Subir nómina de jugadores (Excel)</h2>
   <p style="font-size:0.85rem; color:#555;">
     El archivo debe ser <strong>.xlsx</strong> con la primera fila de encabezados y, desde la fila 2, las columnas en este orden:
@@ -67,6 +95,7 @@
 
 <div class="card">
   <h2>Jugadores inscritos ({{ jugadores|length }})</h2>
+  <p><a href="{{ url_for('exportar_equipo', equipo_id=equipo.id) }}"><button type="button">⬇️ Descargar Excel de este equipo</button></a></p>
   <table>
     <thead>
       <tr>

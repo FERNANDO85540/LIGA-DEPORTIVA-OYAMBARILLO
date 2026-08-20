@@ -6,7 +6,7 @@ from datetime import datetime, date
 from functools import wraps
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g, send_file
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 app = Flask(__name__)
@@ -299,6 +299,68 @@ def detalle_equipo(equipo_id):
     )
 
 
+def _exportar_jugadores_excel(jugadores, nombre_archivo, incluir_equipo=False):
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Jugadores"
+    encabezados = ["Cédula", "Nombres", "Apellidos", "Fecha nacimiento", "Categoría"]
+    if incluir_equipo:
+        encabezados.insert(0, "Equipo")
+    encabezados += ["Número camiseta", "Registrado"]
+    ws.append(encabezados)
+
+    for j in jugadores:
+        categoria = j["categoria"] + (" - Juvenil" if j["subcategoria"] == "Juvenil" else "")
+        fila = [j["cedula"], j["nombres"], j["apellidos"], j["fecha_nacimiento"] or "", categoria]
+        if incluir_equipo:
+            fila.insert(0, j["equipo"])
+        fila += [j["numero_camiseta"] or "", j["fecha_registro"]]
+        ws.append(fila)
+
+    for i, _ in enumerate(encabezados, start=1):
+        ws.column_dimensions[chr(64 + i)].width = 18
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(
+        buf,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=nombre_archivo,
+    )
+
+
+@app.route("/equipo/<int:equipo_id>/exportar")
+@login_required
+def exportar_equipo(equipo_id):
+    db = get_db()
+    equipo = db.execute("SELECT * FROM equipos WHERE id = ?", (equipo_id,)).fetchone()
+    if not equipo:
+        flash("Equipo no encontrado.")
+        return redirect(url_for("index"))
+    if not equipo_permitido(equipo_id):
+        flash("No tienes acceso a ese equipo.")
+        return redirect(url_for("index"))
+
+    jugadores = db.execute(
+        "SELECT * FROM jugadores WHERE equipo = ? AND categoria = ? ORDER BY apellidos",
+        (equipo["nombre"], CATEGORIA_ACTIVA),
+    ).fetchall()
+    nombre_archivo = f"jugadores_{equipo['nombre'].replace(' ', '_')}.xlsx"
+    return _exportar_jugadores_excel(jugadores, nombre_archivo)
+
+
+@app.route("/exportar_general")
+@admin_required
+def exportar_general():
+    db = get_db()
+    jugadores = db.execute(
+        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos", (CATEGORIA_ACTIVA,)
+    ).fetchall()
+    return _exportar_jugadores_excel(jugadores, "jugadores_liga_oyambarillo.xlsx", incluir_equipo=True)
+
+
 @app.route("/equipo/<int:equipo_id>/pago", methods=["POST"])
 @admin_required
 def actualizar_pago_equipo(equipo_id):
@@ -311,6 +373,68 @@ def actualizar_pago_equipo(equipo_id):
     )
     db.commit()
     flash("Datos de pago actualizados.")
+    return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
+
+
+def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacimiento, subcategoria, numero_camiseta=""):
+    if subcategoria not in SUBCATEGORIAS:
+        subcategoria = "Sub 45"
+
+    if not (cedula and nombres and apellidos):
+        return None, "Cédula, nombres y apellidos son obligatorios."
+
+    count = db.execute(
+        "SELECT COUNT(*) c FROM jugadores WHERE equipo = ? AND categoria = ?",
+        (equipo_nombre, CATEGORIA_ACTIVA),
+    ).fetchone()["c"]
+    if count >= CUPO_MAXIMO_EQUIPO:
+        return None, f"El equipo {equipo_nombre} ya alcanzó el cupo máximo de {CUPO_MAXIMO_EQUIPO} jugadores."
+
+    if subcategoria == "Juvenil" and _contar_juveniles(db, equipo_nombre) >= CUPO_MAXIMO_JUVENIL:
+        return None, f"El equipo {equipo_nombre} ya alcanzó el cupo máximo de {CUPO_MAXIMO_JUVENIL} jugadores Juvenil."
+
+    try:
+        cur = db.execute(
+            """INSERT INTO jugadores
+               (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, numero_camiseta, foto_token, fecha_registro)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (cedula, nombres, apellidos, fecha_nacimiento, equipo_nombre, CATEGORIA_ACTIVA,
+             subcategoria, numero_camiseta, uuid.uuid4().hex, datetime.now().strftime("%Y-%m-%d %H:%M")),
+        )
+        db.commit()
+        return cur.lastrowid, None
+    except sqlite3.IntegrityError:
+        return None, f"Ya existe un jugador registrado con la cédula {cedula}."
+
+
+@app.route("/equipo/<int:equipo_id>/agregar_jugador", methods=["POST"])
+@login_required
+def agregar_jugador_equipo(equipo_id):
+    db = get_db()
+    equipo = db.execute("SELECT * FROM equipos WHERE id = ?", (equipo_id,)).fetchone()
+    if not equipo:
+        flash("Equipo no encontrado.")
+        return redirect(url_for("index"))
+    if not equipo_permitido(equipo_id):
+        flash("No tienes acceso a ese equipo.")
+        return redirect(url_for("index"))
+
+    jugador_id, error = _insertar_jugador(
+        db,
+        equipo["nombre"],
+        request.form.get("cedula", "").strip(),
+        request.form.get("nombres", "").strip(),
+        request.form.get("apellidos", "").strip(),
+        request.form.get("fecha_nacimiento", "").strip(),
+        request.form.get("subcategoria", "Sub 45").strip(),
+        request.form.get("numero_camiseta", "").strip(),
+    )
+    if error:
+        flash(error)
+    else:
+        flash("Jugador registrado. Completa su ficha y envíale el link de foto.")
+        return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
+
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
 
@@ -673,6 +797,26 @@ def carnet_jugador(jugador_id):
         flash("No tienes acceso a ese jugador.")
         return redirect(url_for("index"))
     return _carnet_response(jugador)
+
+
+@app.route("/jugador/<int:jugador_id>/carnet.pdf")
+@login_required
+def carnet_jugador_pdf(jugador_id):
+    db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
+    if not jugador:
+        flash("Jugador no encontrado.")
+        return redirect(url_for("index"))
+    if not jugador_permitido(db, jugador):
+        flash("No tienes acceso a ese jugador.")
+        return redirect(url_for("index"))
+
+    frente, reverso = _generar_carnet(jugador)
+    buf = io.BytesIO()
+    frente.save(buf, format="PDF", save_all=True, append_images=[reverso])
+    buf.seek(0)
+    nombre_archivo = f"carnet_{jugador['cedula']}.pdf"
+    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=nombre_archivo)
 
 
 @app.route("/jugador/<int:jugador_id>/eliminar", methods=["POST"])
