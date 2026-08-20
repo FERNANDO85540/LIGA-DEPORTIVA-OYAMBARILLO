@@ -135,10 +135,17 @@ def admin_required(f):
     return wrapper
 
 
-def equipo_permitido(equipo_nombre):
+def equipo_permitido(equipo_id):
     if session.get("rol") == "admin":
         return True
-    return session.get("equipo_nombre") == equipo_nombre
+    return session.get("equipo_id") == equipo_id
+
+
+def jugador_permitido(db, jugador):
+    if session.get("rol") == "admin":
+        return True
+    fila = db.execute("SELECT id FROM equipos WHERE nombre = ?", (jugador["equipo"],)).fetchone()
+    return fila is not None and session.get("equipo_id") == fila["id"]
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -180,7 +187,13 @@ def index():
     if not session.get("logged_in"):
         return redirect(url_for("login"))
     if session.get("rol") == "equipo":
-        return redirect(url_for("detalle_equipo", equipo_id=session.get("equipo_id")))
+        db = get_db()
+        equipo = db.execute("SELECT id FROM equipos WHERE id = ?", (session.get("equipo_id"),)).fetchone()
+        if not equipo:
+            session.clear()
+            flash("Tu sesión ya no es válida. Ingresa nuevamente.")
+            return redirect(url_for("login"))
+        return redirect(url_for("detalle_equipo", equipo_id=equipo["id"]))
     return redirect(url_for("inscripcion"))
 
 
@@ -260,9 +273,9 @@ def detalle_equipo(equipo_id):
     equipo = db.execute("SELECT * FROM equipos WHERE id = ?", (equipo_id,)).fetchone()
     if not equipo:
         flash("Equipo no encontrado.")
-        return redirect(url_for("inscripcion"))
+        return redirect(url_for("index"))
 
-    if not equipo_permitido(equipo["nombre"]):
+    if not equipo_permitido(equipo_id):
         flash("No tienes acceso a ese equipo.")
         return redirect(url_for("index"))
 
@@ -308,9 +321,9 @@ def subir_nomina(equipo_id):
     equipo = db.execute("SELECT * FROM equipos WHERE id = ?", (equipo_id,)).fetchone()
     if not equipo:
         flash("Equipo no encontrado.")
-        return redirect(url_for("inscripcion"))
+        return redirect(url_for("index"))
 
-    if not equipo_permitido(equipo["nombre"]):
+    if not equipo_permitido(equipo_id):
         flash("No tienes acceso a ese equipo.")
         return redirect(url_for("index"))
 
@@ -487,7 +500,7 @@ def ficha_jugador(jugador_id):
     if not jugador:
         flash("Jugador no encontrado.")
         return redirect(url_for("index"))
-    if not equipo_permitido(jugador["equipo"]):
+    if not jugador_permitido(db, jugador):
         flash("No tienes acceso a ese jugador.")
         return redirect(url_for("index"))
     edad = _calcular_edad(jugador["fecha_nacimiento"])
@@ -503,7 +516,7 @@ def actualizar_jugador(jugador_id):
     if not jugador:
         flash("Jugador no encontrado.")
         return redirect(url_for("index"))
-    if not equipo_permitido(jugador["equipo"]):
+    if not jugador_permitido(db, jugador):
         flash("No tienes acceso a ese jugador.")
         return redirect(url_for("index"))
 
@@ -656,7 +669,7 @@ def carnet_jugador(jugador_id):
     if not jugador:
         flash("Jugador no encontrado.")
         return redirect(url_for("index"))
-    if not equipo_permitido(jugador["equipo"]):
+    if not jugador_permitido(db, jugador):
         flash("No tienes acceso a ese jugador.")
         return redirect(url_for("index"))
     return _carnet_response(jugador)
@@ -670,7 +683,7 @@ def eliminar_jugador(jugador_id):
     if not jugador:
         flash("Jugador no encontrado.")
         return redirect(url_for("index"))
-    if not equipo_permitido(jugador["equipo"]):
+    if not jugador_permitido(db, jugador):
         flash("No tienes acceso a ese jugador.")
         return redirect(url_for("index"))
     db.execute("DELETE FROM jugadores WHERE id = ?", (jugador_id,))
