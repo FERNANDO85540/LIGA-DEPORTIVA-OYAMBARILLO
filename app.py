@@ -1,5 +1,6 @@
 import io
 import os
+import re
 import sqlite3
 import uuid
 from datetime import datetime, date
@@ -17,6 +18,62 @@ DB_PATH = os.path.join(BASE_DIR, "liga.db")
 FOTOS_DIR = os.path.join(BASE_DIR, "static", "fotos_jugadores")
 os.makedirs(FOTOS_DIR, exist_ok=True)
 
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+USANDO_POSTGRES = bool(DATABASE_URL)
+
+if USANDO_POSTGRES:
+    import psycopg2
+    import psycopg2.extras
+    IntegrityError = psycopg2.IntegrityError
+else:
+    IntegrityError = sqlite3.IntegrityError
+
+
+class DBWrapper:
+    """Traduce placeholders '?' (estilo sqlite) a '%s' (estilo psycopg2)
+    y adapta fetchone()/fetchall() para devolver dicts en ambos motores."""
+
+    def __init__(self, conn):
+        self.conn = conn
+
+    def execute(self, query, params=()):
+        cur = self.conn.cursor()
+        if USANDO_POSTGRES:
+            query = re.sub(r"\?", "%s", query)
+            query = query.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+        cur.execute(query, params)
+        return CursorWrapper(cur)
+
+    def commit(self):
+        self.conn.commit()
+
+    def rollback(self):
+        self.conn.rollback()
+
+    def close(self):
+        self.conn.close()
+
+
+class CursorWrapper:
+    def __init__(self, cur):
+        self.cur = cur
+
+    def fetchone(self):
+        row = self.cur.fetchone()
+        return row
+
+    def fetchall(self):
+        return self.cur.fetchall()
+
+    @property
+    def lastrowid(self):
+        if USANDO_POSTGRES:
+            try:
+                return self.cur.fetchone()[0]
+            except Exception:
+                return None
+        return self.cur.lastrowid
+
 ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "Oyambarillo2026")
 
@@ -31,10 +88,17 @@ EQUIPOS_INICIALES = [
 ]
 
 
+def _conectar():
+    if USANDO_POSTGRES:
+        return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
+        g.db = DBWrapper(_conectar())
     return g.db
 
 
@@ -45,11 +109,24 @@ def close_db(exception=None):
         db.close()
 
 
+def _columnas_existentes(db, tabla):
+    if USANDO_POSTGRES:
+        filas = db.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = ?", (tabla,)
+        ).fetchall()
+        return [f["column_name"] for f in filas]
+    filas = db.execute(f"PRAGMA table_info({tabla})").fetchall()
+    return [f[1] for f in filas]
+
+
 def init_db():
-    db = sqlite3.connect(DB_PATH)
-    db.execute("""
+    db = DBWrapper(_conectar())
+
+    tipo_id = "SERIAL PRIMARY KEY" if USANDO_POSTGRES else "INTEGER PRIMARY KEY AUTOINCREMENT"
+
+    db.execute(f"""
         CREATE TABLE IF NOT EXISTS jugadores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {tipo_id},
             cedula TEXT NOT NULL UNIQUE,
             nombres TEXT NOT NULL,
             apellidos TEXT NOT NULL,
@@ -63,7 +140,7 @@ def init_db():
             fecha_registro TEXT NOT NULL
         )
     """)
-    jcols = [r[1] for r in db.execute("PRAGMA table_info(jugadores)").fetchall()]
+    jcols = _columnas_existentes(db, "jugadores")
     if "subcategoria" not in jcols:
         db.execute("ALTER TABLE jugadores ADD COLUMN subcategoria TEXT NOT NULL DEFAULT 'Sub 45'")
     if "numero_camiseta" not in jcols:
@@ -75,10 +152,11 @@ def init_db():
     if "foto_token" not in jcols:
         db.execute("ALTER TABLE jugadores ADD COLUMN foto_token TEXT")
         for row in db.execute("SELECT id FROM jugadores").fetchall():
-            db.execute("UPDATE jugadores SET foto_token = ? WHERE id = ?", (uuid.uuid4().hex, row[0]))
-    db.execute("""
+            db.execute("UPDATE jugadores SET foto_token = ? WHERE id = ?", (uuid.uuid4().hex, row["id"]))
+
+    db.execute(f"""
         CREATE TABLE IF NOT EXISTS equipos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {tipo_id},
             nombre TEXT NOT NULL UNIQUE,
             valor_inscripcion REAL NOT NULL DEFAULT 0,
             abono REAL NOT NULL DEFAULT 0,
@@ -86,7 +164,7 @@ def init_db():
             clave TEXT
         )
     """)
-    cols = [r[1] for r in db.execute("PRAGMA table_info(equipos)").fetchall()]
+    cols = _columnas_existentes(db, "equipos")
     if "valor_inscripcion" not in cols:
         db.execute("ALTER TABLE equipos ADD COLUMN valor_inscripcion REAL NOT NULL DEFAULT 0")
     if "abono" not in cols:
@@ -95,7 +173,9 @@ def init_db():
         db.execute("ALTER TABLE equipos ADD COLUMN usuario TEXT")
     if "clave" not in cols:
         db.execute("ALTER TABLE equipos ADD COLUMN clave TEXT")
-    count = db.execute("SELECT COUNT(*) c FROM equipos").fetchone()[0]
+
+    count_row = db.execute("SELECT COUNT(*) c FROM equipos").fetchone()
+    count = count_row["c"]
     if count == 0:
         for nombre in EQUIPOS_INICIALES:
             db.execute("INSERT INTO equipos (nombre) VALUES (?)", (nombre,))
@@ -210,7 +290,8 @@ def agregar_equipo():
             db.execute("INSERT INTO equipos (nombre) VALUES (?)", (nombre,))
             db.commit()
             flash(f"Equipo '{nombre}' agregado.")
-        except sqlite3.IntegrityError:
+        except IntegrityError:
+            db.rollback()
             flash(f"Ya existe un equipo llamado '{nombre}'.")
     return redirect(url_for("inscripcion"))
 
@@ -228,7 +309,8 @@ def renombrar_equipo(equipo_id):
                 db.execute("UPDATE jugadores SET equipo = ? WHERE equipo = ?", (nuevo_nombre, actual["nombre"]))
                 db.commit()
                 flash(f"Equipo renombrado a '{nuevo_nombre}'.")
-            except sqlite3.IntegrityError:
+            except IntegrityError:
+                db.rollback()
                 flash(f"Ya existe un equipo llamado '{nuevo_nombre}'.")
     return redirect(url_for("inscripcion"))
 
@@ -264,7 +346,8 @@ def credenciales_equipo(equipo_id):
             db.execute("UPDATE equipos SET usuario = ?, clave = ? WHERE id = ?", (usuario, clave, equipo_id))
             db.commit()
             flash(f"Acceso del equipo actualizado: usuario '{usuario}'.")
-        except sqlite3.IntegrityError:
+        except IntegrityError:
+            db.rollback()
             flash(f"El usuario '{usuario}' ya está en uso por otro equipo.")
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
@@ -396,17 +479,21 @@ def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacim
     if subcategoria == "Juvenil" and _contar_juveniles(db, equipo_nombre) >= CUPO_MAXIMO_JUVENIL:
         return None, f"El equipo {equipo_nombre} ya alcanzó el cupo máximo de {CUPO_MAXIMO_JUVENIL} jugadores Juvenil."
 
+    returning = " RETURNING id" if USANDO_POSTGRES else ""
     try:
         cur = db.execute(
-            """INSERT INTO jugadores
+            f"""INSERT INTO jugadores
                (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, numero_camiseta, foto_token, fecha_registro)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?){returning}""",
             (cedula, nombres, apellidos, fecha_nacimiento, equipo_nombre, CATEGORIA_ACTIVA,
              subcategoria, numero_camiseta, uuid.uuid4().hex, datetime.now().strftime("%Y-%m-%d %H:%M")),
         )
         db.commit()
+        if USANDO_POSTGRES:
+            return cur.fetchone()["id"], None
         return cur.lastrowid, None
-    except sqlite3.IntegrityError:
+    except IntegrityError:
+        db.rollback()
         return None, f"Ya existe un jugador registrado con la cédula {cedula}."
 
 
@@ -523,7 +610,8 @@ def subir_nomina(equipo_id):
                  subcategoria, uuid.uuid4().hex, datetime.now().strftime("%Y-%m-%d %H:%M")),
             )
             agregados += 1
-        except sqlite3.IntegrityError:
+        except IntegrityError:
+            db.rollback()
             duplicados += 1
 
     db.commit()
@@ -578,7 +666,8 @@ def inscripcion():
                     )
                     db.commit()
                     flash(f"Jugador {nombres} {apellidos} inscrito correctamente en {equipo}.")
-                except sqlite3.IntegrityError:
+                except IntegrityError:
+                    db.rollback()
                     flash(f"Ya existe un jugador registrado con la cédula {cedula}.")
 
         return redirect(url_for("inscripcion"))
