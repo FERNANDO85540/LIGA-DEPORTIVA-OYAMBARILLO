@@ -671,13 +671,13 @@ def actualizar_jugador(jugador_id):
 
 
 def _font(size, bold=False):
-    candidatos = ["arialbd.ttf", "Arial Bold.ttf"] if bold else ["arial.ttf", "Arial.ttf"]
+    candidatos = ["arialbd.ttf", "Arial Bold.ttf", "DejaVuSans-Bold.ttf"] if bold else ["arial.ttf", "Arial.ttf", "DejaVuSans.ttf"]
     for nombre in candidatos:
         try:
             return ImageFont.truetype(nombre, size)
         except OSError:
             continue
-    return ImageFont.load_default()
+    return ImageFont.load_default(size=size)
 
 
 def _generar_carnet(jugador):
@@ -697,7 +697,8 @@ def _generar_carnet(jugador):
         )
         draw.line([(0, y), (ancho, y)], fill=color)
 
-    draw.rectangle([0, 0, ancho, 110], fill="#14532d")
+    draw.rectangle([0, 0, ancho, 110], fill="#ffffff")
+    draw.rectangle([0, 108, ancho, 110], fill="#14532d")
     if os.path.exists(logo_path):
         logo = Image.open(logo_path).convert("RGBA")
         logo.thumbnail((90, 90))
@@ -705,8 +706,8 @@ def _generar_carnet(jugador):
 
     f_titulo = _font(30, bold=True)
     f_sub = _font(20, bold=True)
-    draw.text((120, 15), "LIGA DEPORTIVA OYAMBARILLO", font=f_titulo, fill="#ffffff")
-    draw.text((120, 55), "CAMPEONATO OFICIAL 2026", font=f_sub, fill="#facc15")
+    draw.text((120, 15), "LIGA DEPORTIVA OYAMBARILLO", font=f_titulo, fill="#14532d")
+    draw.text((120, 55), "CAMPEONATO OFICIAL 2026", font=f_sub, fill="#b45309")
 
     foto_x, foto_y, foto_w, foto_h = 640, 140, 220, 260
     if jugador["foto"]:
