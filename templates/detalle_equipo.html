@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
 
+{% if session.get('rol') == 'admin' %}
 <p><a href="{{ url_for('inscripcion') }}">&larr; Volver a equipos</a></p>
+{% endif %}
 
 <div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
   <h1 style="margin:0; font-size:1.5rem;">{{ equipo.nombre }}</h1>
@@ -28,6 +30,27 @@
     <button type="submit">Guardar pago</button>
   </form>
 </div>
+
+{% if session.get('rol') == 'admin' %}
+<div class="card">
+  <h2>🔑 Acceso del delegado del equipo</h2>
+  <p style="font-size:0.85rem; color:#555;">
+    Crea un usuario y clave para que el delegado de este equipo entre directamente a esta pantalla,
+    sin ver los demás equipos.
+  </p>
+  <form method="post" action="{{ url_for('credenciales_equipo', equipo_id=equipo.id) }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+    <div>
+      <label>Usuario</label>
+      <input type="text" name="usuario" value="{{ equipo.usuario or '' }}" placeholder="ej. sanjuan">
+    </div>
+    <div>
+      <label>Clave</label>
+      <input type="text" name="clave" value="{{ equipo.clave or '' }}" placeholder="clave de acceso">
+    </div>
+    <button type="submit">Guardar acceso</button>
+  </form>
+</div>
+{% endif %}
 
 <div class="card">
   <h2>Subir nómina de jugadores (Excel)</h2>

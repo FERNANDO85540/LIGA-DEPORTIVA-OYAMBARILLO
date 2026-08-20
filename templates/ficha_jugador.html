@@ -59,4 +59,16 @@
   </div>
 </div>
 
+<div class="card">
+  <h2>📱 Link para que el jugador se tome su propia foto</h2>
+  <p style="font-size:0.85rem; color:#555;">
+    Comparte este enlace con el jugador por WhatsApp. Desde su celular podrá tomarse la foto con la cámara
+    y ver de inmediato cómo queda su carnet, sin necesidad de clave.
+  </p>
+  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+    <input type="text" value="{{ link_foto }}" id="linkFoto" readonly style="flex:1; min-width:240px;">
+    <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('linkFoto').value); this.innerText='¡Copiado!'; setTimeout(() => this.innerText='Copiar link', 1500);">Copiar link</button>
+  </div>
+</div>
+
 {% endblock %}

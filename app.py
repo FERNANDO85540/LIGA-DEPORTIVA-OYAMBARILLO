@@ -69,12 +69,18 @@ def init_db():
         db.execute("ALTER TABLE jugadores ADD COLUMN numero_camiseta TEXT")
     if "foto" not in jcols:
         db.execute("ALTER TABLE jugadores ADD COLUMN foto TEXT")
+    if "foto_token" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN foto_token TEXT")
+        for row in db.execute("SELECT id FROM jugadores").fetchall():
+            db.execute("UPDATE jugadores SET foto_token = ? WHERE id = ?", (uuid.uuid4().hex, row[0]))
     db.execute("""
         CREATE TABLE IF NOT EXISTS equipos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT NOT NULL UNIQUE,
             valor_inscripcion REAL NOT NULL DEFAULT 0,
-            abono REAL NOT NULL DEFAULT 0
+            abono REAL NOT NULL DEFAULT 0,
+            usuario TEXT UNIQUE,
+            clave TEXT
         )
     """)
     cols = [r[1] for r in db.execute("PRAGMA table_info(equipos)").fetchall()]
@@ -82,6 +88,10 @@ def init_db():
         db.execute("ALTER TABLE equipos ADD COLUMN valor_inscripcion REAL NOT NULL DEFAULT 0")
     if "abono" not in cols:
         db.execute("ALTER TABLE equipos ADD COLUMN abono REAL NOT NULL DEFAULT 0")
+    if "usuario" not in cols:
+        db.execute("ALTER TABLE equipos ADD COLUMN usuario TEXT")
+    if "clave" not in cols:
+        db.execute("ALTER TABLE equipos ADD COLUMN clave TEXT")
     count = db.execute("SELECT COUNT(*) c FROM equipos").fetchone()[0]
     if count == 0:
         for nombre in EQUIPOS_INICIALES:
@@ -113,14 +123,48 @@ def login_required(f):
     return wrapper
 
 
+def admin_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+        if session.get("rol") != "admin":
+            flash("Esta acción requiere acceso de administrador.")
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def equipo_permitido(equipo_nombre):
+    if session.get("rol") == "admin":
+        return True
+    return session.get("equipo_nombre") == equipo_nombre
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        user = request.form.get("usuario", "")
-        pw = request.form.get("clave", "")
+        user = request.form.get("usuario", "").strip()
+        pw = request.form.get("clave", "").strip()
+
         if user == ADMIN_USER and pw == ADMIN_PASS:
+            session.clear()
             session["logged_in"] = True
+            session["rol"] = "admin"
             return redirect(url_for("inscripcion"))
+
+        db = get_db()
+        equipo = db.execute(
+            "SELECT * FROM equipos WHERE usuario = ? AND clave = ?", (user, pw)
+        ).fetchone()
+        if equipo:
+            session.clear()
+            session["logged_in"] = True
+            session["rol"] = "equipo"
+            session["equipo_id"] = equipo["id"]
+            session["equipo_nombre"] = equipo["nombre"]
+            return redirect(url_for("detalle_equipo", equipo_id=equipo["id"]))
+
         flash("Usuario o clave incorrectos")
     return render_template("login.html")
 
@@ -133,11 +177,15 @@ def logout():
 
 @app.route("/")
 def index():
-    return redirect(url_for("inscripcion")) if session.get("logged_in") else redirect(url_for("login"))
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+    if session.get("rol") == "equipo":
+        return redirect(url_for("detalle_equipo", equipo_id=session.get("equipo_id")))
+    return redirect(url_for("inscripcion"))
 
 
 @app.route("/equipos/agregar", methods=["POST"])
-@login_required
+@admin_required
 def agregar_equipo():
     db = get_db()
     nombre = request.form.get("nombre", "").strip()
@@ -152,7 +200,7 @@ def agregar_equipo():
 
 
 @app.route("/equipos/<int:equipo_id>/renombrar", methods=["POST"])
-@login_required
+@admin_required
 def renombrar_equipo(equipo_id):
     db = get_db()
     nuevo_nombre = request.form.get("nombre", "").strip()
@@ -170,7 +218,7 @@ def renombrar_equipo(equipo_id):
 
 
 @app.route("/equipos/<int:equipo_id>/eliminar", methods=["POST"])
-@login_required
+@admin_required
 def eliminar_equipo(equipo_id):
     db = get_db()
     equipo = db.execute("SELECT nombre FROM equipos WHERE id = ?", (equipo_id,)).fetchone()
@@ -187,6 +235,24 @@ def eliminar_equipo(equipo_id):
     return redirect(url_for("inscripcion"))
 
 
+@app.route("/equipos/<int:equipo_id>/credenciales", methods=["POST"])
+@admin_required
+def credenciales_equipo(equipo_id):
+    db = get_db()
+    usuario = request.form.get("usuario", "").strip().lower()
+    clave = request.form.get("clave", "").strip()
+    if not (usuario and clave):
+        flash("Usuario y clave son obligatorios.")
+    else:
+        try:
+            db.execute("UPDATE equipos SET usuario = ?, clave = ? WHERE id = ?", (usuario, clave, equipo_id))
+            db.commit()
+            flash(f"Acceso del equipo actualizado: usuario '{usuario}'.")
+        except sqlite3.IntegrityError:
+            flash(f"El usuario '{usuario}' ya está en uso por otro equipo.")
+    return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
+
+
 @app.route("/equipo/<int:equipo_id>", methods=["GET"])
 @login_required
 def detalle_equipo(equipo_id):
@@ -195,6 +261,10 @@ def detalle_equipo(equipo_id):
     if not equipo:
         flash("Equipo no encontrado.")
         return redirect(url_for("inscripcion"))
+
+    if not equipo_permitido(equipo["nombre"]):
+        flash("No tienes acceso a ese equipo.")
+        return redirect(url_for("index"))
 
     jugadores = db.execute(
         "SELECT * FROM jugadores WHERE equipo = ? AND categoria = ? ORDER BY apellidos",
@@ -217,7 +287,7 @@ def detalle_equipo(equipo_id):
 
 
 @app.route("/equipo/<int:equipo_id>/pago", methods=["POST"])
-@login_required
+@admin_required
 def actualizar_pago_equipo(equipo_id):
     db = get_db()
     valor_inscripcion = _to_float(request.form.get("valor_inscripcion", "0"))
@@ -239,6 +309,10 @@ def subir_nomina(equipo_id):
     if not equipo:
         flash("Equipo no encontrado.")
         return redirect(url_for("inscripcion"))
+
+    if not equipo_permitido(equipo["nombre"]):
+        flash("No tienes acceso a ese equipo.")
+        return redirect(url_for("index"))
 
     archivo = request.files.get("archivo")
     if not archivo or not archivo.filename:
@@ -303,10 +377,10 @@ def subir_nomina(equipo_id):
         try:
             db.execute(
                 """INSERT INTO jugadores
-                   (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, fecha_registro)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, foto_token, fecha_registro)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (cedula, nombres, apellidos, fecha_nac, equipo["nombre"], CATEGORIA_ACTIVA,
-                 subcategoria, datetime.now().strftime("%Y-%m-%d %H:%M")),
+                 subcategoria, uuid.uuid4().hex, datetime.now().strftime("%Y-%m-%d %H:%M")),
             )
             agregados += 1
         except sqlite3.IntegrityError:
@@ -327,7 +401,7 @@ def subir_nomina(equipo_id):
 
 
 @app.route("/inscripcion", methods=["GET", "POST"])
-@login_required
+@admin_required
 def inscripcion():
     db = get_db()
 
@@ -357,10 +431,10 @@ def inscripcion():
                 try:
                     db.execute(
                         """INSERT INTO jugadores
-                           (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, fecha_registro)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                           (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, foto_token, fecha_registro)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                         (cedula, nombres, apellidos, fecha_nacimiento, equipo, CATEGORIA_ACTIVA,
-                         subcategoria, datetime.now().strftime("%Y-%m-%d %H:%M")),
+                         subcategoria, uuid.uuid4().hex, datetime.now().strftime("%Y-%m-%d %H:%M")),
                     )
                     db.commit()
                     flash(f"Jugador {nombres} {apellidos} inscrito correctamente en {equipo}.")
@@ -412,9 +486,13 @@ def ficha_jugador(jugador_id):
     jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
     if not jugador:
         flash("Jugador no encontrado.")
-        return redirect(url_for("inscripcion"))
+        return redirect(url_for("index"))
+    if not equipo_permitido(jugador["equipo"]):
+        flash("No tienes acceso a ese jugador.")
+        return redirect(url_for("index"))
     edad = _calcular_edad(jugador["fecha_nacimiento"])
-    return render_template("ficha_jugador.html", jugador=jugador, edad=edad, subcategorias=SUBCATEGORIAS)
+    link_foto = url_for("autofoto", token=jugador["foto_token"], _external=True)
+    return render_template("ficha_jugador.html", jugador=jugador, edad=edad, subcategorias=SUBCATEGORIAS, link_foto=link_foto)
 
 
 @app.route("/jugador/<int:jugador_id>/actualizar", methods=["POST"])
@@ -424,7 +502,10 @@ def actualizar_jugador(jugador_id):
     jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
     if not jugador:
         flash("Jugador no encontrado.")
-        return redirect(url_for("inscripcion"))
+        return redirect(url_for("index"))
+    if not equipo_permitido(jugador["equipo"]):
+        flash("No tienes acceso a ese jugador.")
+        return redirect(url_for("index"))
 
     nombres = request.form.get("nombres", "").strip() or jugador["nombres"]
     apellidos = request.form.get("apellidos", "").strip() or jugador["apellidos"]
@@ -467,19 +548,19 @@ def _generar_carnet(jugador):
     logo_path = os.path.join(BASE_DIR, "static", "logo_ldbo.png")
 
     # ---------- FRENTE ----------
-    frente = Image.new("RGB", (ancho, alto), "#0b1f33")
+    frente = Image.new("RGB", (ancho, alto), "#eef6f0")
     draw = ImageDraw.Draw(frente)
 
-    for y in range(alto):
-        t = y / alto
+    for y in range(110, alto):
+        t = (y - 110) / (alto - 110)
         color = (
-            int(11 + (20 - 11) * t),
-            int(31 + (70 - 31) * t),
-            int(51 + (35 - 51) * t),
+            int(240 + (214 - 240) * t),
+            int(248 + (232 - 248) * t),
+            int(242 + (220 - 242) * t),
         )
         draw.line([(0, y), (ancho, y)], fill=color)
 
-    draw.rectangle([0, 0, ancho, 110], fill="#0a1a2b")
+    draw.rectangle([0, 0, ancho, 110], fill="#14532d")
     if os.path.exists(logo_path):
         logo = Image.open(logo_path).convert("RGBA")
         logo.thumbnail((90, 90))
@@ -487,8 +568,8 @@ def _generar_carnet(jugador):
 
     f_titulo = _font(30, bold=True)
     f_sub = _font(20, bold=True)
-    draw.text((120, 15), "LIGA DEPORTIVA OYAMBARILLO", font=f_titulo, fill="#4ade80")
-    draw.text((120, 55), "CAMPEONATO OFICIAL 2026", font=f_sub, fill="white")
+    draw.text((120, 15), "LIGA DEPORTIVA OYAMBARILLO", font=f_titulo, fill="#ffffff")
+    draw.text((120, 55), "CAMPEONATO OFICIAL 2026", font=f_sub, fill="#facc15")
 
     foto_x, foto_y, foto_w, foto_h = 640, 140, 220, 260
     if jugador["foto"]:
@@ -497,30 +578,30 @@ def _generar_carnet(jugador):
             foto = Image.open(foto_path).convert("RGB")
             foto = ImageOps.fit(foto, (foto_w, foto_h))
             frente.paste(foto, (foto_x, foto_y))
-    draw.rectangle([foto_x, foto_y, foto_x + foto_w, foto_y + foto_h], outline="white", width=3)
+    draw.rectangle([foto_x, foto_y, foto_x + foto_w, foto_y + foto_h], outline="#14532d", width=4)
 
     f_label = _font(20, bold=True)
     f_valor = _font(26, bold=True)
 
     y0 = 140
-    draw.text((30, y0), "EQUIPO:", font=f_label, fill="#facc15")
-    draw.text((30, y0 + 28), jugador["equipo"].upper(), font=f_valor, fill="white")
+    draw.text((30, y0), "EQUIPO:", font=f_label, fill="#b45309")
+    draw.text((30, y0 + 28), jugador["equipo"].upper(), font=f_valor, fill="#14532d")
 
     y1 = y0 + 90
-    draw.text((30, y1), "JUGADOR:", font=f_label, fill="#facc15")
-    draw.text((30, y1 + 28), jugador["apellidos"].upper(), font=f_valor, fill="white")
-    draw.text((30, y1 + 60), jugador["nombres"].upper(), font=f_valor, fill="white")
+    draw.text((30, y1), "JUGADOR:", font=f_label, fill="#b45309")
+    draw.text((30, y1 + 28), jugador["apellidos"].upper(), font=f_valor, fill="#111111")
+    draw.text((30, y1 + 60), jugador["nombres"].upper(), font=f_valor, fill="#111111")
 
     y2 = y1 + 105
-    draw.text((30, y2), "C.I.:", font=f_label, fill="#facc15")
-    draw.text((110, y2 - 2), jugador["cedula"], font=f_valor, fill="white")
+    draw.text((30, y2), "C.I.:", font=f_label, fill="#b45309")
+    draw.text((110, y2 - 2), jugador["cedula"], font=f_valor, fill="#111111")
 
     subcat = jugador["subcategoria"] or "Sub 45"
-    draw.text((30, y2 + 34), subcat.upper(), font=f_label, fill="#4ade80")
+    draw.text((30, y2 + 34), subcat.upper(), font=f_label, fill="#14532d")
 
     if jugador["numero_camiseta"]:
         f_num = _font(46, bold=True)
-        draw.text((foto_x + foto_w - 90, foto_y + foto_h + 10), f"# {jugador['numero_camiseta']}", font=f_num, fill="white")
+        draw.text((foto_x + foto_w - 90, foto_y + foto_h + 10), f"# {jugador['numero_camiseta']}", font=f_num, fill="#14532d")
 
     # ---------- REVERSO ----------
     reverso = Image.new("RGB", (ancho, alto), "white")
@@ -553,15 +634,7 @@ def _generar_carnet(jugador):
     return frente, reverso
 
 
-@app.route("/jugador/<int:jugador_id>/carnet")
-@login_required
-def carnet_jugador(jugador_id):
-    db = get_db()
-    jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
-    if not jugador:
-        flash("Jugador no encontrado.")
-        return redirect(url_for("inscripcion"))
-
+def _carnet_response(jugador):
     frente, reverso = _generar_carnet(jugador)
 
     lienzo = Image.new("RGB", (frente.width, frente.height * 2 + 20), "#dddddd")
@@ -575,14 +648,82 @@ def carnet_jugador(jugador_id):
     return send_file(buf, mimetype="image/png", as_attachment=False, download_name=nombre_archivo)
 
 
+@app.route("/jugador/<int:jugador_id>/carnet")
+@login_required
+def carnet_jugador(jugador_id):
+    db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
+    if not jugador:
+        flash("Jugador no encontrado.")
+        return redirect(url_for("index"))
+    if not equipo_permitido(jugador["equipo"]):
+        flash("No tienes acceso a ese jugador.")
+        return redirect(url_for("index"))
+    return _carnet_response(jugador)
+
+
 @app.route("/jugador/<int:jugador_id>/eliminar", methods=["POST"])
 @login_required
 def eliminar_jugador(jugador_id):
     db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
+    if not jugador:
+        flash("Jugador no encontrado.")
+        return redirect(url_for("index"))
+    if not equipo_permitido(jugador["equipo"]):
+        flash("No tienes acceso a ese jugador.")
+        return redirect(url_for("index"))
     db.execute("DELETE FROM jugadores WHERE id = ?", (jugador_id,))
     db.commit()
     flash("Jugador eliminado.")
-    return redirect(url_for("inscripcion"))
+    return redirect(url_for("detalle_equipo", equipo_id=db.execute("SELECT id FROM equipos WHERE nombre = ?", (jugador["equipo"],)).fetchone()["id"]))
+
+
+@app.route("/autofoto/<token>", methods=["GET", "POST"])
+def autofoto(token):
+    db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE foto_token = ?", (token,)).fetchone()
+    if not jugador:
+        return render_template("autofoto.html", jugador=None), 404
+
+    if request.method == "POST":
+        archivo = request.files.get("foto")
+        if not archivo or not archivo.filename:
+            flash("No se recibió ninguna foto. Inténtalo de nuevo.")
+            return redirect(url_for("autofoto", token=token))
+
+        nuevo_nombre = f"{uuid.uuid4().hex}.jpg"
+        try:
+            img = Image.open(archivo)
+            img = ImageOps.exif_transpose(img).convert("RGB")
+            img.save(os.path.join(FOTOS_DIR, nuevo_nombre), format="JPEG", quality=88)
+        except Exception:
+            flash("No se pudo procesar la foto. Inténtalo de nuevo.")
+            return redirect(url_for("autofoto", token=token))
+
+        db.execute("UPDATE jugadores SET foto = ? WHERE id = ?", (nuevo_nombre, jugador["id"]))
+        db.commit()
+        return redirect(url_for("autofoto_listo", token=token))
+
+    return render_template("autofoto.html", jugador=jugador)
+
+
+@app.route("/autofoto/<token>/listo")
+def autofoto_listo(token):
+    db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE foto_token = ?", (token,)).fetchone()
+    if not jugador:
+        return render_template("autofoto.html", jugador=None), 404
+    return render_template("autofoto_listo.html", jugador=jugador, token=token)
+
+
+@app.route("/autofoto/<token>/carnet")
+def autofoto_carnet(token):
+    db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE foto_token = ?", (token,)).fetchone()
+    if not jugador:
+        return render_template("autofoto.html", jugador=None), 404
+    return _carnet_response(jugador)
 
 
 init_db()

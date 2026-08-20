@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Foto para carnet — Liga Deportiva Oyambarillo</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: #14532d;
+    color: #1c1c1c;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .card {
+    background: white;
+    border-radius: 14px;
+    padding: 24px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+  h1 { font-size: 1.2rem; color: #14532d; margin: 0 0 4px; }
+  p.sub { color: #555; margin: 0 0 20px; font-size: 0.9rem; }
+  .flash { background: #fff8e1; border: 1px solid #ffe082; color: #6d4c00; padding: 10px; border-radius: 8px; margin-bottom: 16px; font-size: 0.85rem; }
+  #preview {
+    width: 100%;
+    aspect-ratio: 3/4;
+    background: #eee;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #preview video, #preview img { width: 100%; height: 100%; object-fit: cover; }
+  input[type=file] { display: none; }
+  button, label.btn {
+    display: inline-block;
+    background: #14532d;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+    margin: 6px 4px;
+    text-decoration: none;
+  }
+  button.secondary, label.secondary { background: #6b7280; }
+  button:disabled { opacity: 0.5; }
+</style>
+</head>
+<body>
+<div class="card">
+  {% if not jugador %}
+    <h1>Enlace no válido</h1>
+    <p class="sub">Este enlace de foto no existe o ya expiró. Contacta a tu delegado de equipo.</p>
+  {% else %}
+    <h1>{{ jugador.nombres }} {{ jugador.apellidos }}</h1>
+    <p class="sub">{{ jugador.equipo }} — Foto para tu carnet oficial</p>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}{% for m in messages %}<div class="flash">{{ m }}</div>{% endfor %}{% endif %}
+    {% endwith %}
+
+    <div id="preview">
+      <video id="video" autoplay playsinline muted></video>
+      <img id="imgResult" style="display:none;">
+    </div>
+
+    <form id="form" method="post" enctype="multipart/form-data">
+      <input type="file" name="foto" id="fileInput" accept="image/*" capture="user">
+      <canvas id="canvas" style="display:none;"></canvas>
+
+      <div id="botonesCamara">
+        <button type="button" id="btnCapturar">📸 Tomar foto</button>
+        <label class="btn secondary" for="fileInput">📁 Subir foto</label>
+      </div>
+
+      <div id="botonesConfirmar" style="display:none;">
+        <button type="submit" id="btnUsar">✅ Usar esta foto</button>
+        <button type="button" id="btnRepetir" class="secondary">🔄 Repetir</button>
+      </div>
+    </form>
+  {% endif %}
+</div>
+
+<script>
+const video = document.getElementById('video');
+const imgResult = document.getElementById('imgResult');
+const canvas = document.getElementById('canvas');
+const fileInput = document.getElementById('fileInput');
+const btnCapturar = document.getElementById('btnCapturar');
+const btnRepetir = document.getElementById('btnRepetir');
+const botonesCamara = document.getElementById('botonesCamara');
+const botonesConfirmar = document.getElementById('botonesConfirmar');
+let stream = null;
+
+async function iniciarCamara() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+    video.srcObject = stream;
+  } catch (e) {
+    console.log('Cámara no disponible, usar subida de archivo.');
+  }
+}
+iniciarCamara();
+
+btnCapturar.addEventListener('click', () => {
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  canvas.toBlob((blob) => {
+    const file = new File([blob], 'foto.jpg', { type: 'image/jpeg' });
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    fileInput.files = dt.files;
+    imgResult.src = URL.createObjectURL(blob);
+    mostrarConfirmacion();
+  }, 'image/jpeg', 0.9);
+});
+
+fileInput.addEventListener('change', () => {
+  if (fileInput.files && fileInput.files[0]) {
+    imgResult.src = URL.createObjectURL(fileInput.files[0]);
+    mostrarConfirmacion();
+  }
+});
+
+function mostrarConfirmacion() {
+  video.style.display = 'none';
+  imgResult.style.display = 'block';
+  botonesCamara.style.display = 'none';
+  botonesConfirmar.style.display = 'block';
+}
+
+btnRepetir.addEventListener('click', () => {
+  video.style.display = 'block';
+  imgResult.style.display = 'none';
+  botonesCamara.style.display = 'block';
+  botonesConfirmar.style.display = 'none';
+  fileInput.value = '';
+});
+</script>
+</body>
+</html>

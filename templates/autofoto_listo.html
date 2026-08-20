@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tu carnet — Liga Deportiva Oyambarillo</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: #14532d;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+  .card {
+    background: white;
+    border-radius: 14px;
+    padding: 24px;
+    max-width: 460px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+  h1 { font-size: 1.2rem; color: #14532d; margin: 0 0 4px; }
+  p.sub { color: #555; margin: 0 0 16px; font-size: 0.9rem; }
+  img.carnet { width: 100%; border-radius: 10px; border: 1px solid #ddd; margin-bottom: 16px; }
+  a.btn {
+    display: inline-block;
+    background: #14532d;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 1rem;
+    text-decoration: none;
+    margin: 6px 4px;
+  }
+  a.secondary { background: #6b7280; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>¡Listo, {{ jugador.nombres }}!</h1>
+  <p class="sub">Así se ve tu carnet oficial de la Liga Deportiva Oyambarillo.</p>
+  <img class="carnet" src="{{ url_for('autofoto_carnet', token=token) }}">
+  <div>
+    <a class="btn secondary" href="{{ url_for('autofoto', token=token) }}">🔄 Cambiar foto</a>
+  </div>
+</div>
+</body>
+</html>
