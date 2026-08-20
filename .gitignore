@@ -3,3 +3,5 @@ __pycache__/
 liga.db
 .env
 server.log
+static/fotos_jugadores/*
+!static/fotos_jugadores/.gitkeep

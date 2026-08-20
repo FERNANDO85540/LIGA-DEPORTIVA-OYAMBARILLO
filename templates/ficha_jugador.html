@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p><a href="#" onclick="history.back(); return false;">&larr; Volver</a></p>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.4rem;">Ficha del jugador</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">{{ jugador.nombres }} {{ jugador.apellidos }} — {{ jugador.equipo }}</p>
+</div>
+
+<div class="card" style="display:flex; gap:24px; flex-wrap:wrap;">
+  <div style="flex:1; min-width:280px;">
+    <h2>Datos</h2>
+    <form method="post" action="{{ url_for('actualizar_jugador', jugador_id=jugador.id) }}" enctype="multipart/form-data">
+      <label>Cédula</label>
+      <input type="text" value="{{ jugador.cedula }}" disabled style="background:#f4f6f5;">
+
+      <label>Nombres</label>
+      <input type="text" name="nombres" value="{{ jugador.nombres }}" required>
+
+      <label>Apellidos</label>
+      <input type="text" name="apellidos" value="{{ jugador.apellidos }}" required>
+
+      <label>Fecha de nacimiento</label>
+      <input type="date" name="fecha_nacimiento" value="{{ jugador.fecha_nacimiento }}">
+
+      <label>Edad</label>
+      <input type="text" value="{{ edad if edad is not none else '-' }}" disabled style="background:#f4f6f5;">
+
+      <label>Equipo</label>
+      <input type="text" value="{{ jugador.equipo }}" disabled style="background:#f4f6f5;">
+
+      <label>Categoría</label>
+      <input type="text" value="{{ jugador.categoria }}{% if jugador.subcategoria == 'Juvenil' %} - Juvenil{% endif %}" disabled style="background:#f4f6f5;">
+
+      <label>Número de camiseta</label>
+      <input type="text" name="numero_camiseta" value="{{ jugador.numero_camiseta or '' }}" maxlength="3">
+
+      <label>Foto (.jpg o .png)</label>
+      <input type="file" name="foto" accept=".jpg,.jpeg,.png">
+
+      <button type="submit">Guardar cambios</button>
+    </form>
+  </div>
+
+  <div style="flex:1; min-width:280px; text-align:center;">
+    <h2>Foto actual</h2>
+    {% if jugador.foto %}
+      <img src="{{ url_for('static', filename='fotos_jugadores/' + jugador.foto) }}" style="max-width:220px; border-radius:8px; border:1px solid var(--borde);">
+    {% else %}
+      <p style="color:#888;">Sin foto cargada aún.</p>
+    {% endif %}
+
+    <div style="margin-top:20px;">
+      <a href="{{ url_for('carnet_jugador', jugador_id=jugador.id) }}" target="_blank">
+        <button type="button">🪪 Generar / ver carnet</button>
+      </a>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

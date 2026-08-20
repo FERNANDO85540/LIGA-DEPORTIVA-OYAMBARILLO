@@ -59,8 +59,9 @@
         <td>{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
         <td>{{ j.fecha_nacimiento or '-' }}</td>
         <td>{{ j.fecha_registro }}</td>
-        <td>
-          <form method="post" action="{{ url_for('eliminar_jugador', jugador_id=j.id) }}" onsubmit="return confirm('¿Eliminar este jugador?');">
+        <td style="white-space:nowrap;">
+          <a href="{{ url_for('ficha_jugador', jugador_id=j.id) }}"><button type="button" style="margin:0; padding:4px 10px; font-size:0.8rem;">Ficha</button></a>
+          <form method="post" action="{{ url_for('eliminar_jugador', jugador_id=j.id) }}" onsubmit="return confirm('¿Eliminar este jugador?');" style="display:inline;">
             <button type="submit" class="btn-del">Eliminar</button>
           </form>
         </td>

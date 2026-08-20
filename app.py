@@ -1,15 +1,21 @@
+import io
 import os
 import sqlite3
-from datetime import datetime
+import uuid
+from datetime import datetime, date
 from functools import wraps
 
-from flask import Flask, render_template, request, redirect, url_for, session, flash, g
+from flask import Flask, render_template, request, redirect, url_for, session, flash, g, send_file
 from openpyxl import load_workbook
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "cambia-esta-clave-en-produccion")
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "liga.db")
+BASE_DIR = os.path.dirname(__file__)
+DB_PATH = os.path.join(BASE_DIR, "liga.db")
+FOTOS_DIR = os.path.join(BASE_DIR, "static", "fotos_jugadores")
+os.makedirs(FOTOS_DIR, exist_ok=True)
 
 ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "Oyambarillo2026")
@@ -51,12 +57,18 @@ def init_db():
             equipo TEXT NOT NULL,
             categoria TEXT NOT NULL,
             subcategoria TEXT NOT NULL DEFAULT 'Sub 45',
+            numero_camiseta TEXT,
+            foto TEXT,
             fecha_registro TEXT NOT NULL
         )
     """)
     jcols = [r[1] for r in db.execute("PRAGMA table_info(jugadores)").fetchall()]
     if "subcategoria" not in jcols:
         db.execute("ALTER TABLE jugadores ADD COLUMN subcategoria TEXT NOT NULL DEFAULT 'Sub 45'")
+    if "numero_camiseta" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN numero_camiseta TEXT")
+    if "foto" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN foto TEXT")
     db.execute("""
         CREATE TABLE IF NOT EXISTS equipos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -380,6 +392,187 @@ def inscripcion():
         categoria=CATEGORIA_ACTIVA,
         subcategorias=SUBCATEGORIAS,
     )
+
+
+def _calcular_edad(fecha_nacimiento):
+    try:
+        y, m, d = [int(p) for p in fecha_nacimiento.split("-")]
+        nacimiento = date(y, m, d)
+    except (ValueError, AttributeError):
+        return None
+    hoy = date.today()
+    edad = hoy.year - nacimiento.year - ((hoy.month, hoy.day) < (nacimiento.month, nacimiento.day))
+    return edad
+
+
+@app.route("/jugador/<int:jugador_id>", methods=["GET"])
+@login_required
+def ficha_jugador(jugador_id):
+    db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
+    if not jugador:
+        flash("Jugador no encontrado.")
+        return redirect(url_for("inscripcion"))
+    edad = _calcular_edad(jugador["fecha_nacimiento"])
+    return render_template("ficha_jugador.html", jugador=jugador, edad=edad, subcategorias=SUBCATEGORIAS)
+
+
+@app.route("/jugador/<int:jugador_id>/actualizar", methods=["POST"])
+@login_required
+def actualizar_jugador(jugador_id):
+    db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
+    if not jugador:
+        flash("Jugador no encontrado.")
+        return redirect(url_for("inscripcion"))
+
+    nombres = request.form.get("nombres", "").strip() or jugador["nombres"]
+    apellidos = request.form.get("apellidos", "").strip() or jugador["apellidos"]
+    fecha_nacimiento = request.form.get("fecha_nacimiento", "").strip()
+    numero_camiseta = request.form.get("numero_camiseta", "").strip()
+
+    foto_nombre = jugador["foto"]
+    archivo = request.files.get("foto")
+    if archivo and archivo.filename:
+        ext = os.path.splitext(archivo.filename)[1].lower()
+        if ext not in (".jpg", ".jpeg", ".png"):
+            flash("La foto debe ser .jpg o .png.")
+            return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
+        nuevo_nombre = f"{uuid.uuid4().hex}{ext}"
+        archivo.save(os.path.join(FOTOS_DIR, nuevo_nombre))
+        foto_nombre = nuevo_nombre
+
+    db.execute(
+        """UPDATE jugadores SET nombres = ?, apellidos = ?, fecha_nacimiento = ?,
+           numero_camiseta = ?, foto = ? WHERE id = ?""",
+        (nombres, apellidos, fecha_nacimiento, numero_camiseta, foto_nombre, jugador_id),
+    )
+    db.commit()
+    flash("Ficha del jugador actualizada.")
+    return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
+
+
+def _font(size, bold=False):
+    candidatos = ["arialbd.ttf", "Arial Bold.ttf"] if bold else ["arial.ttf", "Arial.ttf"]
+    for nombre in candidatos:
+        try:
+            return ImageFont.truetype(nombre, size)
+        except OSError:
+            continue
+    return ImageFont.load_default()
+
+
+def _generar_carnet(jugador):
+    ancho, alto = 900, 566
+    logo_path = os.path.join(BASE_DIR, "static", "logo_ldbo.png")
+
+    # ---------- FRENTE ----------
+    frente = Image.new("RGB", (ancho, alto), "#0b1f33")
+    draw = ImageDraw.Draw(frente)
+
+    for y in range(alto):
+        t = y / alto
+        color = (
+            int(11 + (20 - 11) * t),
+            int(31 + (70 - 31) * t),
+            int(51 + (35 - 51) * t),
+        )
+        draw.line([(0, y), (ancho, y)], fill=color)
+
+    draw.rectangle([0, 0, ancho, 110], fill="#0a1a2b")
+    if os.path.exists(logo_path):
+        logo = Image.open(logo_path).convert("RGBA")
+        logo.thumbnail((90, 90))
+        frente.paste(logo, (18, 12), logo)
+
+    f_titulo = _font(30, bold=True)
+    f_sub = _font(20, bold=True)
+    draw.text((120, 15), "LIGA DEPORTIVA OYAMBARILLO", font=f_titulo, fill="#4ade80")
+    draw.text((120, 55), "CAMPEONATO OFICIAL 2026", font=f_sub, fill="white")
+
+    foto_x, foto_y, foto_w, foto_h = 640, 140, 220, 260
+    if jugador["foto"]:
+        foto_path = os.path.join(FOTOS_DIR, jugador["foto"])
+        if os.path.exists(foto_path):
+            foto = Image.open(foto_path).convert("RGB")
+            foto = ImageOps.fit(foto, (foto_w, foto_h))
+            frente.paste(foto, (foto_x, foto_y))
+    draw.rectangle([foto_x, foto_y, foto_x + foto_w, foto_y + foto_h], outline="white", width=3)
+
+    f_label = _font(20, bold=True)
+    f_valor = _font(26, bold=True)
+
+    y0 = 140
+    draw.text((30, y0), "EQUIPO:", font=f_label, fill="#facc15")
+    draw.text((30, y0 + 28), jugador["equipo"].upper(), font=f_valor, fill="white")
+
+    y1 = y0 + 90
+    draw.text((30, y1), "JUGADOR:", font=f_label, fill="#facc15")
+    draw.text((30, y1 + 28), jugador["apellidos"].upper(), font=f_valor, fill="white")
+    draw.text((30, y1 + 60), jugador["nombres"].upper(), font=f_valor, fill="white")
+
+    y2 = y1 + 105
+    draw.text((30, y2), "C.I.:", font=f_label, fill="#facc15")
+    draw.text((110, y2 - 2), jugador["cedula"], font=f_valor, fill="white")
+
+    subcat = jugador["subcategoria"] or "Sub 45"
+    draw.text((30, y2 + 34), subcat.upper(), font=f_label, fill="#4ade80")
+
+    if jugador["numero_camiseta"]:
+        f_num = _font(46, bold=True)
+        draw.text((foto_x + foto_w - 90, foto_y + foto_h + 10), f"# {jugador['numero_camiseta']}", font=f_num, fill="white")
+
+    # ---------- REVERSO ----------
+    reverso = Image.new("RGB", (ancho, alto), "white")
+    rdraw = ImageDraw.Draw(reverso)
+
+    edad = _calcular_edad(jugador["fecha_nacimiento"])
+    f_rlabel = _font(24, bold=True)
+    f_rvalor = _font(24)
+
+    rdraw.text((40, 50), "Categoría:", font=f_rlabel, fill="#14532d")
+    rdraw.text((230, 50), (jugador["categoria"] or "") + (f" - {subcat}" if subcat == "Juvenil" else ""), font=f_rvalor, fill="black")
+
+    rdraw.text((40, 100), "Edad:", font=f_rlabel, fill="black")
+    rdraw.text((230, 100), str(edad) if edad is not None else "-", font=f_rvalor, fill="black")
+
+    rdraw.text((40, 150), "F. Nacimiento:", font=f_rlabel, fill="black")
+    rdraw.text((40, 185), jugador["fecha_nacimiento"] or "-", font=f_rvalor, fill="#14532d")
+
+    if os.path.exists(logo_path):
+        sello = Image.open(logo_path).convert("RGBA")
+        sello.thumbnail((190, 190))
+        sello_alpha = sello.split()[3].point(lambda p: p * 0.5)
+        sello.putalpha(sello_alpha)
+        reverso.paste(sello, (ancho - sello.width - 60, 230), sello)
+
+    rdraw.line([(40, 470), (340, 470)], fill="black", width=2)
+    f_firma = _font(20, bold=True)
+    rdraw.text((40, 478), "PRESIDENTE", font=f_firma, fill="black")
+
+    return frente, reverso
+
+
+@app.route("/jugador/<int:jugador_id>/carnet")
+@login_required
+def carnet_jugador(jugador_id):
+    db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
+    if not jugador:
+        flash("Jugador no encontrado.")
+        return redirect(url_for("inscripcion"))
+
+    frente, reverso = _generar_carnet(jugador)
+
+    lienzo = Image.new("RGB", (frente.width, frente.height * 2 + 20), "#dddddd")
+    lienzo.paste(frente, (0, 0))
+    lienzo.paste(reverso, (0, frente.height + 20))
+
+    buf = io.BytesIO()
+    lienzo.save(buf, format="PNG")
+    buf.seek(0)
+    nombre_archivo = f"carnet_{jugador['cedula']}.png"
+    return send_file(buf, mimetype="image/png", as_attachment=False, download_name=nombre_archivo)
 
 
 @app.route("/jugador/<int:jugador_id>/eliminar", methods=["POST"])
