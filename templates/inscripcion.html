@@ -36,40 +36,6 @@
 </div>
 
 <div class="card">
-  <h2>Inscripción de jugadores — Categoría {{ categoria }}</h2>
-  <form method="post">
-    <label>Cédula</label>
-    <input type="text" name="cedula" required>
-
-    <label>Nombres</label>
-    <input type="text" name="nombres" required>
-
-    <label>Apellidos</label>
-    <input type="text" name="apellidos" required>
-
-    <label>Fecha de nacimiento</label>
-    <input type="date" name="fecha_nacimiento">
-
-    <label>Equipo</label>
-    <select name="equipo" required>
-      <option value="">Seleccione...</option>
-      {% for e in equipos %}
-        <option value="{{ e.nombre }}">{{ e.nombre }} ({{ cupos[e.nombre] }}/{{ cupo_maximo }})</option>
-      {% endfor %}
-    </select>
-
-    <label>Categoría</label>
-    <select name="subcategoria">
-      {% for s in subcategorias %}
-        <option value="{{ s }}">{{ categoria }}{% if s == 'Juvenil' %} - Juvenil (1982){% endif %}</option>
-      {% endfor %}
-    </select>
-
-    <button type="submit">Inscribir jugador</button>
-  </form>
-</div>
-
-<div class="card">
   <h2>Cupos por equipo</h2>
   <div class="cupos-grid">
     {% for e in equipos %}

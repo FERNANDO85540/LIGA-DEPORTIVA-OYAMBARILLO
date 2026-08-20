@@ -628,49 +628,10 @@ def subir_nomina(equipo_id):
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
 
-@app.route("/inscripcion", methods=["GET", "POST"])
+@app.route("/inscripcion", methods=["GET"])
 @admin_required
 def inscripcion():
     db = get_db()
-
-    if request.method == "POST":
-        cedula = request.form.get("cedula", "").strip()
-        nombres = request.form.get("nombres", "").strip()
-        apellidos = request.form.get("apellidos", "").strip()
-        fecha_nacimiento = request.form.get("fecha_nacimiento", "").strip()
-        equipo = request.form.get("equipo", "").strip()
-        subcategoria = request.form.get("subcategoria", "Sub 45").strip()
-        if subcategoria not in SUBCATEGORIAS:
-            subcategoria = "Sub 45"
-
-        if not (cedula and nombres and apellidos and equipo):
-            flash("Cédula, nombres, apellidos y equipo son obligatorios.")
-        else:
-            count = db.execute(
-                "SELECT COUNT(*) c FROM jugadores WHERE equipo = ? AND categoria = ?",
-                (equipo, CATEGORIA_ACTIVA),
-            ).fetchone()["c"]
-
-            if count >= CUPO_MAXIMO_EQUIPO:
-                flash(f"El equipo {equipo} ya alcanzó el cupo máximo de {CUPO_MAXIMO_EQUIPO} jugadores en {CATEGORIA_ACTIVA}.")
-            elif subcategoria == "Juvenil" and _contar_juveniles(db, equipo) >= CUPO_MAXIMO_JUVENIL:
-                flash(f"El equipo {equipo} ya alcanzó el cupo máximo de {CUPO_MAXIMO_JUVENIL} jugadores Juvenil.")
-            else:
-                try:
-                    db.execute(
-                        """INSERT INTO jugadores
-                           (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, foto_token, fecha_registro)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                        (cedula, nombres, apellidos, fecha_nacimiento, equipo, CATEGORIA_ACTIVA,
-                         subcategoria, uuid.uuid4().hex, datetime.now().strftime("%Y-%m-%d %H:%M")),
-                    )
-                    db.commit()
-                    flash(f"Jugador {nombres} {apellidos} inscrito correctamente en {equipo}.")
-                except IntegrityError:
-                    db.rollback()
-                    flash(f"Ya existe un jugador registrado con la cédula {cedula}.")
-
-        return redirect(url_for("inscripcion"))
 
     jugadores = db.execute(
         "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos", (CATEGORIA_ACTIVA,)
