@@ -59,6 +59,7 @@ def init_db():
             subcategoria TEXT NOT NULL DEFAULT 'Sub 45',
             numero_camiseta TEXT,
             foto TEXT,
+            foto_confirmada INTEGER NOT NULL DEFAULT 0,
             fecha_registro TEXT NOT NULL
         )
     """)
@@ -69,6 +70,8 @@ def init_db():
         db.execute("ALTER TABLE jugadores ADD COLUMN numero_camiseta TEXT")
     if "foto" not in jcols:
         db.execute("ALTER TABLE jugadores ADD COLUMN foto TEXT")
+    if "foto_confirmada" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN foto_confirmada INTEGER NOT NULL DEFAULT 0")
     if "foto_token" not in jcols:
         db.execute("ALTER TABLE jugadores ADD COLUMN foto_token TEXT")
         for row in db.execute("SELECT id FROM jugadores").fetchall():
@@ -844,6 +847,9 @@ def autofoto(token):
     if not jugador:
         return render_template("autofoto.html", jugador=None), 404
 
+    if jugador["foto_confirmada"]:
+        return redirect(url_for("autofoto_listo", token=token))
+
     if request.method == "POST":
         archivo = request.files.get("foto")
         if not archivo or not archivo.filename:
@@ -875,6 +881,20 @@ def autofoto_listo(token):
     return render_template("autofoto_listo.html", jugador=jugador, token=token)
 
 
+@app.route("/autofoto/<token>/confirmar", methods=["POST"])
+def autofoto_confirmar(token):
+    db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE foto_token = ?", (token,)).fetchone()
+    if not jugador:
+        return render_template("autofoto.html", jugador=None), 404
+    if not jugador["foto"]:
+        flash("Primero debes tomarte o subir una foto.")
+        return redirect(url_for("autofoto", token=token))
+    db.execute("UPDATE jugadores SET foto_confirmada = 1 WHERE id = ?", (jugador["id"],))
+    db.commit()
+    return redirect(url_for("autofoto_listo", token=token))
+
+
 @app.route("/autofoto/<token>/carnet")
 def autofoto_carnet(token):
     db = get_db()
@@ -882,6 +902,23 @@ def autofoto_carnet(token):
     if not jugador:
         return render_template("autofoto.html", jugador=None), 404
     return _carnet_response(jugador)
+
+
+@app.route("/jugador/<int:jugador_id>/reabrir_foto", methods=["POST"])
+@login_required
+def reabrir_foto(jugador_id):
+    db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
+    if not jugador:
+        flash("Jugador no encontrado.")
+        return redirect(url_for("index"))
+    if not jugador_permitido(db, jugador):
+        flash("No tienes acceso a ese jugador.")
+        return redirect(url_for("index"))
+    db.execute("UPDATE jugadores SET foto_confirmada = 0 WHERE id = ?", (jugador_id,))
+    db.commit()
+    flash("Se habilitó nuevamente el link para que el jugador pueda cambiar su foto.")
+    return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
 
 init_db()

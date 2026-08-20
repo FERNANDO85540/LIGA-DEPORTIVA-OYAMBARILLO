@@ -99,7 +99,7 @@
   <table>
     <thead>
       <tr>
-        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Categoría</th><th>Nac.</th><th>Registrado</th><th></th>
+        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Categoría</th><th>Nac.</th><th>Foto</th><th>Registrado</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -110,6 +110,15 @@
         <td>{{ j.apellidos }}</td>
         <td>{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
         <td>{{ j.fecha_nacimiento or '-' }}</td>
+        <td>
+          {% if j.foto_confirmada %}
+            <span class="badge badge-ok">✅ Confirmada</span>
+          {% elif j.foto %}
+            <span class="badge" style="background:#fff8e1; color:#6d4c00;">📷 Sin confirmar</span>
+          {% else %}
+            <span class="badge badge-full">Sin foto</span>
+          {% endif %}
+        </td>
         <td>{{ j.fecha_registro }}</td>
         <td style="white-space:nowrap;">
           <a href="{{ url_for('ficha_jugador', jugador_id=j.id) }}"><button type="button" style="margin:0; padding:4px 10px; font-size:0.8rem;">Ficha</button></a>
@@ -119,7 +128,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="7">Aún no hay jugadores inscritos en este equipo.</td></tr>
+      <tr><td colspan="8">Aún no hay jugadores inscritos en este equipo.</td></tr>
       {% endfor %}
     </tbody>
   </table>
