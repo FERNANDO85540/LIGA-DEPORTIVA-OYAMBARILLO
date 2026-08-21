@@ -733,6 +733,12 @@ def _font(size, bold=False):
     return ImageFont.load_default(size=size)
 
 
+def _texto_centrado(draw, cx, y, texto, font, fill):
+    bbox = draw.textbbox((0, 0), texto, font=font)
+    ancho_texto = bbox[2] - bbox[0]
+    draw.text((cx - ancho_texto / 2, y), texto, font=font, fill=fill)
+
+
 def _generar_carnet(jugador):
     ancho, alto = 900, 566
     logo_path = os.path.join(BASE_DIR, "static", "logo_ldbo.png")
@@ -741,8 +747,8 @@ def _generar_carnet(jugador):
     frente = Image.new("RGB", (ancho, alto), "#eef6f0")
     draw = ImageDraw.Draw(frente)
 
-    for y in range(110, alto):
-        t = (y - 110) / (alto - 110)
+    for y in range(130, alto):
+        t = (y - 130) / (alto - 130)
         color = (
             int(240 + (214 - 240) * t),
             int(248 + (232 - 248) * t),
@@ -750,19 +756,20 @@ def _generar_carnet(jugador):
         )
         draw.line([(0, y), (ancho, y)], fill=color)
 
-    draw.rectangle([0, 0, ancho, 110], fill="#ffffff")
-    draw.rectangle([0, 108, ancho, 110], fill="#14532d")
+    draw.rectangle([0, 0, ancho, 130], fill="#ffffff")
+    draw.rectangle([0, 127, ancho, 130], fill="#14532d")
+
+    f_titulo = _font(32, bold=True)
+    f_sub = _font(22, bold=True)
+    _texto_centrado(draw, ancho / 2, 18, "LIGA DEPORTIVA OYAMBARILLO", f_titulo, "#14532d")
+    _texto_centrado(draw, ancho / 2, 62, "CAMPEONATO OFICIAL 2026", f_sub, "#b45309")
+
     if os.path.exists(logo_path):
         logo = Image.open(logo_path).convert("RGBA")
-        logo.thumbnail((90, 90))
-        frente.paste(logo, (18, 12), logo)
+        logo.thumbnail((120, 120))
+        frente.paste(logo, (18, 5), logo)
 
-    f_titulo = _font(30, bold=True)
-    f_sub = _font(20, bold=True)
-    draw.text((120, 15), "LIGA DEPORTIVA OYAMBARILLO", font=f_titulo, fill="#14532d")
-    draw.text((120, 55), "CAMPEONATO OFICIAL 2026", font=f_sub, fill="#b45309")
-
-    foto_x, foto_y, foto_w, foto_h = 640, 140, 220, 260
+    foto_x, foto_y, foto_w, foto_h = 610, 155, 250, 280
     if jugador["foto"]:
         foto_path = os.path.join(FOTOS_DIR, jugador["foto"])
         if os.path.exists(foto_path):
@@ -771,56 +778,57 @@ def _generar_carnet(jugador):
             frente.paste(foto, (foto_x, foto_y))
     draw.rectangle([foto_x, foto_y, foto_x + foto_w, foto_y + foto_h], outline="#14532d", width=4)
 
-    f_label = _font(20, bold=True)
-    f_valor = _font(26, bold=True)
+    if jugador["numero_camiseta"]:
+        f_num = _font(64, bold=True)
+        _texto_centrado(draw, foto_x + foto_w / 2, foto_y + foto_h + 14, f"# {jugador['numero_camiseta']}", f_num, "#14532d")
 
-    y0 = 140
+    f_label = _font(24, bold=True)
+    f_valor = _font(34, bold=True)
+
+    y0 = 165
     draw.text((30, y0), "EQUIPO:", font=f_label, fill="#b45309")
-    draw.text((30, y0 + 28), jugador["equipo"].upper(), font=f_valor, fill="#14532d")
+    draw.text((30, y0 + 32), jugador["equipo"].upper(), font=f_valor, fill="#14532d")
 
-    y1 = y0 + 90
+    y1 = y0 + 105
     draw.text((30, y1), "JUGADOR:", font=f_label, fill="#b45309")
-    draw.text((30, y1 + 28), jugador["apellidos"].upper(), font=f_valor, fill="#111111")
-    draw.text((30, y1 + 60), jugador["nombres"].upper(), font=f_valor, fill="#111111")
+    draw.text((30, y1 + 32), jugador["apellidos"].upper(), font=f_valor, fill="#111111")
+    draw.text((30, y1 + 72), jugador["nombres"].upper(), font=f_valor, fill="#111111")
 
-    y2 = y1 + 105
+    y2 = y1 + 130
     draw.text((30, y2), "C.I.:", font=f_label, fill="#b45309")
-    draw.text((110, y2 - 2), jugador["cedula"], font=f_valor, fill="#111111")
+    draw.text((115, y2 - 5), jugador["cedula"], font=f_valor, fill="#111111")
 
     subcat = jugador["subcategoria"] or "Sub 45"
-    draw.text((30, y2 + 34), subcat.upper(), font=f_label, fill="#14532d")
-
-    if jugador["numero_camiseta"]:
-        f_num = _font(46, bold=True)
-        draw.text((foto_x + foto_w - 90, foto_y + foto_h + 10), f"# {jugador['numero_camiseta']}", font=f_num, fill="#14532d")
+    f_cat = _font(26, bold=True)
+    draw.text((30, y2 + 45), subcat.upper(), font=f_cat, fill="#14532d")
 
     # ---------- REVERSO ----------
     reverso = Image.new("RGB", (ancho, alto), "white")
     rdraw = ImageDraw.Draw(reverso)
 
     edad = _calcular_edad(jugador["fecha_nacimiento"])
-    f_rlabel = _font(24, bold=True)
-    f_rvalor = _font(24)
+    f_rlabel = _font(30, bold=True)
+    f_rvalor = _font(30)
 
-    rdraw.text((40, 50), "Categoría:", font=f_rlabel, fill="#14532d")
-    rdraw.text((230, 50), (jugador["categoria"] or "") + (f" - {subcat}" if subcat == "Juvenil" else ""), font=f_rvalor, fill="black")
+    rdraw.text((50, 70), "Categoría:", font=f_rlabel, fill="#14532d")
+    rdraw.text((300, 70), (jugador["categoria"] or "") + (f" - {subcat}" if subcat == "Juvenil" else ""), font=f_rvalor, fill="black")
 
-    rdraw.text((40, 100), "Edad:", font=f_rlabel, fill="black")
-    rdraw.text((230, 100), str(edad) if edad is not None else "-", font=f_rvalor, fill="black")
+    rdraw.text((50, 130), "Edad:", font=f_rlabel, fill="black")
+    rdraw.text((300, 130), str(edad) if edad is not None else "-", font=f_rvalor, fill="black")
 
-    rdraw.text((40, 150), "F. Nacimiento:", font=f_rlabel, fill="black")
-    rdraw.text((40, 185), jugador["fecha_nacimiento"] or "-", font=f_rvalor, fill="#14532d")
+    rdraw.text((50, 190), "F. Nacimiento:", font=f_rlabel, fill="black")
+    rdraw.text((50, 232), jugador["fecha_nacimiento"] or "-", font=f_rvalor, fill="#14532d")
 
     if os.path.exists(logo_path):
         sello = Image.open(logo_path).convert("RGBA")
-        sello.thumbnail((190, 190))
+        sello.thumbnail((220, 220))
         sello_alpha = sello.split()[3].point(lambda p: p * 0.5)
         sello.putalpha(sello_alpha)
-        reverso.paste(sello, (ancho - sello.width - 60, 230), sello)
+        reverso.paste(sello, (ancho - sello.width - 60, 280), sello)
 
-    rdraw.line([(40, 470), (340, 470)], fill="black", width=2)
-    f_firma = _font(20, bold=True)
-    rdraw.text((40, 478), "PRESIDENTE", font=f_firma, fill="black")
+    rdraw.line([(50, 490), (380, 490)], fill="black", width=2)
+    f_firma = _font(24, bold=True)
+    rdraw.text((50, 498), "PRESIDENTE", font=f_firma, fill="black")
 
     return frente, reverso
 
@@ -965,9 +973,12 @@ def reabrir_foto(jugador_id):
     if not jugador_permitido(db, jugador):
         flash("No tienes acceso a ese jugador.")
         return redirect(url_for("index"))
-    db.execute("UPDATE jugadores SET foto_confirmada = 0 WHERE id = ?", (jugador_id,))
+    db.execute(
+        "UPDATE jugadores SET foto_confirmada = 0, foto_token = ? WHERE id = ?",
+        (uuid.uuid4().hex, jugador_id),
+    )
     db.commit()
-    flash("Se habilitó nuevamente el link para que el jugador pueda cambiar su foto.")
+    flash("Se generó un nuevo link para que el jugador suba otra foto. El link anterior ya no funciona.")
     return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
 
