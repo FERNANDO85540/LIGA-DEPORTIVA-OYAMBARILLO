@@ -36,20 +36,49 @@
       <label>Número de camiseta</label>
       <input type="text" name="numero_camiseta" value="{{ jugador.numero_camiseta or '' }}" maxlength="3">
 
-      <label>Foto (.jpg o .png)</label>
+      <label>Foto del jugador (selfie)</label>
       <input type="file" name="foto" accept=".jpg,.jpeg,.png">
+
+      <label>Cédula — lado frontal (anverso)</label>
+      <input type="file" name="cedula_frontal" accept=".jpg,.jpeg,.png">
+
+      <label>Cédula — lado reverso</label>
+      <input type="file" name="cedula_reverso" accept=".jpg,.jpeg,.png">
 
       <button type="submit">Guardar cambios</button>
     </form>
   </div>
 
-  <div style="flex:1; min-width:280px; text-align:center;">
-    <h2>Foto actual</h2>
-    {% if jugador.foto %}
-      <img src="{{ url_for('static', filename='fotos_jugadores/' + jugador.foto) }}" style="max-width:220px; border-radius:8px; border:1px solid var(--borde);">
-    {% else %}
-      <p style="color:#888;">Sin foto cargada aún.</p>
-    {% endif %}
+  <div style="flex:1; min-width:280px;">
+    <h2>Documentos cargados</h2>
+
+    <div style="text-align:center; margin-bottom:16px;">
+      <p style="font-weight:600; margin-bottom:4px;">Foto del jugador</p>
+      {% if jugador.foto %}
+        <img src="{{ url_for('static', filename='fotos_jugadores/' + jugador.foto) }}" style="max-width:180px; border-radius:8px; border:1px solid var(--borde);">
+      {% else %}
+        <p style="color:#888; font-size:0.85rem;">Sin foto cargada.</p>
+      {% endif %}
+    </div>
+
+    <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+      <div style="text-align:center;">
+        <p style="font-weight:600; margin-bottom:4px; font-size:0.9rem;">Cédula frontal</p>
+        {% if jugador.cedula_frontal %}
+          <img src="{{ url_for('static', filename='fotos_jugadores/' + jugador.cedula_frontal) }}" style="max-width:150px; border-radius:8px; border:1px solid var(--borde);">
+        {% else %}
+          <p style="color:#888; font-size:0.8rem;">Sin cargar.</p>
+        {% endif %}
+      </div>
+      <div style="text-align:center;">
+        <p style="font-weight:600; margin-bottom:4px; font-size:0.9rem;">Cédula reverso</p>
+        {% if jugador.cedula_reverso %}
+          <img src="{{ url_for('static', filename='fotos_jugadores/' + jugador.cedula_reverso) }}" style="max-width:150px; border-radius:8px; border:1px solid var(--borde);">
+        {% else %}
+          <p style="color:#888; font-size:0.8rem;">Sin cargar.</p>
+        {% endif %}
+      </div>
+    </div>
 
     <div style="margin-top:20px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
       <a href="{{ url_for('carnet_jugador', jugador_id=jugador.id) }}" target="_blank">
@@ -60,26 +89,6 @@
       </a>
     </div>
   </div>
-</div>
-
-<div class="card">
-  <h2>📱 Link para que el jugador se tome su propia foto</h2>
-
-  {% if jugador.foto_confirmada %}
-    <p style="font-size:0.9rem; color:#14532d; font-weight:600;">✅ El jugador ya confirmó su foto. El link está bloqueado.</p>
-    <form method="post" action="{{ url_for('reabrir_foto', jugador_id=jugador.id) }}" onsubmit="return confirm('¿Habilitar el link para que el jugador pueda cambiar su foto otra vez?');">
-      <button type="submit" class="btn-del">🔓 Habilitar cambio de foto</button>
-    </form>
-  {% else %}
-    <p style="font-size:0.85rem; color:#555;">
-      Comparte este enlace con el jugador por WhatsApp. Desde su celular podrá tomarse la foto con la cámara,
-      ver cómo queda su carnet y confirmarla. Una vez confirmada, el link se bloquea.
-    </p>
-    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-      <input type="text" value="{{ link_foto }}" id="linkFoto" readonly style="flex:1; min-width:240px;">
-      <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('linkFoto').value); this.innerText='¡Copiado!'; setTimeout(() => this.innerText='Copiar link', 1500);">Copiar link</button>
-    </div>
-  {% endif %}
 </div>
 
 {% endblock %}

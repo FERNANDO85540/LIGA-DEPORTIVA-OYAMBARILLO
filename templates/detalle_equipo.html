@@ -54,7 +54,7 @@
 
 <div class="card">
   <h2>Registrar nuevo jugador</h2>
-  <form method="post" action="{{ url_for('agregar_jugador_equipo', equipo_id=equipo.id) }}">
+  <form method="post" action="{{ url_for('agregar_jugador_equipo', equipo_id=equipo.id) }}" enctype="multipart/form-data">
     <label>Cédula</label>
     <input type="text" name="cedula" required>
 
@@ -75,6 +75,15 @@
 
     <label>Número de camiseta (opcional)</label>
     <input type="text" name="numero_camiseta" maxlength="3">
+
+    <label>Foto del jugador (selfie)</label>
+    <input type="file" name="foto" accept=".jpg,.jpeg,.png">
+
+    <label>Cédula — lado frontal (anverso)</label>
+    <input type="file" name="cedula_frontal" accept=".jpg,.jpeg,.png">
+
+    <label>Cédula — lado reverso</label>
+    <input type="file" name="cedula_reverso" accept=".jpg,.jpeg,.png">
 
     <button type="submit">Registrar jugador</button>
   </form>
@@ -99,7 +108,7 @@
   <table>
     <thead>
       <tr>
-        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Categoría</th><th>Nac.</th><th>Foto</th><th>Registrado</th><th></th>
+        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Categoría</th><th>Nac.</th><th>Documentos</th><th>Registrado</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -111,12 +120,13 @@
         <td>{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
         <td>{{ j.fecha_nacimiento or '-' }}</td>
         <td>
-          {% if j.foto_confirmada %}
-            <span class="badge badge-ok">✅ Confirmada</span>
-          {% elif j.foto %}
-            <span class="badge" style="background:#fff8e1; color:#6d4c00;">📷 Sin confirmar</span>
+          {% set completos = (j.foto and j.cedula_frontal and j.cedula_reverso) %}
+          {% if completos %}
+            <span class="badge badge-ok">✅ Completos</span>
+          {% elif j.foto or j.cedula_frontal or j.cedula_reverso %}
+            <span class="badge" style="background:#fff8e1; color:#6d4c00;">📷 Incompletos</span>
           {% else %}
-            <span class="badge badge-full">Sin foto</span>
+            <span class="badge badge-full">Sin documentos</span>
           {% endif %}
         </td>
         <td>{{ j.fecha_registro }}</td>

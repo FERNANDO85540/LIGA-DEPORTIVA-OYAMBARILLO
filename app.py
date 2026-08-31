@@ -137,6 +137,8 @@ def init_db():
             numero_camiseta TEXT,
             foto TEXT,
             foto_confirmada INTEGER NOT NULL DEFAULT 0,
+            cedula_frontal TEXT,
+            cedula_reverso TEXT,
             fecha_registro TEXT NOT NULL
         )
     """)
@@ -149,6 +151,10 @@ def init_db():
         db.execute("ALTER TABLE jugadores ADD COLUMN foto TEXT")
     if "foto_confirmada" not in jcols:
         db.execute("ALTER TABLE jugadores ADD COLUMN foto_confirmada INTEGER NOT NULL DEFAULT 0")
+    if "cedula_frontal" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN cedula_frontal TEXT")
+    if "cedula_reverso" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN cedula_reverso TEXT")
     if "foto_token" not in jcols:
         db.execute("ALTER TABLE jugadores ADD COLUMN foto_token TEXT")
         for row in db.execute("SELECT id FROM jugadores").fetchall():
@@ -462,7 +468,24 @@ def actualizar_pago_equipo(equipo_id):
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
 
-def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacimiento, subcategoria, numero_camiseta=""):
+def _guardar_imagen_subida(archivo):
+    if not archivo or not archivo.filename:
+        return None
+    ext = os.path.splitext(archivo.filename)[1].lower()
+    if ext not in (".jpg", ".jpeg", ".png"):
+        return None
+    nuevo_nombre = f"{uuid.uuid4().hex}.jpg"
+    try:
+        img = Image.open(archivo)
+        img = ImageOps.exif_transpose(img).convert("RGB")
+        img.save(os.path.join(FOTOS_DIR, nuevo_nombre), format="JPEG", quality=88)
+    except Exception:
+        return None
+    return nuevo_nombre
+
+
+def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacimiento, subcategoria,
+                       numero_camiseta="", foto=None, cedula_frontal=None, cedula_reverso=None):
     if subcategoria not in SUBCATEGORIAS:
         subcategoria = "Sub 45"
 
@@ -483,10 +506,12 @@ def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacim
     try:
         cur = db.execute(
             f"""INSERT INTO jugadores
-               (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, numero_camiseta, foto_token, fecha_registro)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?){returning}""",
+               (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, numero_camiseta,
+                foto, cedula_frontal, cedula_reverso, foto_token, fecha_registro)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?){returning}""",
             (cedula, nombres, apellidos, fecha_nacimiento, equipo_nombre, CATEGORIA_ACTIVA,
-             subcategoria, numero_camiseta, uuid.uuid4().hex, datetime.now().strftime("%Y-%m-%d %H:%M")),
+             subcategoria, numero_camiseta, foto, cedula_frontal, cedula_reverso,
+             uuid.uuid4().hex, datetime.now().strftime("%Y-%m-%d %H:%M")),
         )
         db.commit()
         if USANDO_POSTGRES:
@@ -509,6 +534,10 @@ def agregar_jugador_equipo(equipo_id):
         flash("No tienes acceso a ese equipo.")
         return redirect(url_for("index"))
 
+    foto = _guardar_imagen_subida(request.files.get("foto"))
+    cedula_frontal = _guardar_imagen_subida(request.files.get("cedula_frontal"))
+    cedula_reverso = _guardar_imagen_subida(request.files.get("cedula_reverso"))
+
     jugador_id, error = _insertar_jugador(
         db,
         equipo["nombre"],
@@ -518,11 +547,14 @@ def agregar_jugador_equipo(equipo_id):
         request.form.get("fecha_nacimiento", "").strip(),
         request.form.get("subcategoria", "Sub 45").strip(),
         request.form.get("numero_camiseta", "").strip(),
+        foto=foto,
+        cedula_frontal=cedula_frontal,
+        cedula_reverso=cedula_reverso,
     )
     if error:
         flash(error)
     else:
-        flash("Jugador registrado. Completa su ficha y envíale el link de foto.")
+        flash("Jugador registrado correctamente.")
         return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
@@ -681,8 +713,7 @@ def ficha_jugador(jugador_id):
         flash("No tienes acceso a ese jugador.")
         return redirect(url_for("index"))
     edad = _calcular_edad(jugador["fecha_nacimiento"])
-    link_foto = url_for("autofoto", token=jugador["foto_token"], _external=True)
-    return render_template("ficha_jugador.html", jugador=jugador, edad=edad, subcategorias=SUBCATEGORIAS, link_foto=link_foto)
+    return render_template("ficha_jugador.html", jugador=jugador, edad=edad, subcategorias=SUBCATEGORIAS)
 
 
 @app.route("/jugador/<int:jugador_id>/actualizar", methods=["POST"])
@@ -702,21 +733,15 @@ def actualizar_jugador(jugador_id):
     fecha_nacimiento = request.form.get("fecha_nacimiento", "").strip()
     numero_camiseta = request.form.get("numero_camiseta", "").strip()
 
-    foto_nombre = jugador["foto"]
-    archivo = request.files.get("foto")
-    if archivo and archivo.filename:
-        ext = os.path.splitext(archivo.filename)[1].lower()
-        if ext not in (".jpg", ".jpeg", ".png"):
-            flash("La foto debe ser .jpg o .png.")
-            return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
-        nuevo_nombre = f"{uuid.uuid4().hex}{ext}"
-        archivo.save(os.path.join(FOTOS_DIR, nuevo_nombre))
-        foto_nombre = nuevo_nombre
+    foto_nombre = _guardar_imagen_subida(request.files.get("foto")) or jugador["foto"]
+    cedula_frontal = _guardar_imagen_subida(request.files.get("cedula_frontal")) or jugador["cedula_frontal"]
+    cedula_reverso = _guardar_imagen_subida(request.files.get("cedula_reverso")) or jugador["cedula_reverso"]
 
     db.execute(
         """UPDATE jugadores SET nombres = ?, apellidos = ?, fecha_nacimiento = ?,
-           numero_camiseta = ?, foto = ? WHERE id = ?""",
-        (nombres, apellidos, fecha_nacimiento, numero_camiseta, foto_nombre, jugador_id),
+           numero_camiseta = ?, foto = ?, cedula_frontal = ?, cedula_reverso = ? WHERE id = ?""",
+        (nombres, apellidos, fecha_nacimiento, numero_camiseta, foto_nombre,
+         cedula_frontal, cedula_reverso, jugador_id),
     )
     db.commit()
     flash("Ficha del jugador actualizada.")
@@ -896,90 +921,6 @@ def eliminar_jugador(jugador_id):
     db.commit()
     flash("Jugador eliminado.")
     return redirect(url_for("detalle_equipo", equipo_id=db.execute("SELECT id FROM equipos WHERE nombre = ?", (jugador["equipo"],)).fetchone()["id"]))
-
-
-@app.route("/autofoto/<token>", methods=["GET", "POST"])
-def autofoto(token):
-    db = get_db()
-    jugador = db.execute("SELECT * FROM jugadores WHERE foto_token = ?", (token,)).fetchone()
-    if not jugador:
-        return render_template("autofoto.html", jugador=None), 404
-
-    if jugador["foto_confirmada"]:
-        return redirect(url_for("autofoto_listo", token=token))
-
-    if request.method == "POST":
-        archivo = request.files.get("foto")
-        if not archivo or not archivo.filename:
-            flash("No se recibió ninguna foto. Inténtalo de nuevo.")
-            return redirect(url_for("autofoto", token=token))
-
-        nuevo_nombre = f"{uuid.uuid4().hex}.jpg"
-        try:
-            img = Image.open(archivo)
-            img = ImageOps.exif_transpose(img).convert("RGB")
-            img.save(os.path.join(FOTOS_DIR, nuevo_nombre), format="JPEG", quality=88)
-        except Exception:
-            flash("No se pudo procesar la foto. Inténtalo de nuevo.")
-            return redirect(url_for("autofoto", token=token))
-
-        db.execute("UPDATE jugadores SET foto = ? WHERE id = ?", (nuevo_nombre, jugador["id"]))
-        db.commit()
-        return redirect(url_for("autofoto_listo", token=token))
-
-    return render_template("autofoto.html", jugador=jugador)
-
-
-@app.route("/autofoto/<token>/listo")
-def autofoto_listo(token):
-    db = get_db()
-    jugador = db.execute("SELECT * FROM jugadores WHERE foto_token = ?", (token,)).fetchone()
-    if not jugador:
-        return render_template("autofoto.html", jugador=None), 404
-    return render_template("autofoto_listo.html", jugador=jugador, token=token)
-
-
-@app.route("/autofoto/<token>/confirmar", methods=["POST"])
-def autofoto_confirmar(token):
-    db = get_db()
-    jugador = db.execute("SELECT * FROM jugadores WHERE foto_token = ?", (token,)).fetchone()
-    if not jugador:
-        return render_template("autofoto.html", jugador=None), 404
-    if not jugador["foto"]:
-        flash("Primero debes tomarte o subir una foto.")
-        return redirect(url_for("autofoto", token=token))
-    db.execute("UPDATE jugadores SET foto_confirmada = 1 WHERE id = ?", (jugador["id"],))
-    db.commit()
-    return redirect(url_for("autofoto_listo", token=token))
-
-
-@app.route("/autofoto/<token>/carnet")
-def autofoto_carnet(token):
-    db = get_db()
-    jugador = db.execute("SELECT * FROM jugadores WHERE foto_token = ?", (token,)).fetchone()
-    if not jugador:
-        return render_template("autofoto.html", jugador=None), 404
-    return _carnet_response(jugador)
-
-
-@app.route("/jugador/<int:jugador_id>/reabrir_foto", methods=["POST"])
-@login_required
-def reabrir_foto(jugador_id):
-    db = get_db()
-    jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
-    if not jugador:
-        flash("Jugador no encontrado.")
-        return redirect(url_for("index"))
-    if not jugador_permitido(db, jugador):
-        flash("No tienes acceso a ese jugador.")
-        return redirect(url_for("index"))
-    db.execute(
-        "UPDATE jugadores SET foto_confirmada = 0, foto_token = ? WHERE id = ?",
-        (uuid.uuid4().hex, jugador_id),
-    )
-    db.commit()
-    flash("Se generó un nuevo link para que el jugador suba otra foto. El link anterior ya no funciona.")
-    return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
 
 init_db()
