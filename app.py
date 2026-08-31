@@ -507,10 +507,13 @@ def _guardar_imagen_subida(archivo):
     return nuevo_nombre
 
 
+def _subcategoria_por_nacimiento(fecha_nacimiento):
+    return "Juvenil" if (fecha_nacimiento or "").strip().startswith("1982") else "Sub 45"
+
+
 def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacimiento, subcategoria,
                        numero_camiseta="", foto=None, cedula_frontal=None, cedula_reverso=None):
-    if subcategoria not in SUBCATEGORIAS:
-        subcategoria = "Sub 45"
+    subcategoria = _subcategoria_por_nacimiento(fecha_nacimiento)
 
     if not (cedula and nombres and apellidos):
         return None, "Cédula, nombres y apellidos son obligatorios."
@@ -755,15 +758,21 @@ def actualizar_jugador(jugador_id):
     apellidos = request.form.get("apellidos", "").strip() or jugador["apellidos"]
     fecha_nacimiento = request.form.get("fecha_nacimiento", "").strip()
     numero_camiseta = request.form.get("numero_camiseta", "").strip()
+    subcategoria = _subcategoria_por_nacimiento(fecha_nacimiento)
+
+    if (subcategoria == "Juvenil" and jugador["subcategoria"] != "Juvenil"
+            and _contar_juveniles(db, jugador["equipo"]) >= CUPO_MAXIMO_JUVENIL):
+        flash(f"No se puede cambiar la fecha: el equipo ya alcanzó el cupo máximo de {CUPO_MAXIMO_JUVENIL} jugadores Juvenil.")
+        return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
     foto_nombre = _guardar_imagen_subida(request.files.get("foto")) or jugador["foto"]
     cedula_frontal = _guardar_imagen_subida(request.files.get("cedula_frontal")) or jugador["cedula_frontal"]
     cedula_reverso = _guardar_imagen_subida(request.files.get("cedula_reverso")) or jugador["cedula_reverso"]
 
     db.execute(
-        """UPDATE jugadores SET nombres = ?, apellidos = ?, fecha_nacimiento = ?,
+        """UPDATE jugadores SET nombres = ?, apellidos = ?, fecha_nacimiento = ?, subcategoria = ?,
            numero_camiseta = ?, foto = ?, cedula_frontal = ?, cedula_reverso = ? WHERE id = ?""",
-        (nombres, apellidos, fecha_nacimiento, numero_camiseta, foto_nombre,
+        (nombres, apellidos, fecha_nacimiento, subcategoria, numero_camiseta, foto_nombre,
          cedula_frontal, cedula_reverso, jugador_id),
     )
     db.commit()

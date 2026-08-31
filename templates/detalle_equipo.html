@@ -84,13 +84,8 @@
     <input type="text" name="apellidos" required>
 
     <label>Fecha de nacimiento</label>
-    <input type="date" name="fecha_nacimiento">
-
-    <label>Categoría</label>
-    <select name="subcategoria">
-      <option value="Sub 45">{{ categoria }}</option>
-      <option value="Juvenil">{{ categoria }} - Juvenil (1982)</option>
-    </select>
+    <input type="date" name="fecha_nacimiento" required>
+    <p style="font-size:0.8rem; color:#888; margin:2px 0 0;">La categoría (Sub 45 / Juvenil) se calcula automáticamente según el año de nacimiento. Juvenil es exclusivo para nacidos en 1982.</p>
 
     <label>Número de camiseta (opcional)</label>
     <input type="text" name="numero_camiseta" maxlength="3">
