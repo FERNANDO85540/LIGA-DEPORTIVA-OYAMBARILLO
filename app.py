@@ -358,6 +358,16 @@ def credenciales_equipo(equipo_id):
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
 
+@app.route("/equipos/<int:equipo_id>/credenciales/quitar", methods=["POST"])
+@admin_required
+def quitar_credenciales_equipo(equipo_id):
+    db = get_db()
+    db.execute("UPDATE equipos SET usuario = NULL, clave = NULL WHERE id = ?", (equipo_id,))
+    db.commit()
+    flash("Se quitó el acceso del delegado para este equipo.")
+    return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
+
+
 @app.route("/equipo/<int:equipo_id>", methods=["GET"])
 @login_required
 def detalle_equipo(equipo_id):
@@ -745,6 +755,31 @@ def actualizar_jugador(jugador_id):
     )
     db.commit()
     flash("Ficha del jugador actualizada.")
+    return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
+
+
+CAMPOS_FOTO_VALIDOS = {"foto", "cedula_frontal", "cedula_reverso"}
+
+
+@app.route("/jugador/<int:jugador_id>/quitar_foto/<campo>", methods=["POST"])
+@login_required
+def quitar_foto_jugador(jugador_id, campo):
+    if campo not in CAMPOS_FOTO_VALIDOS:
+        flash("Documento no válido.")
+        return redirect(url_for("index"))
+
+    db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
+    if not jugador:
+        flash("Jugador no encontrado.")
+        return redirect(url_for("index"))
+    if not jugador_permitido(db, jugador):
+        flash("No tienes acceso a ese jugador.")
+        return redirect(url_for("index"))
+
+    db.execute(f"UPDATE jugadores SET {campo} = NULL WHERE id = ?", (jugador_id,))
+    db.commit()
+    flash("Documento eliminado.")
     return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
 

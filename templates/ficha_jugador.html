@@ -55,7 +55,10 @@
     <div style="text-align:center; margin-bottom:16px;">
       <p style="font-weight:600; margin-bottom:4px;">Foto del jugador</p>
       {% if jugador.foto %}
-        <img src="{{ url_for('static', filename='fotos_jugadores/' + jugador.foto) }}" style="max-width:180px; border-radius:8px; border:1px solid var(--borde);">
+        <img src="{{ url_for('static', filename='fotos_jugadores/' + jugador.foto) }}" style="max-width:180px; border-radius:8px; border:1px solid var(--borde); display:block; margin:0 auto 6px;">
+        <form method="post" action="{{ url_for('quitar_foto_jugador', jugador_id=jugador.id, campo='foto') }}" onsubmit="return confirm('¿Eliminar esta foto?');">
+          <button type="submit" class="btn-del">Eliminar</button>
+        </form>
       {% else %}
         <p style="color:#888; font-size:0.85rem;">Sin foto cargada.</p>
       {% endif %}
@@ -65,7 +68,10 @@
       <div style="text-align:center;">
         <p style="font-weight:600; margin-bottom:4px; font-size:0.9rem;">Cédula frontal</p>
         {% if jugador.cedula_frontal %}
-          <img src="{{ url_for('static', filename='fotos_jugadores/' + jugador.cedula_frontal) }}" style="max-width:150px; border-radius:8px; border:1px solid var(--borde);">
+          <img src="{{ url_for('static', filename='fotos_jugadores/' + jugador.cedula_frontal) }}" style="max-width:150px; border-radius:8px; border:1px solid var(--borde); display:block; margin:0 auto 6px;">
+          <form method="post" action="{{ url_for('quitar_foto_jugador', jugador_id=jugador.id, campo='cedula_frontal') }}" onsubmit="return confirm('¿Eliminar esta foto?');">
+            <button type="submit" class="btn-del">Eliminar</button>
+          </form>
         {% else %}
           <p style="color:#888; font-size:0.8rem;">Sin cargar.</p>
         {% endif %}
@@ -73,7 +79,10 @@
       <div style="text-align:center;">
         <p style="font-weight:600; margin-bottom:4px; font-size:0.9rem;">Cédula reverso</p>
         {% if jugador.cedula_reverso %}
-          <img src="{{ url_for('static', filename='fotos_jugadores/' + jugador.cedula_reverso) }}" style="max-width:150px; border-radius:8px; border:1px solid var(--borde);">
+          <img src="{{ url_for('static', filename='fotos_jugadores/' + jugador.cedula_reverso) }}" style="max-width:150px; border-radius:8px; border:1px solid var(--borde); display:block; margin:0 auto 6px;">
+          <form method="post" action="{{ url_for('quitar_foto_jugador', jugador_id=jugador.id, campo='cedula_reverso') }}" onsubmit="return confirm('¿Eliminar esta foto?');">
+            <button type="submit" class="btn-del">Eliminar</button>
+          </form>
         {% else %}
           <p style="color:#888; font-size:0.8rem;">Sin cargar.</p>
         {% endif %}

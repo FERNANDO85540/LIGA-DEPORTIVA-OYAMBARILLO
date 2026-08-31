@@ -49,6 +49,11 @@
     </div>
     <button type="submit">Guardar acceso</button>
   </form>
+  {% if equipo.usuario %}
+    <form method="post" action="{{ url_for('quitar_credenciales_equipo', equipo_id=equipo.id) }}" onsubmit="return confirm('¿Quitar el acceso del delegado? Ya no podrá ingresar con este usuario/clave.');" style="margin-top:10px;">
+      <button type="submit" class="btn-del">Quitar acceso</button>
+    </form>
+  {% endif %}
 </div>
 {% endif %}
 
