@@ -166,6 +166,8 @@ def init_db():
             nombre TEXT NOT NULL UNIQUE,
             valor_inscripcion REAL NOT NULL DEFAULT 0,
             abono REAL NOT NULL DEFAULT 0,
+            forma_pago TEXT,
+            comprobante_pago TEXT,
             usuario TEXT UNIQUE,
             clave TEXT
         )
@@ -175,6 +177,10 @@ def init_db():
         db.execute("ALTER TABLE equipos ADD COLUMN valor_inscripcion REAL NOT NULL DEFAULT 0")
     if "abono" not in cols:
         db.execute("ALTER TABLE equipos ADD COLUMN abono REAL NOT NULL DEFAULT 0")
+    if "forma_pago" not in cols:
+        db.execute("ALTER TABLE equipos ADD COLUMN forma_pago TEXT")
+    if "comprobante_pago" not in cols:
+        db.execute("ALTER TABLE equipos ADD COLUMN comprobante_pago TEXT")
     if "usuario" not in cols:
         db.execute("ALTER TABLE equipos ADD COLUMN usuario TEXT")
     if "clave" not in cols:
@@ -463,15 +469,22 @@ def exportar_general():
     return _exportar_jugadores_excel(jugadores, "jugadores_liga_oyambarillo.xlsx", incluir_equipo=True)
 
 
+FORMAS_PAGO_VALIDAS = {"Efectivo", "Depósito", "Transferencia"}
+
+
 @app.route("/equipo/<int:equipo_id>/pago", methods=["POST"])
 @admin_required
 def actualizar_pago_equipo(equipo_id):
     db = get_db()
     valor_inscripcion = _to_float(request.form.get("valor_inscripcion", "0"))
     abono = _to_float(request.form.get("abono", "0"))
+    forma_pago = request.form.get("forma_pago", "Efectivo").strip()
+    if forma_pago not in FORMAS_PAGO_VALIDAS:
+        forma_pago = "Efectivo"
+    comprobante_pago = request.form.get("comprobante_pago", "").strip()
     db.execute(
-        "UPDATE equipos SET valor_inscripcion = ?, abono = ? WHERE id = ?",
-        (valor_inscripcion, abono, equipo_id),
+        "UPDATE equipos SET valor_inscripcion = ?, abono = ?, forma_pago = ?, comprobante_pago = ? WHERE id = ?",
+        (valor_inscripcion, abono, forma_pago, comprobante_pago, equipo_id),
     )
     db.commit()
     flash("Datos de pago actualizados.")

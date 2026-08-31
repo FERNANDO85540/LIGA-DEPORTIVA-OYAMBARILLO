@@ -12,6 +12,7 @@
   </p>
 </div>
 
+{% if session.get('rol') == 'admin' %}
 <div class="card">
   <h2>Inscripción del equipo (pago)</h2>
   <form method="post" action="{{ url_for('actualizar_pago_equipo', equipo_id=equipo.id) }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
@@ -24,12 +25,25 @@
       <input type="number" step="0.01" name="abono" value="{{ equipo.abono }}">
     </div>
     <div>
+      <label>Forma de pago</label>
+      <select name="forma_pago">
+        <option value="Efectivo" {% if equipo.forma_pago == 'Efectivo' %}selected{% endif %}>Efectivo</option>
+        <option value="Depósito" {% if equipo.forma_pago == 'Depósito' %}selected{% endif %}>Depósito</option>
+        <option value="Transferencia" {% if equipo.forma_pago == 'Transferencia' %}selected{% endif %}>Transferencia</option>
+      </select>
+    </div>
+    <div>
+      <label>N° comprobante (opcional)</label>
+      <input type="text" name="comprobante_pago" value="{{ equipo.comprobante_pago or '' }}" placeholder="ej. 00123456">
+    </div>
+    <div>
       <label>Saldo</label>
       <input type="text" value="${{ '%.2f' % saldo }}" disabled style="background:#f4f6f5;">
     </div>
     <button type="submit">Guardar pago</button>
   </form>
 </div>
+{% endif %}
 
 {% if session.get('rol') == 'admin' %}
 <div class="card">
