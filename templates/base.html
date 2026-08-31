@@ -109,5 +109,103 @@
   {% endwith %}
   {% block content %}{% endblock %}
 </main>
+<script>
+// Editor simple de rotación para inputs de tipo file con foto.
+// Uso: <input type="file" data-rotador accept=".jpg,.jpeg,.png">
+document.querySelectorAll('input[type=file][data-rotador]').forEach(function (input) {
+  const wrapper = document.createElement('div');
+  wrapper.style.marginTop = '8px';
+  input.insertAdjacentElement('afterend', wrapper);
+
+  let rotacion = 0;
+  let imgOriginal = null;
+
+  function render() {
+    wrapper.innerHTML = '';
+    if (!imgOriginal) return;
+
+    const canvas = document.createElement('canvas');
+    const swap = rotacion % 180 !== 0;
+    canvas.width = swap ? imgOriginal.height : imgOriginal.width;
+    canvas.height = swap ? imgOriginal.width : imgOriginal.height;
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((rotacion * Math.PI) / 180);
+    ctx.drawImage(imgOriginal, -imgOriginal.width / 2, -imgOriginal.height / 2);
+    ctx.restore();
+
+    canvas.style.maxWidth = '220px';
+    canvas.style.display = 'block';
+    canvas.style.border = '1px solid var(--borde)';
+    canvas.style.borderRadius = '8px';
+    canvas.style.marginBottom = '6px';
+    wrapper.appendChild(canvas);
+
+    const btnBox = document.createElement('div');
+    btnBox.style.display = 'flex';
+    btnBox.style.gap = '6px';
+
+    const btnIzq = document.createElement('button');
+    btnIzq.type = 'button';
+    btnIzq.textContent = '⟲ Girar izquierda';
+    btnIzq.style.padding = '4px 10px';
+    btnIzq.style.fontSize = '0.8rem';
+    btnIzq.style.margin = '0';
+    btnIzq.onclick = function () { rotacion = (rotacion - 90 + 360) % 360; render(); actualizarArchivo(canvas); };
+
+    const btnDer = document.createElement('button');
+    btnDer.type = 'button';
+    btnDer.textContent = 'Girar derecha ⟳';
+    btnDer.style.padding = '4px 10px';
+    btnDer.style.fontSize = '0.8rem';
+    btnDer.style.margin = '0';
+    btnDer.onclick = function () { rotacion = (rotacion + 90) % 360; render(); actualizarArchivo(canvas); };
+
+    btnBox.appendChild(btnIzq);
+    btnBox.appendChild(btnDer);
+    wrapper.appendChild(btnBox);
+
+    actualizarArchivo(canvas);
+  }
+
+  function actualizarArchivo(canvas) {
+    canvas.toBlob(function (blob) {
+      if (!blob) return;
+      const nombre = (input.dataset.nombreOriginal || 'foto') + '.jpg';
+      const file = new File([blob], nombre, { type: 'image/jpeg' });
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input._archivoRotado = dt.files;
+    }, 'image/jpeg', 0.9);
+  }
+
+  input.addEventListener('change', function () {
+    rotacion = 0;
+    const file = input.files && input.files[0];
+    if (!file) { wrapper.innerHTML = ''; imgOriginal = null; return; }
+    input.dataset.nombreOriginal = file.name.replace(/\.[^.]+$/, '');
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const img = new Image();
+      img.onload = function () {
+        imgOriginal = img;
+        render();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  const form = input.closest('form');
+  if (form) {
+    form.addEventListener('submit', function () {
+      if (input._archivoRotado) {
+        input.files = input._archivoRotado;
+      }
+    });
+  }
+});
+</script>
 </body>
 </html>
