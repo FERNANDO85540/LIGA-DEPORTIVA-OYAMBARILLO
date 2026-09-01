@@ -301,7 +301,7 @@ def agregar_equipo():
         try:
             db.execute("INSERT INTO equipos (nombre) VALUES (?)", (nombre,))
             db.commit()
-            flash(f"Equipo '{nombre}' agregado.")
+            flash(f"Equipo '{nombre}' agregado.", "ok")
         except IntegrityError:
             db.rollback()
             flash(f"Ya existe un equipo llamado '{nombre}'.")
@@ -320,7 +320,7 @@ def renombrar_equipo(equipo_id):
                 db.execute("UPDATE equipos SET nombre = ? WHERE id = ?", (nuevo_nombre, equipo_id))
                 db.execute("UPDATE jugadores SET equipo = ? WHERE equipo = ?", (nuevo_nombre, actual["nombre"]))
                 db.commit()
-                flash(f"Equipo renombrado a '{nuevo_nombre}'.")
+                flash(f"Equipo renombrado a '{nuevo_nombre}'.", "ok")
             except IntegrityError:
                 db.rollback()
                 flash(f"Ya existe un equipo llamado '{nuevo_nombre}'.")
@@ -341,7 +341,7 @@ def eliminar_equipo(equipo_id):
         else:
             db.execute("DELETE FROM equipos WHERE id = ?", (equipo_id,))
             db.commit()
-            flash(f"Equipo '{equipo['nombre']}' eliminado.")
+            flash(f"Equipo '{equipo['nombre']}' eliminado.", "ok")
     return redirect(url_for("inscripcion"))
 
 
@@ -357,7 +357,7 @@ def credenciales_equipo(equipo_id):
         try:
             db.execute("UPDATE equipos SET usuario = ?, clave = ? WHERE id = ?", (usuario, clave, equipo_id))
             db.commit()
-            flash(f"Acceso del equipo actualizado: usuario '{usuario}'.")
+            flash(f"Acceso del equipo actualizado: usuario '{usuario}'.", "ok")
         except IntegrityError:
             db.rollback()
             flash(f"El usuario '{usuario}' ya está en uso por otro equipo.")
@@ -370,7 +370,7 @@ def quitar_credenciales_equipo(equipo_id):
     db = get_db()
     db.execute("UPDATE equipos SET usuario = NULL, clave = NULL WHERE id = ?", (equipo_id,))
     db.commit()
-    flash("Se quitó el acceso del delegado para este equipo.")
+    flash("Se quitó el acceso del delegado para este equipo.", "ok")
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
 
@@ -487,7 +487,7 @@ def actualizar_pago_equipo(equipo_id):
         (valor_inscripcion, abono, forma_pago, comprobante_pago, equipo_id),
     )
     db.commit()
-    flash("Datos de pago actualizados.")
+    flash("Datos de pago actualizados.", "ok")
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
 
@@ -580,7 +580,7 @@ def agregar_jugador_equipo(equipo_id):
     if error:
         flash(error)
     else:
-        flash("Jugador registrado correctamente.")
+        flash("Jugador registrado correctamente.", "ok")
         return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
@@ -681,7 +681,7 @@ def subir_nomina(equipo_id):
         mensaje += f" {incompletos} fila(s) omitida(s) por datos incompletos."
     if omitidos_cupo_juvenil:
         mensaje += f" {omitidos_cupo_juvenil} omitido(s) por superar el cupo máximo de {CUPO_MAXIMO_JUVENIL} Juvenil."
-    flash(mensaje)
+    flash(mensaje, "ok" if agregados > 0 else "error")
 
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
@@ -739,7 +739,9 @@ def ficha_jugador(jugador_id):
         flash("No tienes acceso a ese jugador.")
         return redirect(url_for("index"))
     edad = _calcular_edad(jugador["fecha_nacimiento"])
-    return render_template("ficha_jugador.html", jugador=jugador, edad=edad, subcategorias=SUBCATEGORIAS)
+    equipo_row = db.execute("SELECT id FROM equipos WHERE nombre = ?", (jugador["equipo"],)).fetchone()
+    equipo_id = equipo_row["id"] if equipo_row else None
+    return render_template("ficha_jugador.html", jugador=jugador, edad=edad, subcategorias=SUBCATEGORIAS, equipo_id=equipo_id)
 
 
 @app.route("/jugador/<int:jugador_id>/actualizar", methods=["POST"])
@@ -776,7 +778,7 @@ def actualizar_jugador(jugador_id):
          cedula_frontal, cedula_reverso, jugador_id),
     )
     db.commit()
-    flash("Ficha del jugador actualizada.")
+    flash("Ficha del jugador actualizada.", "ok")
     return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
 
@@ -801,7 +803,7 @@ def quitar_foto_jugador(jugador_id, campo):
 
     db.execute(f"UPDATE jugadores SET {campo} = NULL WHERE id = ?", (jugador_id,))
     db.commit()
-    flash("Documento eliminado.")
+    flash("Documento eliminado.", "ok")
     return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
 
@@ -976,7 +978,7 @@ def eliminar_jugador(jugador_id):
         return redirect(url_for("index"))
     db.execute("DELETE FROM jugadores WHERE id = ?", (jugador_id,))
     db.commit()
-    flash("Jugador eliminado.")
+    flash("Jugador eliminado.", "ok")
     return redirect(url_for("detalle_equipo", equipo_id=db.execute("SELECT id FROM equipos WHERE nombre = ?", (jugador["equipo"],)).fetchone()["id"]))
 
 

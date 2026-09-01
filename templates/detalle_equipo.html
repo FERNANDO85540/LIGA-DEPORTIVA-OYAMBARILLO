@@ -59,7 +59,10 @@
     </div>
     <div>
       <label>Clave</label>
-      <input type="text" name="clave" value="{{ equipo.clave or '' }}" placeholder="clave de acceso">
+      <div style="display:flex; gap:6px;">
+        <input type="password" name="clave" id="clave-{{ equipo.id }}" value="{{ equipo.clave or '' }}" placeholder="clave de acceso" style="flex:1;">
+        <button type="button" onclick="const i=document.getElementById('clave-{{ equipo.id }}'); i.type = i.type==='password' ? 'text' : 'password';" style="margin:0; padding:8px 10px;">👁️</button>
+      </div>
     </div>
     <button type="submit">Guardar acceso</button>
   </form>
@@ -93,11 +96,8 @@
     <label>Foto del jugador (selfie)</label>
     <input type="file" name="foto" accept=".jpg,.jpeg,.png" data-rotador>
 
-    <label>Cédula — lado frontal (anverso)</label>
+    <label>Foto de la cédula</label>
     <input type="file" name="cedula_frontal" accept=".jpg,.jpeg,.png" data-rotador>
-
-    <label>Cédula — lado reverso</label>
-    <input type="file" name="cedula_reverso" accept=".jpg,.jpeg,.png" data-rotador>
 
     <button type="submit">Registrar jugador</button>
   </form>
@@ -134,7 +134,7 @@
         <td>{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
         <td>{{ j.fecha_nacimiento or '-' }}</td>
         <td>
-          {% set completos = (j.foto and j.cedula_frontal and j.cedula_reverso) %}
+          {% set completos = (j.foto and j.cedula_frontal) %}
           {% if completos %}
             <span class="badge badge-ok">✅ Completos</span>
           {% elif j.foto or j.cedula_frontal or j.cedula_reverso %}

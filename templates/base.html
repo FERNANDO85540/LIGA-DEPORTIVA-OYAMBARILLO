@@ -39,14 +39,34 @@
     padding: 20px;
     margin-bottom: 20px;
   }
-  .flash {
-    background: #fff8e1;
-    border: 1px solid #ffe082;
-    color: #6d4c00;
-    padding: 10px 14px;
-    border-radius: 8px;
-    margin-bottom: 16px;
+  #toast-container {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    left: 16px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    pointer-events: none;
   }
+  .toast {
+    background: #a13a2f;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+    font-size: 0.9rem;
+    max-width: 420px;
+    width: 100%;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: auto;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.toast-ok { background: var(--verde-osc); }
   label { display: block; margin: 10px 0 4px; font-weight: 600; font-size: 0.9rem; }
   input, select {
     width: 100%;
@@ -100,15 +120,32 @@
   {% endif %}
 </header>
 <main>
-  {% with messages = get_flashed_messages() %}
-    {% if messages %}
-      {% for m in messages %}
-        <div class="flash">{{ m }}</div>
-      {% endfor %}
-    {% endif %}
-  {% endwith %}
   {% block content %}{% endblock %}
 </main>
+<div id="toast-container"></div>
+<script>
+(function () {
+  const mensajes = [
+    {% for categoria, m in get_flashed_messages(with_categories=true) %}
+      {texto: {{ m|tojson }}, categoria: {{ categoria|tojson }}},
+    {% endfor %}
+  ];
+  const container = document.getElementById('toast-container');
+  mensajes.forEach(function (msg, i) {
+    setTimeout(function () {
+      const toast = document.createElement('div');
+      toast.className = 'toast' + (msg.categoria === 'ok' ? ' toast-ok' : '');
+      toast.textContent = msg.texto;
+      container.appendChild(toast);
+      requestAnimationFrame(function () { toast.classList.add('show'); });
+      setTimeout(function () {
+        toast.classList.remove('show');
+        setTimeout(function () { toast.remove(); }, 300);
+      }, 4500);
+    }, i * 150);
+  });
+})();
+</script>
 <script>
 // Editor simple de rotación para inputs de tipo file con foto.
 // Uso: <input type="file" data-rotador accept=".jpg,.jpeg,.png">
