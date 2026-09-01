@@ -139,6 +139,7 @@ def init_db():
             foto_confirmada INTEGER NOT NULL DEFAULT 0,
             cedula_frontal TEXT,
             cedula_reverso TEXT,
+            calificado INTEGER NOT NULL DEFAULT 0,
             fecha_registro TEXT NOT NULL
         )
     """)
@@ -155,6 +156,8 @@ def init_db():
         db.execute("ALTER TABLE jugadores ADD COLUMN cedula_frontal TEXT")
     if "cedula_reverso" not in jcols:
         db.execute("ALTER TABLE jugadores ADD COLUMN cedula_reverso TEXT")
+    if "calificado" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN calificado INTEGER NOT NULL DEFAULT 0")
     if "foto_token" not in jcols:
         db.execute("ALTER TABLE jugadores ADD COLUMN foto_token TEXT")
         for row in db.execute("SELECT id FROM jugadores").fetchall():
@@ -751,6 +754,10 @@ def actualizar_jugador(jugador_id):
         flash("No tienes acceso a ese jugador.")
         return redirect(url_for("index"))
 
+    if jugador["calificado"] and session.get("rol") != "admin":
+        flash("Este jugador ya fue calificado y no se puede modificar. Contacta a la Comisión de Calificación.")
+        return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
+
     nombres = request.form.get("nombres", "").strip() or jugador["nombres"]
     apellidos = request.form.get("apellidos", "").strip() or jugador["apellidos"]
     fecha_nacimiento = request.form.get("fecha_nacimiento", "").strip()
@@ -796,10 +803,29 @@ def quitar_foto_jugador(jugador_id, campo):
         flash("No tienes acceso a ese jugador.")
         return redirect(url_for("index"))
 
+    if jugador["calificado"] and session.get("rol") != "admin":
+        flash("Este jugador ya fue calificado y no se puede modificar. Contacta a la Comisión de Calificación.")
+        return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
+
     db.execute(f"UPDATE jugadores SET {campo} = NULL WHERE id = ?", (jugador_id,))
     db.commit()
     flash("Documento eliminado.", "ok")
     return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
+
+
+@app.route("/jugador/<int:jugador_id>/calificar", methods=["POST"])
+@admin_required
+def calificar_jugador(jugador_id):
+    db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
+    if not jugador:
+        flash("Jugador no encontrado.")
+        return redirect(url_for("index"))
+    nuevo_estado = 0 if jugador["calificado"] else 1
+    db.execute("UPDATE jugadores SET calificado = ? WHERE id = ?", (nuevo_estado, jugador_id))
+    db.commit()
+    flash("Jugador calificado correctamente." if nuevo_estado else "Se quitó la calificación del jugador.", "ok")
+    return redirect(request.referrer or url_for("ficha_jugador", jugador_id=jugador_id))
 
 
 def _font(size, bold=False):
@@ -961,7 +987,7 @@ def carnet_jugador_pdf(jugador_id):
 
 
 @app.route("/jugador/<int:jugador_id>/eliminar", methods=["POST"])
-@login_required
+@admin_required
 def eliminar_jugador(jugador_id):
     db = get_db()
     jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()

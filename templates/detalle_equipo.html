@@ -122,7 +122,7 @@
   <table>
     <thead>
       <tr>
-        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Categoría</th><th>Nac.</th><th>Documentos</th><th>Registrado</th><th></th>
+        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Categoría</th><th>Nac.</th><th>Documentos</th><th>Estado</th><th>Registrado</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -143,16 +143,28 @@
             <span class="badge badge-full">Sin documentos</span>
           {% endif %}
         </td>
+        <td>
+          {% if j.calificado %}
+            <span class="badge badge-ok">✅ Calificado</span>
+          {% else %}
+            <span class="badge" style="background:#eef3ee; color:#555;">Sin calificar</span>
+          {% endif %}
+        </td>
         <td>{{ j.fecha_registro }}</td>
         <td style="white-space:nowrap;">
           <a href="{{ url_for('ficha_jugador', jugador_id=j.id) }}"><button type="button" style="margin:0; padding:4px 10px; font-size:0.8rem;">Ficha</button></a>
+          {% if session.get('rol') == 'admin' %}
+          <form method="post" action="{{ url_for('calificar_jugador', jugador_id=j.id) }}" style="display:inline;">
+            <button type="submit" style="margin:0; padding:4px 10px; font-size:0.8rem;">{{ 'Quitar calificación' if j.calificado else '✅ Calificar' }}</button>
+          </form>
           <form method="post" action="{{ url_for('eliminar_jugador', jugador_id=j.id) }}" onsubmit="return confirm('¿Eliminar este jugador?');" style="display:inline;">
             <button type="submit" class="btn-del">Eliminar</button>
           </form>
+          {% endif %}
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="8">Aún no hay jugadores inscritos en este equipo.</td></tr>
+      <tr><td colspan="9">Aún no hay jugadores inscritos en este equipo.</td></tr>
       {% endfor %}
     </tbody>
   </table>

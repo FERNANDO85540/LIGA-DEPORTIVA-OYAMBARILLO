@@ -17,21 +17,28 @@
   </a>
 </div>
 
+{% set bloqueado = jugador.calificado and session.get('rol') != 'admin' %}
+
 <div class="card" style="display:flex; gap:24px; flex-wrap:wrap;">
   <div style="flex:1; min-width:280px;">
     <h2>Datos</h2>
+    {% if bloqueado %}
+      <p style="background:#fff8e1; border:1px solid #ffe082; color:#6d4c00; padding:10px 14px; border-radius:8px; font-size:0.85rem;">
+        🔒 Este jugador ya fue <strong>calificado</strong> por la Comisión y no se puede modificar. Si necesitas un cambio, contacta a la Comisión de Calificación.
+      </p>
+    {% endif %}
     <form method="post" action="{{ url_for('actualizar_jugador', jugador_id=jugador.id) }}" enctype="multipart/form-data">
       <label>Cédula</label>
       <input type="text" value="{{ jugador.cedula }}" disabled style="background:#f4f6f5;">
 
       <label>Nombres</label>
-      <input type="text" name="nombres" value="{{ jugador.nombres }}" required>
+      <input type="text" name="nombres" value="{{ jugador.nombres }}" required {% if bloqueado %}disabled{% endif %}>
 
       <label>Apellidos</label>
-      <input type="text" name="apellidos" value="{{ jugador.apellidos }}" required>
+      <input type="text" name="apellidos" value="{{ jugador.apellidos }}" required {% if bloqueado %}disabled{% endif %}>
 
       <label>Fecha de nacimiento</label>
-      <input type="date" name="fecha_nacimiento" value="{{ jugador.fecha_nacimiento }}">
+      <input type="date" name="fecha_nacimiento" value="{{ jugador.fecha_nacimiento }}" {% if bloqueado %}disabled{% endif %}>
 
       <label>Edad</label>
       <input type="text" value="{{ edad if edad is not none else '-' }}" disabled style="background:#f4f6f5;">
@@ -43,15 +50,19 @@
       <input type="text" value="{{ jugador.categoria }}{% if jugador.subcategoria == 'Juvenil' %} - Juvenil{% endif %}" disabled style="background:#f4f6f5;">
 
       <label>Número de camiseta</label>
-      <input type="text" name="numero_camiseta" value="{{ jugador.numero_camiseta or '' }}" maxlength="3">
+      <input type="text" name="numero_camiseta" value="{{ jugador.numero_camiseta or '' }}" maxlength="3" {% if bloqueado %}disabled{% endif %}>
 
+      {% if not bloqueado %}
       <label>Foto del jugador (selfie)</label>
       <input type="file" name="foto" accept=".jpg,.jpeg,.png" data-rotador>
 
       <label>Foto de la cédula</label>
       <input type="file" name="cedula_frontal" accept=".jpg,.jpeg,.png" data-rotador>
+      {% endif %}
 
+      {% if not bloqueado %}
       <button type="submit">Guardar cambios</button>
+      {% endif %}
     </form>
   </div>
 
@@ -62,9 +73,11 @@
       <p style="font-weight:600; margin-bottom:4px;">Foto del jugador</p>
       {% if jugador.foto %}
         <img src="{{ url_for('static', filename='fotos_jugadores/' + jugador.foto) }}" style="max-width:180px; border-radius:8px; border:1px solid var(--borde); display:block; margin:0 auto 6px;">
+        {% if not bloqueado %}
         <form method="post" action="{{ url_for('quitar_foto_jugador', jugador_id=jugador.id, campo='foto') }}" onsubmit="return confirm('¿Eliminar esta foto?');">
           <button type="submit" class="btn-del">Eliminar</button>
         </form>
+        {% endif %}
       {% else %}
         <p style="color:#888; font-size:0.85rem;">Sin foto cargada.</p>
       {% endif %}
@@ -74,9 +87,11 @@
       <p style="font-weight:600; margin-bottom:4px; font-size:0.9rem;">Foto de la cédula</p>
       {% if jugador.cedula_frontal %}
         <img src="{{ url_for('static', filename='fotos_jugadores/' + jugador.cedula_frontal) }}" style="max-width:180px; border-radius:8px; border:1px solid var(--borde); display:block; margin:0 auto 6px;">
+        {% if not bloqueado %}
         <form method="post" action="{{ url_for('quitar_foto_jugador', jugador_id=jugador.id, campo='cedula_frontal') }}" onsubmit="return confirm('¿Eliminar esta foto?');">
           <button type="submit" class="btn-del">Eliminar</button>
         </form>
+        {% endif %}
       {% else %}
         <p style="color:#888; font-size:0.8rem;">Sin cargar.</p>
       {% endif %}
@@ -90,6 +105,16 @@
         <button type="button">⬇️ Descargar PDF</button>
       </a>
     </div>
+
+    {% if session.get('rol') == 'admin' %}
+    <div style="margin-top:12px; text-align:center;">
+      <form method="post" action="{{ url_for('calificar_jugador', jugador_id=jugador.id) }}">
+        <button type="submit">{{ '🔓 Quitar calificación' if jugador.calificado else '✅ Calificar jugador' }}</button>
+      </form>
+    </div>
+    {% elif jugador.calificado %}
+    <p style="text-align:center; margin-top:12px;"><span class="badge badge-ok">✅ Calificado</span></p>
+    {% endif %}
   </div>
 </div>
 
