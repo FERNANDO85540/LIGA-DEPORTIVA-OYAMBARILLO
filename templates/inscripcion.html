@@ -52,35 +52,4 @@
   </div>
 </div>
 
-<div class="card">
-  <h2>Jugadores inscritos ({{ jugadores|length }})</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Equipo</th><th>Categoría</th><th>Nac.</th><th>Registrado</th><th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for j in jugadores %}
-      <tr>
-        <td>{{ j.cedula }}</td>
-        <td>{{ j.nombres }}</td>
-        <td>{{ j.apellidos }}</td>
-        <td>{{ j.equipo }}</td>
-        <td>{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
-        <td>{{ j.fecha_nacimiento or '-' }}</td>
-        <td>{{ j.fecha_registro }}</td>
-        <td>
-          <form method="post" action="{{ url_for('eliminar_jugador', jugador_id=j.id) }}" onsubmit="return confirm('¿Eliminar este jugador?');">
-            <button type="submit" class="btn-del">Eliminar</button>
-          </form>
-        </td>
-      </tr>
-      {% else %}
-      <tr><td colspan="8">Aún no hay jugadores inscritos.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-
 {% endblock %}

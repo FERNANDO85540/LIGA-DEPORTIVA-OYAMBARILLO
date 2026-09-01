@@ -691,10 +691,6 @@ def subir_nomina(equipo_id):
 def inscripcion():
     db = get_db()
 
-    jugadores = db.execute(
-        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos", (CATEGORIA_ACTIVA,)
-    ).fetchall()
-
     equipos_rows = db.execute("SELECT * FROM equipos ORDER BY nombre").fetchall()
 
     cupos = {}
@@ -707,7 +703,6 @@ def inscripcion():
 
     return render_template(
         "inscripcion.html",
-        jugadores=jugadores,
         equipos=equipos_rows,
         cupos=cupos,
         cupo_maximo=CUPO_MAXIMO_EQUIPO,
