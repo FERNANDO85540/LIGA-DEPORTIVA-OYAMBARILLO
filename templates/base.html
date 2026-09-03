@@ -280,7 +280,14 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
       });
       let mejorValor = null, mejorConteo = 0;
       Object.keys(conteo).forEach(function (valor) {
-        if (conteo[valor] > mejorConteo) { mejorConteo = conteo[valor]; mejorValor = valor; }
+        // En empate, para nombres/apellidos se prefiere el valor MÁS CORTO:
+        // cuando el OCR contamina un nombre con basura (ej. un fragmento
+        // suelto pegado en la misma línea), casi siempre lo alarga en vez
+        // de acortarlo, así que el más corto suele ser el más limpio.
+        const esMejor = conteo[valor] > mejorConteo ||
+          (conteo[valor] === mejorConteo && mejorValor !== null &&
+           (campo === 'nombres' || campo === 'apellidos') && valor.length < mejorValor.length);
+        if (esMejor) { mejorConteo = conteo[valor]; mejorValor = valor; }
       });
       if (mejorValor) resultado[campo] = mejorValor;
     });
@@ -663,7 +670,16 @@ function detectarRecorteTarjeta(canvasOriginal) {
 // Es heurístico (la calidad de la foto varía mucho), por eso el delegado
 // siempre revisa/corrige los campos antes de guardar.
 function parsearCedulaEcuador(texto) {
-  const rawLines = texto.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+  // Quita basura pegada al principio/final de una l\u00ednea (guiones, rayas,
+  // subrayados sueltos que el OCR agrega) sin tocar el contenido real \u2014
+  // ej. "SHINGON CHINGO _" pasa a "SHINGON CHINGO". Deja letras (con
+  // tildes/\u00d1) y n\u00fameros, que es lo \u00fanico que de verdad importa.
+  const limpiarBordes = function (s) {
+    return s
+      .replace(/^[^A-Za-z\u00c1\u00c9\u00cd\u00d3\u00da\u00dc\u00d1\u00e1\u00e9\u00ed\u00f3\u00fa\u00fc\u00f10-9]+/, '')
+      .replace(/[^A-Za-z\u00c1\u00c9\u00cd\u00d3\u00da\u00dc\u00d1\u00e1\u00e9\u00ed\u00f3\u00fa\u00fc\u00f10-9]+$/, '');
+  };
+  const rawLines = texto.split(/\r?\n/).map(function (l) { return limpiarBordes(l.trim()); }).filter(Boolean);
   const quitarAcentos = function (s) { return s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); };
   const lines = rawLines.map(function (l) { return quitarAcentos(l).toUpperCase(); });
   const resultado = {};
@@ -752,8 +768,11 @@ function parsearCedulaEcuador(texto) {
   // (primero el/los apellido(s), luego el/los nombre(s)). Cubrimos ambos casos.
   let idxLineaApellidos = -1;
   const idxApellidos = lines.findIndex(function (l) { return l.indexOf('APELLID') !== -1; });
+  // "NOMB" en vez de "NOMBRE" completo: el OCR a veces corta la palabra
+  // ("NOMB", "NOMBI") y con "NOMBRE" exacto se perdía la etiqueta aunque el
+  // dato sí estaba ahí.
   const idxNombres = lines.findIndex(function (l, i) {
-    return l.indexOf('NOMBRE') !== -1 && l.indexOf('APELLID') === -1 && (idxApellidos === -1 || i > idxApellidos);
+    return l.indexOf('NOMB') !== -1 && l.indexOf('APELLID') === -1 && (idxApellidos === -1 || i > idxApellidos);
   });
   if (idxApellidos !== -1) {
     // Con etiqueta NOMBRES separada, el límite de dónde termina el apellido es esa
@@ -763,12 +782,44 @@ function parsearCedulaEcuador(texto) {
     const r = recolectarValor(idxApellidos, idxNombres !== -1 ? 5 : 1);
     if (r.valor) { resultado.apellidos = r.valor; idxLineaApellidos = r.ultimaLinea; }
   }
-  if (idxNombres !== -1) {
+  if (idxNombres !== -1 && idxApellidos !== -1) {
+    // Solo se usa "NOMB..." como ancla confiable para "todo lo que sigue es
+    // el nombre" cuando SÍ se encontró "APELLIDOS" por separado. Si
+    // "APELLIDOS" nunca apareció, no hay forma de saber con esta etiqueta
+    // sola dónde termina el apellido y empieza el nombre — se prueba el
+    // respaldo de más abajo en vez de meter todo junto en "nombres".
     const r = recolectarValor(idxNombres, 5);
     if (r.valor) resultado.nombres = r.valor;
   } else if (idxLineaApellidos !== -1) {
     const r = recolectarValor(idxLineaApellidos, 1);
     if (r.valor) resultado.nombres = r.valor;
+  }
+
+  if (!resultado.apellidos && !resultado.nombres) {
+    // Último recurso: ni "APELLIDOS" ni "NOMBRES" se pudieron anclar (el OCR
+    // los desfiguró). Casi siempre las 1-2 líneas justo antes de "LUGAR DE
+    // NACIMIENTO" (etiqueta que se lee bien de forma consistente) son el
+    // apellido y el nombre, en ese orden.
+    const idxLugarNac = lines.findIndex(function (l) { return l.indexOf('LUGAR') !== -1 && l.indexOf('NACIMIENTO') !== -1; });
+    if (idxLugarNac !== -1) {
+      const candidatas = [];
+      for (let i = idxLugarNac - 1; i >= 0 && i >= idxLugarNac - 3 && candidatas.length < 2; i--) {
+        if (esRuido(lines[i]) || !/^[A-Z\s]+$/.test(lines[i]) || lines[i].replace(/\s/g, '').length < 3) break;
+        candidatas.unshift(rawLines[i]);
+      }
+      if (candidatas.length === 2) {
+        resultado.apellidos = aTitleCase(candidatas[0]);
+        resultado.nombres = aTitleCase(candidatas[1]);
+      } else if (candidatas.length === 1) {
+        resultado.nombres = aTitleCase(candidatas[0]);
+      }
+    } else if (idxNombres !== -1) {
+      // Tampoco hay "LUGAR DE NACIMIENTO": como último intento se usa lo que
+      // se haya podido leer después de "NOMB...", aunque no se pueda separar
+      // del apellido.
+      const r = recolectarValor(idxNombres, 5);
+      if (r.valor) resultado.nombres = r.valor;
+    }
   }
 
   return resultado;
