@@ -932,7 +932,7 @@ def carnet_jugador_pdf(jugador_id):
 
 
 @app.route("/jugador/<int:jugador_id>/eliminar", methods=["POST"])
-@admin_required
+@login_required
 def eliminar_jugador(jugador_id):
     db = get_db()
     jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
@@ -942,10 +942,14 @@ def eliminar_jugador(jugador_id):
     if not jugador_permitido(db, jugador):
         flash("No tienes acceso a ese jugador.")
         return redirect(url_for("index"))
+    equipo_id = db.execute("SELECT id FROM equipos WHERE nombre = ?", (jugador["equipo"],)).fetchone()["id"]
+    if jugador["calificado"] and session.get("rol") != "admin":
+        flash("Este jugador ya fue calificado y no se puede eliminar. Contacta a la Comisión de Calificación.")
+        return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
     db.execute("DELETE FROM jugadores WHERE id = ?", (jugador_id,))
     db.commit()
     flash("Jugador eliminado.", "ok")
-    return redirect(url_for("detalle_equipo", equipo_id=db.execute("SELECT id FROM equipos WHERE nombre = ?", (jugador["equipo"],)).fetchone()["id"]))
+    return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
 
 init_db()
