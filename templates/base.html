@@ -714,13 +714,19 @@ function parsearCedulaEcuador(texto) {
   // toparse con la siguiente etiqueta conocida. Cubre tanto el caso de un solo
   // apellido/nombre en una línea como el de cada palabra en su propia línea
   // (formato usado en las cédulas nuevas).
-  function recolectarValor(idxEtiqueta, maxLineas) {
+  function recolectarValor(idxEtiqueta, maxEscaneo) {
     const partes = [];
     let ultimaLinea = idxEtiqueta;
-    for (let i = idxEtiqueta + 1; i <= idxEtiqueta + maxLineas && i < lines.length; i++) {
+    for (let i = idxEtiqueta + 1; i <= idxEtiqueta + maxEscaneo && i < lines.length; i++) {
       if (esRuido(lines[i]) || !/^[A-Z\s]+$/.test(lines[i])) break;
-      partes.push(rawLines[i]);
       ultimaLinea = i;
+      // Una "palabra" de 1-2 letras sueltas casi nunca es un nombre/apellido
+      // real — suele ser ruido del OCR (ej. una inicial mal leída antes del
+      // nombre real). Se ignora sin cortar la búsqueda, para no perderse el
+      // dato real que puede venir en la siguiente línea.
+      if (lines[i].replace(/\s/g, '').length < 3) continue;
+      partes.push(rawLines[i]);
+      if (partes.length >= 3) break; // ya es suficiente (ej. nombre + 2 apellidos)
     }
     return { valor: partes.length ? aTitleCase(partes.join(' ')) : null, ultimaLinea: ultimaLinea };
   }
@@ -738,11 +744,11 @@ function parsearCedulaEcuador(texto) {
     // etiqueta, así que es seguro juntar varias líneas (cada apellido en su línea).
     // Con etiqueta combinada "APELLIDOS Y NOMBRES" no hay forma de saber cuántas
     // líneas son apellido vs nombre, así que tomamos solo 1 línea para cada uno.
-    const r = recolectarValor(idxApellidos, idxNombres !== -1 ? 3 : 1);
+    const r = recolectarValor(idxApellidos, idxNombres !== -1 ? 5 : 1);
     if (r.valor) { resultado.apellidos = r.valor; idxLineaApellidos = r.ultimaLinea; }
   }
   if (idxNombres !== -1) {
-    const r = recolectarValor(idxNombres, 3);
+    const r = recolectarValor(idxNombres, 5);
     if (r.valor) resultado.nombres = r.valor;
   } else if (idxLineaApellidos !== -1) {
     const r = recolectarValor(idxLineaApellidos, 1);
