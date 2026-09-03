@@ -261,8 +261,30 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
     return c;
   }
 
-  function contarDatosDetectados(d) {
-    return Object.keys(d).filter(function (k) { return d[k]; }).length;
+  // En vez de escoger UN intento completo como "el mejor" (lo que puede
+  // agarrar basura completa si ese intento en particular se equivocó en
+  // algo, aunque haya llenado más campos), se compara cada dato por
+  // separado entre TODOS los intentos y se usa el valor en el que más
+  // coincidan. Así un dato mal leído en un solo intento no gana solo por
+  // acompañarse de otro campo "lleno" (aunque también esté mal).
+  function elegirPorConsenso(datosPorIntento) {
+    const campos = ['cedula', 'nombres', 'apellidos', 'fecha_nacimiento'];
+    const resultado = {};
+    campos.forEach(function (campo) {
+      const conteo = {};
+      datosPorIntento.forEach(function (d) {
+        const valor = d[campo];
+        if (!valor) return;
+        if (valor.replace(/\s/g, '').length < 2) return; // descarta fragmentos sueltos de 1 caracter
+        conteo[valor] = (conteo[valor] || 0) + 1;
+      });
+      let mejorValor = null, mejorConteo = 0;
+      Object.keys(conteo).forEach(function (valor) {
+        if (conteo[valor] > mejorConteo) { mejorConteo = conteo[valor]; mejorValor = valor; }
+      });
+      if (mejorValor) resultado[campo] = mejorValor;
+    });
+    return resultado;
   }
 
   function leerCedula(canvas) {
@@ -308,14 +330,13 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
       });
       return cadena.then(function () { return resultados; });
     }).then(function (resultados) {
-      let mejor = {};
       let textoMasLargo = '';
-      resultados.forEach(function (r, i) {
+      const datosPorIntento = resultados.map(function (r, i) {
         console.log('[OCR cédula] intento ' + (i + 1) + ' de ' + resultados.length + ':', r.texto || r.error);
-        const datos = parsearCedulaEcuador(r.texto);
-        if (contarDatosDetectados(datos) > contarDatosDetectados(mejor)) mejor = datos;
         if (r.texto.length > textoMasLargo.length) textoMasLargo = r.texto;
+        return parsearCedulaEcuador(r.texto);
       });
+      const mejor = elegirPorConsenso(datosPorIntento);
       aplicarDatosDetectados(mejor, resultados, textoMasLargo);
     });
   }
