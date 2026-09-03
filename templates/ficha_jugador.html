@@ -53,8 +53,12 @@
       <input type="text" name="numero_camiseta" value="{{ jugador.numero_camiseta or '' }}" maxlength="3" {% if bloqueado %}disabled{% endif %}>
 
       {% if not bloqueado %}
-      <label>Foto del jugador (selfie)</label>
-      <input type="file" name="foto" accept=".jpg,.jpeg,.png" data-rotador>
+      <label>Selfie del jugador (foto para el carnet)</label>
+      <p style="font-size:0.8rem; color:#888; margin:2px 0 6px;">
+        🤳 Usa "Tomar selfie con guía" para que quede centrada y del tamaño correcto para el carnet automáticamente —
+        rostro de frente a la cámara, no de lado.
+      </p>
+      <input type="file" name="foto" accept=".jpg,.jpeg,.png" data-rotador data-camara-guia="retrato">
 
       <label>Foto de la cédula</label>
       <p style="font-size:0.8rem; color:#888; margin:2px 0 6px;">

@@ -430,23 +430,44 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
 
   // Si el input lo pide (data-camara-guia) y el navegador soporta cámara,
   // agrega un botón para tomar la foto ahí mismo con una guía en pantalla:
-  // así el delegado puede fotografiar la cédula del jugador en el momento,
-  // ya bien encuadrada, sin depender de elegir un archivo de la galería.
+  // así el delegado puede fotografiar la cédula (o al jugador) en el
+  // momento, ya bien encuadrada, sin depender de elegir un archivo de la
+  // galería. El valor de data-camara-guia decide la forma de la guía:
+  // "retrato" = marco ovalado vertical para selfie (cámara frontal),
+  // cualquier otro valor = marco rectangular proporción cédula (cámara
+  // trasera).
   if (input.dataset.camaraGuia && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    const esRetrato = input.dataset.camaraGuia === 'retrato';
     const btnCamara = document.createElement('button');
     btnCamara.type = 'button';
-    btnCamara.textContent = '📷 Tomar foto con guía';
+    btnCamara.textContent = esRetrato ? '🤳 Tomar selfie con guía' : '📷 Tomar foto con guía';
     btnCamara.style.margin = '8px 0 0';
     btnCamara.style.fontSize = '0.85rem';
     input.insertAdjacentElement('afterend', btnCamara);
 
     btnCamara.addEventListener('click', function () {
+      const opciones = esRetrato ? {
+        // El carnet recorta la selfie a un recuadro de 250x280 (más alto
+        // que ancho) — se usa esa misma proporción para la guía, así la
+        // foto ya sale ajustada a ese tamaño sin recortar la cara despues.
+        relacion: 250 / 280,
+        anchoGuiaRatio: 0.6,
+        bordeRadio: '50%',
+        facingMode: 'user',
+        mensaje: 'Centra tu rostro dentro del óvalo, mirando de frente a la cámara',
+      } : {
+        relacion: 1.586,
+        anchoGuiaRatio: 0.82,
+        bordeRadio: '12px',
+        facingMode: 'environment',
+        mensaje: 'Encaja la cédula dentro del marco verde, bien iluminada',
+      };
       abrirCamaraConGuia(function (canvasCapturado) {
-        input.dataset.nombreOriginal = 'cedula_' + Date.now();
+        input.dataset.nombreOriginal = (esRetrato ? 'selfie_' : 'cedula_') + Date.now();
         rotacion = 0;
         imgOriginal = canvasCapturado;
         render();
-      });
+      }, opciones);
     });
   }
 
@@ -594,11 +615,21 @@ function obtenerWorkerCedula() {
   return workerCedulaPromise;
 }
 
-// Abre la cámara del celular con una guía en pantalla (marco proporción cédula)
-// para que el delegado encaje la cédula del jugador ahí mismo. Al capturar,
+// Abre la cámara del celular con una guía en pantalla para que el delegado
+// encaje ahí mismo la cédula (o al jugador, para la selfie). Al capturar,
 // recorta exactamente lo que quedó dentro del marco y se lo entrega a quien
-// llamó a esta función (que lo mete al mismo editor de rotación/OCR de siempre).
-function abrirCamaraConGuia(onCapturar) {
+// llamó a esta función (que lo mete al mismo editor de rotación/OCR de
+// siempre). `opciones` permite reusar esto tanto para la cédula (marco
+// rectangular, cámara trasera) como para la selfie (marco ovalado vertical,
+// cámara frontal) — ver los dos juegos de opciones donde se llama.
+function abrirCamaraConGuia(onCapturar, opciones) {
+  opciones = opciones || {};
+  const relacion = opciones.relacion || 1.586;
+  const anchoGuiaRatio = opciones.anchoGuiaRatio || 0.82;
+  const bordeRadio = opciones.bordeRadio || '12px';
+  const facingMode = opciones.facingMode || 'environment';
+  const mensajeInicial = opciones.mensaje || 'Encaja dentro del marco verde, bien iluminado';
+
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed; inset:0; background:#000; z-index:10000; ' +
     'display:flex; flex-direction:column; align-items:center; justify-content:center; padding:12px;';
@@ -612,16 +643,15 @@ function abrirCamaraConGuia(onCapturar) {
   video.style.cssText = 'display:block; max-width:100%; max-height:65vh;';
 
   const guia = document.createElement('div');
-  // Proporción real de una cédula (85.6 x 53.98 mm ≈ 1.586:1)
   guia.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); ' +
-    'width:82%; aspect-ratio:1.586; border:3px solid #4ade80; border-radius:12px; ' +
-    'box-shadow:0 0 0 2000px rgba(0,0,0,0.5); pointer-events:none;';
+    'width:' + (anchoGuiaRatio * 100) + '%; aspect-ratio:' + relacion + '; border:3px solid #4ade80; ' +
+    'border-radius:' + bordeRadio + '; box-shadow:0 0 0 2000px rgba(0,0,0,0.5); pointer-events:none;';
 
   contenedorVideo.appendChild(video);
   contenedorVideo.appendChild(guia);
 
   const ayuda = document.createElement('p');
-  ayuda.textContent = 'Encaja la cédula dentro del marco verde, bien iluminada';
+  ayuda.textContent = mensajeInicial;
   ayuda.style.cssText = 'color:#fff; font-size:0.9rem; margin:12px 0; text-align:center;';
 
   const botones = document.createElement('div');
@@ -652,7 +682,7 @@ function abrirCamaraConGuia(onCapturar) {
   }
 
   navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+    video: { facingMode: facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
     audio: false,
   }).then(function (s) {
     stream = s;
@@ -667,11 +697,9 @@ function abrirCamaraConGuia(onCapturar) {
 
   btnCapturar.addEventListener('click', function () {
     if (!video.videoWidth) return;
-    const anchoGuiaRatio = 0.82;
-    const relCedula = 1.586;
     const vw = video.videoWidth, vh = video.videoHeight;
     const cw = vw * anchoGuiaRatio;
-    const ch = cw / relCedula;
+    const ch = cw / relacion;
     const cx = (vw - cw) / 2;
     const cy = (vh - ch) / 2;
 
