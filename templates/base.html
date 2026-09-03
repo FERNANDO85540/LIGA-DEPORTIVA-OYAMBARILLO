@@ -269,25 +269,45 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
     ocrStatus.textContent = '🔍 Leyendo cédula, un momento...';
     ocrStatus.style.color = '#888';
 
-    // Se intenta leer de varias formas a la vez y se usa la que más datos
-    // rescate: (1) la foto tal cual, sin tocar — el ajuste de contraste puede
-    // ayudar a fotos oscuras pero también puede "quemar" el detalle de una
-    // foto que ya venía nítida y bien iluminada; (2) la foto con contraste
-    // ajustado; y (3) si el sistema logra ubicar dónde está la cédula dentro
-    // de la foto completa (útil cuando no vino recién tomada con guía, sino
-    // ya lista por WhatsApp), esa zona recortada y agrandada.
-    const intentos = [canvas, prepararParaOCR(canvas)];
+    // Se intenta leer de varias formas y se usa la que más datos rescate:
+    // (1) la foto tal cual, sin tocar; (2) con contraste ajustado (ayuda a
+    // fotos oscuras); y (3) si el sistema logra ubicar dónde está la cédula
+    // dentro de la foto completa (útil cuando no vino recién tomada con guía,
+    // sino ya lista por WhatsApp), esa zona recortada y agrandada.
+    // Cada imagen se lee además con dos modos de segmentación: el automático
+    // (agrupa el texto como si fuera un documento normal) y "texto disperso"
+    // (no intenta ordenar por columnas/párrafos) — una cédula tiene columnas
+    // de datos separadas (foto+etiquetas a un lado, campos al otro) que el
+    // modo automático a veces mezcla en una sola línea sin sentido.
+    const imagenes = [canvas, prepararParaOCR(canvas)];
     const recorte = detectarRecorteTarjeta(canvas);
-    if (recorte) intentos.push(prepararParaOCR(recorte));
+    if (recorte) imagenes.push(prepararParaOCR(recorte));
 
-    Promise.all(intentos.map(function (imagen) {
-      return Tesseract.recognize(imagen, 'spa')
-        .then(function (resultado) { return { texto: resultado.data.text || '', error: null }; })
-        .catch(function (error) {
-          console.error('[OCR cédula] error:', error);
-          return { texto: '', error: (error && (error.message || String(error))) || 'error desconocido' };
+    const PSM_AUTO = '3';
+    const PSM_TEXTO_DISPERSO = '11';
+    const tareas = [];
+    imagenes.forEach(function (imagen) {
+      tareas.push({ imagen: imagen, psm: PSM_TEXTO_DISPERSO });
+      tareas.push({ imagen: imagen, psm: PSM_AUTO });
+    });
+
+    obtenerWorkerCedula().then(function (worker) {
+      // Un mismo worker no puede leer dos imágenes a la vez: se hace en fila.
+      let cadena = Promise.resolve();
+      const resultados = [];
+      tareas.forEach(function (t) {
+        cadena = cadena.then(function () {
+          return worker.setParameters({ tessedit_pageseg_mode: t.psm })
+            .then(function () { return worker.recognize(t.imagen); })
+            .then(function (r) { resultados.push({ texto: (r.data && r.data.text) || '', error: null }); })
+            .catch(function (error) {
+              console.error('[OCR cédula] error:', error);
+              resultados.push({ texto: '', error: (error && (error.message || String(error))) || 'error desconocido' });
+            });
         });
-    })).then(function (resultados) {
+      });
+      return cadena.then(function () { return resultados; });
+    }).then(function (resultados) {
       let mejor = {};
       let textoMasLargo = '';
       resultados.forEach(function (r, i) {
@@ -409,6 +429,17 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
     });
   }
 });
+
+// Un solo worker de Tesseract compartido por toda la página: crearlo tarda
+// (descarga el motor y el idioma), así que se reutiliza entre intentos y
+// entre los distintos campos de cédula en vez de crear uno nuevo cada vez.
+let workerCedulaPromise = null;
+function obtenerWorkerCedula() {
+  if (!workerCedulaPromise) {
+    workerCedulaPromise = Tesseract.createWorker('spa');
+  }
+  return workerCedulaPromise;
+}
 
 // Abre la cámara del celular con una guía en pantalla (marco proporción cédula)
 // para que el delegado encaje la cédula del jugador ahí mismo. Al capturar,
