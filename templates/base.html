@@ -329,40 +329,53 @@ function parsearCedulaEcuador(texto) {
   const fecha = (idxNac !== -1 && buscarFechaEn(lines.slice(idxNac, idxNac + 3))) || buscarFechaEn(lines);
   if (fecha) resultado.fecha_nacimiento = fecha;
 
+  // Etiquetas conocidas de la cédula ecuatoriana (en cualquiera de sus formatos):
+  // marcan dónde termina un dato y empieza el siguiente.
+  const ETIQUETAS = /REPUBLICA|ECUADOR|CEDULA|IDENTIDAD|NACIONALIDAD|LUGAR|FECHA|SEXO|EMISION|VENCIMIENTO|NUMERO|NUMBER|NUI\b|DOCUMENTO|SURNAME|VALIDEZ|FIRMA|CONDICION|CIUDADAN|REGISTRO|CIVIL|APELLID|NOMBRE/;
   function esRuido(l) {
-    return !l || /^[\d\W]+$/.test(l) ||
-      /REPUBLICA|ECUADOR|CEDULA|IDENTIDAD|NACIONALIDAD|LUGAR|FECHA|SEXO|EMISION|NUMERO|NUMBER|SURNAME|VALIDEZ|FIRMA|REGISTRO|CIVIL/.test(l);
+    return !l || /^[\d\W]+$/.test(l) || ETIQUETAS.test(l);
   }
   function aTitleCase(s) {
     return s.toLowerCase().replace(/(^|\s)([a-zñáéíóúü])/g, function (m, p1, p2) { return p1 + p2.toUpperCase(); });
   }
 
+  // Junta las líneas de datos que siguen a una etiqueta (ej. "APELLIDOS") hasta
+  // toparse con la siguiente etiqueta conocida. Cubre tanto el caso de un solo
+  // apellido/nombre en una línea como el de cada palabra en su propia línea
+  // (formato usado en las cédulas nuevas).
+  function recolectarValor(idxEtiqueta, maxLineas) {
+    const partes = [];
+    let ultimaLinea = idxEtiqueta;
+    for (let i = idxEtiqueta + 1; i <= idxEtiqueta + maxLineas && i < lines.length; i++) {
+      if (esRuido(lines[i]) || !/^[A-Z\s]+$/.test(lines[i])) break;
+      partes.push(rawLines[i]);
+      ultimaLinea = i;
+    }
+    return { valor: partes.length ? aTitleCase(partes.join(' ')) : null, ultimaLinea: ultimaLinea };
+  }
+
   // Algunas cédulas traen etiquetas separadas ("APELLIDOS" ... "NOMBRES" ...) y otras
-  // una sola etiqueta combinada ("APELLIDOS Y NOMBRES") seguida de dos líneas de datos
-  // (primero el apellido, luego el nombre). Cubrimos ambos casos.
+  // una sola etiqueta combinada ("APELLIDOS Y NOMBRES") seguida de las líneas de datos
+  // (primero el/los apellido(s), luego el/los nombre(s)). Cubrimos ambos casos.
   let idxLineaApellidos = -1;
   const idxApellidos = lines.findIndex(function (l) { return l.indexOf('APELLID') !== -1; });
-  if (idxApellidos !== -1) {
-    for (let i = idxApellidos + 1; i < Math.min(idxApellidos + 4, lines.length); i++) {
-      if (!esRuido(lines[i]) && /^[A-Z\s]+$/.test(lines[i])) {
-        resultado.apellidos = aTitleCase(rawLines[i]);
-        idxLineaApellidos = i;
-        break;
-      }
-    }
-  }
   const idxNombres = lines.findIndex(function (l, i) {
     return l.indexOf('NOMBRE') !== -1 && l.indexOf('APELLID') === -1 && (idxApellidos === -1 || i > idxApellidos);
   });
+  if (idxApellidos !== -1) {
+    // Con etiqueta NOMBRES separada, el límite de dónde termina el apellido es esa
+    // etiqueta, así que es seguro juntar varias líneas (cada apellido en su línea).
+    // Con etiqueta combinada "APELLIDOS Y NOMBRES" no hay forma de saber cuántas
+    // líneas son apellido vs nombre, así que tomamos solo 1 línea para cada uno.
+    const r = recolectarValor(idxApellidos, idxNombres !== -1 ? 3 : 1);
+    if (r.valor) { resultado.apellidos = r.valor; idxLineaApellidos = r.ultimaLinea; }
+  }
   if (idxNombres !== -1) {
-    for (let i = idxNombres + 1; i < Math.min(idxNombres + 4, lines.length); i++) {
-      if (!esRuido(lines[i]) && /^[A-Z\s]+$/.test(lines[i])) { resultado.nombres = aTitleCase(rawLines[i]); break; }
-    }
+    const r = recolectarValor(idxNombres, 3);
+    if (r.valor) resultado.nombres = r.valor;
   } else if (idxLineaApellidos !== -1) {
-    const siguiente = idxLineaApellidos + 1;
-    if (siguiente < lines.length && !esRuido(lines[siguiente]) && /^[A-Z\s]+$/.test(lines[siguiente])) {
-      resultado.nombres = aTitleCase(rawLines[siguiente]);
-    }
+    const r = recolectarValor(idxLineaApellidos, 1);
+    if (r.valor) resultado.nombres = r.valor;
   }
 
   return resultado;
