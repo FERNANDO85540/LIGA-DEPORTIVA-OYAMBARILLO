@@ -287,7 +287,23 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
     return resultado;
   }
 
+  function limpiarCamposMapeados() {
+    // Antes de leer una foto nueva se vacían los campos que este input llena
+    // (Cédula, Nombres, Apellidos, Fecha) — así nunca queda un dato de una
+    // prueba/foto anterior mezclado con el de la foto actual: si esta foto
+    // no logra leer algo, el campo queda vacío (no con el valor viejo).
+    const form = input.closest('form');
+    let mapa = {};
+    try { mapa = JSON.parse(input.dataset.ocrCedula); } catch (e) { mapa = {}; }
+    if (!form) return;
+    Object.keys(mapa).forEach(function (campo) {
+      const destino = form.querySelector('[name="' + mapa[campo] + '"]');
+      if (destino && !destino.disabled) destino.value = '';
+    });
+  }
+
   function leerCedula(canvas) {
+    limpiarCamposMapeados();
     ocrStatus.textContent = '🔍 Leyendo cédula, un momento...';
     ocrStatus.style.color = '#888';
 
