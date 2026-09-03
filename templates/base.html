@@ -269,11 +269,14 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
     ocrStatus.textContent = '🔍 Leyendo cédula, un momento...';
     ocrStatus.style.color = '#888';
 
-    // Además de la foto completa, si el sistema logra ubicar dónde está la
-    // cédula dentro de la foto (útil cuando la foto no vino recién tomada con
-    // guía, sino ya lista por WhatsApp), también intenta leer solo esa zona
-    // recortada y agrandada. Se queda con el intento que más datos rescate.
-    const intentos = [prepararParaOCR(canvas)];
+    // Se intenta leer de varias formas a la vez y se usa la que más datos
+    // rescate: (1) la foto tal cual, sin tocar — el ajuste de contraste puede
+    // ayudar a fotos oscuras pero también puede "quemar" el detalle de una
+    // foto que ya venía nítida y bien iluminada; (2) la foto con contraste
+    // ajustado; y (3) si el sistema logra ubicar dónde está la cédula dentro
+    // de la foto completa (útil cuando no vino recién tomada con guía, sino
+    // ya lista por WhatsApp), esa zona recortada y agrandada.
+    const intentos = [canvas, prepararParaOCR(canvas)];
     const recorte = detectarRecorteTarjeta(canvas);
     if (recorte) intentos.push(prepararParaOCR(recorte));
 
@@ -597,14 +600,24 @@ function parsearCedulaEcuador(texto) {
   const lines = rawLines.map(function (l) { return quitarAcentos(l).toUpperCase(); });
   const resultado = {};
 
-  const mCedula = lines.join(' ').match(/\b(\d{10})\b/);
+  // Cédula: normalmente 10 dígitos seguidos, pero algunas cédulas nuevas la
+  // muestran como "172605076-6" (9 dígitos + guion + dígito verificador).
+  const textoJunto = lines.join(' ');
+  let mCedula = textoJunto.match(/\b(\d{10})\b/);
+  if (!mCedula) {
+    const mConGuion = textoJunto.match(/\b(\d{9})\s*-\s*(\d)\b/);
+    if (mConGuion) mCedula = [null, mConGuion[1] + mConGuion[2]];
+  }
   if (mCedula) resultado.cedula = mCedula[1];
 
   const meses = { ENE: 1, FEB: 2, MAR: 3, ABR: 4, MAY: 5, JUN: 6, JUL: 7, AGO: 8, SEP: 9, SET: 9, OCT: 10, NOV: 11, DIC: 12 };
   function buscarFechaEn(candidatas) {
     for (let i = 0; i < candidatas.length; i++) {
       const l = candidatas[i];
-      let m = l.match(/(\d{1,2})[\/\-\s]+([A-Z]{3,4})[\/\-.\s]+(\d{4})/);
+      // Formato AAAA-MM-DD (algunas cédulas lo traen así, ya listo para el input date)
+      let m = l.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+      if (m) return m[1] + '-' + m[2] + '-' + m[3];
+      m = l.match(/(\d{1,2})[\/\-\s]+([A-Z]{3,4})[\/\-.\s]+(\d{4})/);
       if (m && meses[m[2].slice(0, 3)]) {
         return m[3] + '-' + String(meses[m[2].slice(0, 3)]).padStart(2, '0') + '-' + m[1].padStart(2, '0');
       }
@@ -613,7 +626,10 @@ function parsearCedulaEcuador(texto) {
     }
     return null;
   }
-  const idxNac = lines.findIndex(function (l) { return l.indexOf('NACIMIENTO') !== -1; });
+  // Ojo: "LUGAR DE NACIMIENTO" también contiene "NACIMIENTO" y en algunas
+  // cédulas aparece ANTES que "FECHA DE NACIMIENTO" — hay que anclar a esta
+  // etiqueta exacta para no quedarse mirando el lugar en vez de la fecha.
+  const idxNac = lines.findIndex(function (l) { return l.indexOf('FECHA') !== -1 && l.indexOf('NACIMIENTO') !== -1; });
   const fecha = (idxNac !== -1 && buscarFechaEn(lines.slice(idxNac, idxNac + 3))) || buscarFechaEn(lines);
   if (fecha) resultado.fecha_nacimiento = fecha;
 
