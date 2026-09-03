@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, date
 from functools import wraps
 
-from flask import Flask, render_template, request, redirect, url_for, session, flash, g, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, flash, g, send_file, jsonify
 from openpyxl import Workbook
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
@@ -567,6 +567,29 @@ def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacim
     except IntegrityError:
         db.rollback()
         return None, f"Ya existe un jugador registrado con la cédula {cedula}."
+
+
+@app.route("/api/cedula_existe")
+@login_required
+def api_cedula_existe():
+    """Consulta rápida (para avisar en el formulario antes de guardar) si
+    ya existe un jugador registrado con esa cédula, en cualquier equipo —
+    la cédula es única en todo el sistema."""
+    cedula = request.args.get("cedula", "").strip()
+    if not cedula:
+        return jsonify({"existe": False})
+    db = get_db()
+    jugador = db.execute(
+        "SELECT nombres, apellidos, equipo FROM jugadores WHERE cedula = ?", (cedula,)
+    ).fetchone()
+    if not jugador:
+        return jsonify({"existe": False})
+    return jsonify({
+        "existe": True,
+        "nombres": jugador["nombres"],
+        "apellidos": jugador["apellidos"],
+        "equipo": jugador["equipo"],
+    })
 
 
 @app.route("/equipo/<int:equipo_id>/agregar_jugador", methods=["POST"])

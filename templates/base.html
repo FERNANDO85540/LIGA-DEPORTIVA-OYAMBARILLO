@@ -526,6 +526,63 @@ document.querySelectorAll('input[type="date"][name="fecha_nacimiento"]').forEach
   }
 });
 
+// Avisa apenas se escribe o se lee (por OCR) una cédula que ya está
+// registrada, en vez de esperar a que el delegado llene todo el formulario
+// y recién ahí se entere al guardar. La base de datos ya lo bloquea de
+// todas formas (cédula única) — esto es solo para avisar más rápido.
+document.querySelectorAll('input[name="cedula"]').forEach(function (input) {
+  if (input.disabled) return;
+  const form = input.closest('form');
+  if (!form) return;
+
+  const aviso = document.createElement('p');
+  aviso.style.cssText = 'font-size:0.8rem; color:#a13a2f; margin:4px 0 0; font-weight:600;';
+  input.insertAdjacentElement('afterend', aviso);
+
+  let cedulaDuplicada = false;
+  let temporizador = null;
+
+  function limpiar() {
+    cedulaDuplicada = false;
+    input.style.borderColor = '';
+    input.style.background = '';
+    aviso.textContent = '';
+  }
+
+  function verificar() {
+    const cedula = input.value.trim();
+    limpiar();
+    if (cedula.length < 8) return; // muy corta todavía para consultar
+    fetch('/api/cedula_existe?cedula=' + encodeURIComponent(cedula))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (datos) {
+        // Si el campo cambió mientras esperábamos la respuesta, se ignora.
+        if (!datos || input.value.trim() !== cedula) return;
+        if (datos.existe) {
+          cedulaDuplicada = true;
+          input.style.borderColor = '#a13a2f';
+          input.style.background = '#fdecea';
+          aviso.textContent = '⚠️ Esta cédula ya está registrada: ' + datos.nombres + ' ' + datos.apellidos +
+            ' (equipo ' + datos.equipo + '). No se puede duplicar.';
+        }
+      })
+      .catch(function () {});
+  }
+
+  input.addEventListener('input', function () {
+    clearTimeout(temporizador);
+    limpiar();
+    temporizador = setTimeout(verificar, 500);
+  });
+
+  form.addEventListener('submit', function (e) {
+    if (cedulaDuplicada) {
+      e.preventDefault();
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+});
+
 // Un solo worker de Tesseract compartido por toda la página: crearlo tarda
 // (descarga el motor y el idioma), así que se reutiliza entre intentos y
 // entre los distintos campos de cédula en vez de crear uno nuevo cada vez.
