@@ -229,7 +229,14 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
   }
 
   function programarOCR(canvas) {
-    if (!input.dataset.ocrCedula || typeof Tesseract === 'undefined') return;
+    if (!input.dataset.ocrCedula) return;
+    if (typeof Tesseract === 'undefined') {
+      // El lector no cargó (ej. sin internet en ese momento, o el CDN no respondió).
+      // Antes esto fallaba en silencio; ahora se avisa en vez de solo mostrar "no se pudo leer".
+      ocrStatus.textContent = '⚠️ El lector automático no cargó en este navegador (revisa tu conexión a internet y recarga la página). Completa los datos a mano.';
+      ocrStatus.style.color = '#a13a2f';
+      return;
+    }
     clearTimeout(ocrTimer);
     ocrStatus.textContent = '';
     ocrTimer = setTimeout(function () { leerCedula(canvas); }, 350);
@@ -272,20 +279,25 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
 
     Promise.all(intentos.map(function (imagen) {
       return Tesseract.recognize(imagen, 'spa')
-        .then(function (resultado) { return resultado.data.text || ''; })
-        .catch(function (error) { console.error('[OCR cédula] error:', error); return ''; });
-    })).then(function (textos) {
+        .then(function (resultado) { return { texto: resultado.data.text || '', error: null }; })
+        .catch(function (error) {
+          console.error('[OCR cédula] error:', error);
+          return { texto: '', error: (error && (error.message || String(error))) || 'error desconocido' };
+        });
+    })).then(function (resultados) {
       let mejor = {};
-      textos.forEach(function (texto, i) {
-        console.log('[OCR cédula] intento ' + (i + 1) + ' de ' + textos.length + ':', texto);
-        const datos = parsearCedulaEcuador(texto);
+      let textoMasLargo = '';
+      resultados.forEach(function (r, i) {
+        console.log('[OCR cédula] intento ' + (i + 1) + ' de ' + resultados.length + ':', r.texto || r.error);
+        const datos = parsearCedulaEcuador(r.texto);
         if (contarDatosDetectados(datos) > contarDatosDetectados(mejor)) mejor = datos;
+        if (r.texto.length > textoMasLargo.length) textoMasLargo = r.texto;
       });
-      aplicarDatosDetectados(mejor);
+      aplicarDatosDetectados(mejor, resultados, textoMasLargo);
     });
   }
 
-  function aplicarDatosDetectados(datos) {
+  function aplicarDatosDetectados(datos, resultados, textoMasLargo) {
     const form = input.closest('form');
     let mapa = {};
     try { mapa = JSON.parse(input.dataset.ocrCedula); } catch (e) { mapa = {}; }
@@ -300,12 +312,49 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
       setTimeout(function () { destino.style.background = ''; }, 2000);
       algunDato = true;
     });
+    resultados = resultados || [];
+    textoMasLargo = textoMasLargo || '';
+
     if (algunDato) {
       ocrStatus.textContent = '✅ Datos detectados de la cédula. Verifica que estén correctos antes de guardar.';
       ocrStatus.style.color = 'var(--verde-osc)';
     } else {
-      ocrStatus.textContent = '⚠️ No se pudo leer la cédula automáticamente. Completa los datos a mano.';
+      // En vez de un mensaje generico, se explica la causa mas probable segun
+      // lo que realmente paso (error tecnico vs. casi nada de texto legible
+      // vs. texto que no calzo con el formato esperado de una cedula).
+      const huboSoloErrores = resultados.length > 0 && resultados.every(function (r) { return r.error; });
+      const totalCaracteres = textoMasLargo.replace(/\s/g, '').length;
+      let motivo;
+      if (huboSoloErrores) {
+        motivo = 'hubo un error técnico leyendo la imagen (revisa el detalle técnico abajo)';
+      } else if (totalCaracteres < 8) {
+        motivo = 'la foto casi no dejó ver texto — probablemente salió borrosa, oscura o muy de lejos';
+      } else {
+        motivo = 'se leyó algo de texto pero no calzó con el formato de una cédula — revisa que sea el lado frontal, derecho y completo';
+      }
+      ocrStatus.textContent = '⚠️ No se pudo leer la cédula automáticamente: ' + motivo + '. Completa los datos a mano.';
       ocrStatus.style.color = '#a13a2f';
+    }
+
+    if (resultados.length) {
+      const detalle = document.createElement('details');
+      detalle.style.marginTop = '6px';
+      detalle.style.fontSize = '0.72rem';
+      detalle.style.color = '#888';
+      const resumen = document.createElement('summary');
+      resumen.textContent = 'Ver detalle técnico';
+      resumen.style.cursor = 'pointer';
+      detalle.appendChild(resumen);
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'white-space:pre-wrap; word-break:break-word; background:#f4f6f5; ' +
+        'border:1px solid var(--borde); border-radius:6px; padding:8px; margin-top:4px;';
+      pre.textContent = resultados.map(function (r, i) {
+        if (r.error) return 'Intento ' + (i + 1) + ': ERROR -> ' + r.error;
+        const t = r.texto.trim();
+        return 'Intento ' + (i + 1) + ' (' + r.texto.length + ' caracteres): ' + (t ? t.slice(0, 300) : '(vacío, no detectó texto)');
+      }).join('\n\n');
+      detalle.appendChild(pre);
+      wrapper.appendChild(detalle);
     }
   }
 
