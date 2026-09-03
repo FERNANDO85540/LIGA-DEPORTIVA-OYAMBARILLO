@@ -462,6 +462,22 @@ def exportar_equipo(equipo_id):
     return _exportar_jugadores_excel(jugadores, nombre_archivo)
 
 
+@app.route("/jugadores_liga")
+@login_required
+def jugadores_liga():
+    """Lista de todos los jugadores inscritos en la liga, de todos los
+    equipos, visible tanto para el admin como para los delegados -- para
+    que cualquiera pueda revisar quién está inscrito y en qué equipo."""
+    db = get_db()
+    jugadores = db.execute(
+        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos", (CATEGORIA_ACTIVA,)
+    ).fetchall()
+    equipos_distintos = sorted(set(j["equipo"] for j in jugadores))
+    return render_template(
+        "jugadores_liga.html", jugadores=jugadores, categoria=CATEGORIA_ACTIVA, total_equipos=len(equipos_distintos)
+    )
+
+
 @app.route("/exportar_general")
 @admin_required
 def exportar_general():
