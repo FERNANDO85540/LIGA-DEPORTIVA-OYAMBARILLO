@@ -654,10 +654,14 @@ function parsearCedulaEcuador(texto) {
 
   // Cédula: normalmente 10 dígitos seguidos, pero algunas cédulas nuevas la
   // muestran como "172605076-6" (9 dígitos + guion + dígito verificador).
+  // Ojo: NO se exige que haya un espacio/símbolo antes de los 10 dígitos —
+  // el OCR a veces pega la etiqueta con el número (ej. "NUI1711451235"), y
+  // como letras y números cuentan igual como "caracter de palabra", una
+  // etiqueta \b ahí no detecta ese límite y se perdía el número completo.
   const textoJunto = lines.join(' ');
-  let mCedula = textoJunto.match(/\b(\d{10})\b/);
+  let mCedula = textoJunto.match(/(?:^|[^\d])(\d{10})(?!\d)/);
   if (!mCedula) {
-    const mConGuion = textoJunto.match(/\b(\d{9})\s*-\s*(\d)\b/);
+    const mConGuion = textoJunto.match(/(?:^|[^\d])(\d{9})\s*-\s*(\d)(?!\d)/);
     if (mConGuion) mCedula = [null, mConGuion[1] + mConGuion[2]];
   }
   if (mCedula) resultado.cedula = mCedula[1];
@@ -679,10 +683,21 @@ function parsearCedulaEcuador(texto) {
     return null;
   }
   // Ojo: "LUGAR DE NACIMIENTO" también contiene "NACIMIENTO" y en algunas
-  // cédulas aparece ANTES que "FECHA DE NACIMIENTO" — hay que anclar a esta
-  // etiqueta exacta para no quedarse mirando el lugar en vez de la fecha.
-  const idxNac = lines.findIndex(function (l) { return l.indexOf('FECHA') !== -1 && l.indexOf('NACIMIENTO') !== -1; });
-  const fecha = (idxNac !== -1 && buscarFechaEn(lines.slice(idxNac, idxNac + 3))) || buscarFechaEn(lines);
+  // cédulas aparece ANTES que "FECHA DE NACIMIENTO" — hay que anclar a la
+  // etiqueta de fecha exacta para no quedarse mirando el lugar en vez de la
+  // fecha. Además, el OCR a veces corta "FECHA DE NACIMIENTO" en dos líneas
+  // separadas (ej. "FECHA E" / "NACIMIENTO"), así que no alcanza con buscar
+  // ambas palabras en la misma línea: se busca "FECHA" (que no sea la de
+  // vencimiento/emisión) y se revisa si "NACIMIENTO" aparece ahí mismo o en
+  // las 2 líneas siguientes.
+  let idxNac = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.indexOf('FECHA') === -1) continue;
+    if (l.indexOf('VENCIMIENTO') !== -1 || l.indexOf('EMISION') !== -1) continue;
+    if (lines.slice(i, i + 3).join(' ').indexOf('NACIMIENTO') !== -1) { idxNac = i; break; }
+  }
+  const fecha = (idxNac !== -1 && buscarFechaEn(lines.slice(idxNac, idxNac + 4))) || buscarFechaEn(lines);
   if (fecha) resultado.fecha_nacimiento = fecha;
 
   // Etiquetas conocidas de la cédula ecuatoriana (en cualquiera de sus formatos):
