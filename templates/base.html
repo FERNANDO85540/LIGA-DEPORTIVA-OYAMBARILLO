@@ -803,8 +803,11 @@ function parsearCedulaEcuador(texto) {
     const idxLugarNac = lines.findIndex(function (l) { return l.indexOf('LUGAR') !== -1 && l.indexOf('NACIMIENTO') !== -1; });
     if (idxLugarNac !== -1) {
       const candidatas = [];
-      for (let i = idxLugarNac - 1; i >= 0 && i >= idxLugarNac - 3 && candidatas.length < 2; i--) {
-        if (esRuido(lines[i]) || !/^[A-Z\s]+$/.test(lines[i]) || lines[i].replace(/\s/g, '').length < 3) break;
+      // Se saltan (no cortan) líneas de ruido sueltas cerca de la etiqueta
+      // (ej. un guion "-" pegado justo antes) — a veces el apellido/nombre
+      // real está un par de líneas más arriba, separado por basura del OCR.
+      for (let i = idxLugarNac - 1; i >= 0 && i >= idxLugarNac - 6 && candidatas.length < 2; i--) {
+        if (esRuido(lines[i]) || !/^[A-Z\s]+$/.test(lines[i]) || lines[i].replace(/\s/g, '').length < 3) continue;
         candidatas.unshift(rawLines[i]);
       }
       if (candidatas.length === 2) {
