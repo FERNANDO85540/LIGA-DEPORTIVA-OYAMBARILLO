@@ -149,10 +149,19 @@
 <script>
 // Editor simple de rotación para inputs de tipo file con foto.
 // Uso: <input type="file" data-rotador accept=".jpg,.jpeg,.png">
+// Si además tiene data-ocr-cedula='{"cedula":"cedula","nombres":"nombres",...}'
+// (mapa campo_detectado -> name del input a llenar en el mismo form), intenta leer
+// los datos de una cédula ecuatoriana con Tesseract.js (OCR en el propio celular)
+// y autocompleta esos campos para que el delegado no los transcriba a mano.
 document.querySelectorAll('input[type=file][data-rotador]').forEach(function (input) {
   const wrapper = document.createElement('div');
   wrapper.style.marginTop = '8px';
   input.insertAdjacentElement('afterend', wrapper);
+
+  const ocrStatus = document.createElement('p');
+  ocrStatus.style.fontSize = '0.8rem';
+  ocrStatus.style.margin = '4px 0 0';
+  let ocrTimer = null;
 
   let rotacion = 0;
   let imgOriginal = null;
@@ -189,7 +198,7 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
     btnIzq.style.padding = '4px 10px';
     btnIzq.style.fontSize = '0.8rem';
     btnIzq.style.margin = '0';
-    btnIzq.onclick = function () { rotacion = (rotacion - 90 + 360) % 360; render(); actualizarArchivo(canvas); };
+    btnIzq.onclick = function () { rotacion = (rotacion - 90 + 360) % 360; render(); };
 
     const btnDer = document.createElement('button');
     btnDer.type = 'button';
@@ -197,13 +206,15 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
     btnDer.style.padding = '4px 10px';
     btnDer.style.fontSize = '0.8rem';
     btnDer.style.margin = '0';
-    btnDer.onclick = function () { rotacion = (rotacion + 90) % 360; render(); actualizarArchivo(canvas); };
+    btnDer.onclick = function () { rotacion = (rotacion + 90) % 360; render(); };
 
     btnBox.appendChild(btnIzq);
     btnBox.appendChild(btnDer);
     wrapper.appendChild(btnBox);
+    wrapper.appendChild(ocrStatus);
 
     actualizarArchivo(canvas);
+    programarOCR(canvas);
   }
 
   function actualizarArchivo(canvas) {
@@ -215,6 +226,50 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
       dt.items.add(file);
       input._archivoRotado = dt.files;
     }, 'image/jpeg', 0.9);
+  }
+
+  function programarOCR(canvas) {
+    if (!input.dataset.ocrCedula || typeof Tesseract === 'undefined') return;
+    clearTimeout(ocrTimer);
+    ocrStatus.textContent = '';
+    ocrTimer = setTimeout(function () { leerCedula(canvas); }, 350);
+  }
+
+  function leerCedula(canvas) {
+    ocrStatus.textContent = '🔍 Leyendo cédula, un momento...';
+    ocrStatus.style.color = '#888';
+    Tesseract.recognize(canvas, 'spa')
+      .then(function (resultado) {
+        aplicarDatosDetectados(parsearCedulaEcuador(resultado.data.text || ''));
+      })
+      .catch(function () {
+        ocrStatus.textContent = '⚠️ No se pudo leer la cédula automáticamente. Completa los datos a mano.';
+        ocrStatus.style.color = '#a13a2f';
+      });
+  }
+
+  function aplicarDatosDetectados(datos) {
+    const form = input.closest('form');
+    let mapa = {};
+    try { mapa = JSON.parse(input.dataset.ocrCedula); } catch (e) { mapa = {}; }
+    let algunDato = false;
+    Object.keys(mapa).forEach(function (campo) {
+      const valor = datos[campo];
+      if (!valor || !form) return;
+      const destino = form.querySelector('[name="' + mapa[campo] + '"]');
+      if (!destino || destino.disabled) return;
+      destino.value = valor;
+      destino.style.background = '#fff8e1';
+      setTimeout(function () { destino.style.background = ''; }, 2000);
+      algunDato = true;
+    });
+    if (algunDato) {
+      ocrStatus.textContent = '✅ Datos detectados de la cédula. Verifica que estén correctos antes de guardar.';
+      ocrStatus.style.color = 'var(--verde-osc)';
+    } else {
+      ocrStatus.textContent = '⚠️ No se pudo leer la cédula automáticamente. Completa los datos a mano.';
+      ocrStatus.style.color = '#a13a2f';
+    }
   }
 
   input.addEventListener('change', function () {
@@ -243,6 +298,76 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
     });
   }
 });
+
+// Interpreta el texto crudo que devuelve el OCR sobre una cédula ecuatoriana
+// y trata de rescatar cédula, apellidos, nombres y fecha de nacimiento.
+// Es heurístico (la calidad de la foto varía mucho), por eso el delegado
+// siempre revisa/corrige los campos antes de guardar.
+function parsearCedulaEcuador(texto) {
+  const rawLines = texto.split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+  const quitarAcentos = function (s) { return s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); };
+  const lines = rawLines.map(function (l) { return quitarAcentos(l).toUpperCase(); });
+  const resultado = {};
+
+  const mCedula = lines.join(' ').match(/\b(\d{10})\b/);
+  if (mCedula) resultado.cedula = mCedula[1];
+
+  const meses = { ENE: 1, FEB: 2, MAR: 3, ABR: 4, MAY: 5, JUN: 6, JUL: 7, AGO: 8, SEP: 9, SET: 9, OCT: 10, NOV: 11, DIC: 12 };
+  function buscarFechaEn(candidatas) {
+    for (let i = 0; i < candidatas.length; i++) {
+      const l = candidatas[i];
+      let m = l.match(/(\d{1,2})[\/\-\s]+([A-Z]{3,4})[\/\-.\s]+(\d{4})/);
+      if (m && meses[m[2].slice(0, 3)]) {
+        return m[3] + '-' + String(meses[m[2].slice(0, 3)]).padStart(2, '0') + '-' + m[1].padStart(2, '0');
+      }
+      m = l.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+      if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+    }
+    return null;
+  }
+  const idxNac = lines.findIndex(function (l) { return l.indexOf('NACIMIENTO') !== -1; });
+  const fecha = (idxNac !== -1 && buscarFechaEn(lines.slice(idxNac, idxNac + 3))) || buscarFechaEn(lines);
+  if (fecha) resultado.fecha_nacimiento = fecha;
+
+  function esRuido(l) {
+    return !l || /^[\d\W]+$/.test(l) ||
+      /REPUBLICA|ECUADOR|CEDULA|IDENTIDAD|NACIONALIDAD|LUGAR|FECHA|SEXO|EMISION|NUMERO|NUMBER|SURNAME|VALIDEZ|FIRMA|REGISTRO|CIVIL/.test(l);
+  }
+  function aTitleCase(s) {
+    return s.toLowerCase().replace(/(^|\s)([a-zñáéíóúü])/g, function (m, p1, p2) { return p1 + p2.toUpperCase(); });
+  }
+
+  // Algunas cédulas traen etiquetas separadas ("APELLIDOS" ... "NOMBRES" ...) y otras
+  // una sola etiqueta combinada ("APELLIDOS Y NOMBRES") seguida de dos líneas de datos
+  // (primero el apellido, luego el nombre). Cubrimos ambos casos.
+  let idxLineaApellidos = -1;
+  const idxApellidos = lines.findIndex(function (l) { return l.indexOf('APELLID') !== -1; });
+  if (idxApellidos !== -1) {
+    for (let i = idxApellidos + 1; i < Math.min(idxApellidos + 4, lines.length); i++) {
+      if (!esRuido(lines[i]) && /^[A-Z\s]+$/.test(lines[i])) {
+        resultado.apellidos = aTitleCase(rawLines[i]);
+        idxLineaApellidos = i;
+        break;
+      }
+    }
+  }
+  const idxNombres = lines.findIndex(function (l, i) {
+    return l.indexOf('NOMBRE') !== -1 && l.indexOf('APELLID') === -1 && (idxApellidos === -1 || i > idxApellidos);
+  });
+  if (idxNombres !== -1) {
+    for (let i = idxNombres + 1; i < Math.min(idxNombres + 4, lines.length); i++) {
+      if (!esRuido(lines[i]) && /^[A-Z\s]+$/.test(lines[i])) { resultado.nombres = aTitleCase(rawLines[i]); break; }
+    }
+  } else if (idxLineaApellidos !== -1) {
+    const siguiente = idxLineaApellidos + 1;
+    if (siguiente < lines.length && !esRuido(lines[siguiente]) && /^[A-Z\s]+$/.test(lines[siguiente])) {
+      resultado.nombres = aTitleCase(rawLines[siguiente]);
+    }
+  }
+
+  return resultado;
+}
 </script>
+{% block extra_scripts %}{% endblock %}
 </body>
 </html>

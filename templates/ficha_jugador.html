@@ -57,7 +57,12 @@
       <input type="file" name="foto" accept=".jpg,.jpeg,.png" data-rotador>
 
       <label>Foto de la cédula</label>
-      <input type="file" name="cedula_frontal" accept=".jpg,.jpeg,.png" data-rotador>
+      <p style="font-size:0.8rem; color:#888; margin:2px 0 6px;">
+        📸 Que se vea clara: buena luz, sin reflejos ni borrosa. Al subirla, el sistema intenta llenar
+        Nombres, Apellidos y Fecha de nacimiento solo — igual revisa que quede correcto antes de guardar.
+      </p>
+      <input type="file" name="cedula_frontal" accept=".jpg,.jpeg,.png" data-rotador
+             data-ocr-cedula='{"nombres":"nombres","apellidos":"apellidos","fecha_nacimiento":"fecha_nacimiento"}'>
       {% endif %}
 
       {% if not bloqueado %}
@@ -118,4 +123,8 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 {% endblock %}
