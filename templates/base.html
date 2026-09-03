@@ -700,17 +700,32 @@ function parsearCedulaEcuador(texto) {
 
   const meses = { ENE: 1, FEB: 2, MAR: 3, ABR: 4, MAY: 5, JUN: 6, JUL: 7, AGO: 8, SEP: 9, SET: 9, OCT: 10, NOV: 11, DIC: 12 };
   function buscarFechaEn(candidatas) {
+    // Un dígito mal leído por el OCR puede dar un año imposible (ej. "4997"
+    // en vez de "1997"). En vez de aceptar cualquier fecha con el formato
+    // correcto, se valida que el año/mes/día sean reales antes de usarla —
+    // mejor dejar el campo vacío que mostrar una fecha obviamente mal.
+    const anioActual = new Date().getFullYear();
+    function esValida(anio, mes, dia) {
+      return anio >= 1900 && anio <= anioActual && mes >= 1 && mes <= 12 && dia >= 1 && dia <= 31;
+    }
     for (let i = 0; i < candidatas.length; i++) {
       const l = candidatas[i];
       // Formato AAAA-MM-DD (algunas cédulas lo traen así, ya listo para el input date)
       let m = l.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
-      if (m) return m[1] + '-' + m[2] + '-' + m[3];
+      if (m && esValida(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10))) {
+        return m[1] + '-' + m[2] + '-' + m[3];
+      }
       m = l.match(/(\d{1,2})[\/\-\s]+([A-Z]{3,4})[\/\-.\s]+(\d{4})/);
       if (m && meses[m[2].slice(0, 3)]) {
-        return m[3] + '-' + String(meses[m[2].slice(0, 3)]).padStart(2, '0') + '-' + m[1].padStart(2, '0');
+        const mes = meses[m[2].slice(0, 3)];
+        if (esValida(parseInt(m[3], 10), mes, parseInt(m[1], 10))) {
+          return m[3] + '-' + String(mes).padStart(2, '0') + '-' + m[1].padStart(2, '0');
+        }
       }
       m = l.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
-      if (m) return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+      if (m && esValida(parseInt(m[3], 10), parseInt(m[2], 10), parseInt(m[1], 10))) {
+        return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+      }
     }
     return null;
   }
