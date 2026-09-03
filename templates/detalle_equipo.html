@@ -110,19 +110,6 @@
 </div>
 
 <div class="card">
-  <h2>Subir nómina de jugadores (Excel)</h2>
-  <p style="font-size:0.85rem; color:#555;">
-    El archivo debe ser <strong>.xlsx</strong> con la primera fila de encabezados y, desde la fila 2, las columnas en este orden:
-    <strong>Cédula, Nombres, Apellidos, Fecha de nacimiento</strong>.
-    Los jugadores nacidos en <strong>1982</strong> se marcan automáticamente como <strong>Juvenil</strong> (cupo máximo {{ cupo_maximo_juvenil }} por equipo).
-  </p>
-  <form method="post" action="{{ url_for('subir_nomina', equipo_id=equipo.id) }}" enctype="multipart/form-data" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-    <input type="file" name="archivo" accept=".xlsx" required>
-    <button type="submit">Subir nómina</button>
-  </form>
-</div>
-
-<div class="card">
   <h2>Jugadores inscritos ({{ jugadores|length }})</h2>
   <p><a href="{{ url_for('exportar_equipo', equipo_id=equipo.id) }}"><button type="button">⬇️ Descargar Excel de este equipo</button></a></p>
   <table>

@@ -7,7 +7,7 @@ from datetime import datetime, date
 from functools import wraps
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g, send_file
-from openpyxl import Workbook, load_workbook
+from openpyxl import Workbook
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 app = Flask(__name__)
@@ -514,12 +514,30 @@ def _subcategoria_por_nacimiento(fecha_nacimiento):
     return "Juvenil" if (fecha_nacimiento or "").strip().startswith("1982") else "Sub 45"
 
 
+def _jugador_califica(fecha_nacimiento):
+    """Solo califica quien nace en 1982 (Juvenil, cupo aparte) o cumple 45
+    años en el año actual de la temporada (Sub 45). Nacer despues de 1982
+    y no cumplir 45 este año no corresponde a ninguna categoria."""
+    fecha_nacimiento = (fecha_nacimiento or "").strip()
+    if fecha_nacimiento.startswith("1982"):
+        return True
+    try:
+        anio_nacimiento = int(fecha_nacimiento[:4])
+    except (ValueError, IndexError):
+        return False
+    return (date.today().year - anio_nacimiento) >= 45
+
+
 def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacimiento, subcategoria,
                        numero_camiseta="", foto=None, cedula_frontal=None, cedula_reverso=None):
     subcategoria = _subcategoria_por_nacimiento(fecha_nacimiento)
 
     if not (cedula and nombres and apellidos):
         return None, "Cédula, nombres y apellidos son obligatorios."
+
+    if not _jugador_califica(fecha_nacimiento):
+        return None, ("Cédula no califica: según la fecha de nacimiento, no cumple 45 años este año "
+                       "ni nació en 1982 (Juvenil). No corresponde a ninguna categoría de esta liga.")
 
     count = db.execute(
         "SELECT COUNT(*) c FROM jugadores WHERE equipo = ? AND categoria = ?",
@@ -585,106 +603,6 @@ def agregar_jugador_equipo(equipo_id):
     else:
         flash("Jugador registrado correctamente.", "ok")
         return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
-
-    return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
-
-
-@app.route("/equipo/<int:equipo_id>/subir_nomina", methods=["POST"])
-@login_required
-def subir_nomina(equipo_id):
-    db = get_db()
-    equipo = db.execute("SELECT * FROM equipos WHERE id = ?", (equipo_id,)).fetchone()
-    if not equipo:
-        flash("Equipo no encontrado.")
-        return redirect(url_for("index"))
-
-    if not equipo_permitido(equipo_id):
-        flash("No tienes acceso a ese equipo.")
-        return redirect(url_for("index"))
-
-    archivo = request.files.get("archivo")
-    if not archivo or not archivo.filename:
-        flash("Selecciona un archivo Excel (.xlsx) para subir.")
-        return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
-
-    if not archivo.filename.lower().endswith(".xlsx"):
-        flash("El archivo debe ser formato .xlsx (Excel).")
-        return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
-
-    try:
-        wb = load_workbook(archivo, data_only=True)
-        ws = wb.active
-    except Exception:
-        flash("No se pudo leer el archivo. Verifica que sea un Excel válido.")
-        return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
-
-    cupo_actual = db.execute(
-        "SELECT COUNT(*) c FROM jugadores WHERE equipo = ? AND categoria = ?",
-        (equipo["nombre"], CATEGORIA_ACTIVA),
-    ).fetchone()["c"]
-
-    agregados = 0
-    duplicados = 0
-    incompletos = 0
-    omitidos_cupo_juvenil = 0
-    juveniles_actuales = _contar_juveniles(db, equipo["nombre"])
-    filas = list(ws.iter_rows(min_row=2, values_only=True))
-
-    for fila in filas:
-        if cupo_actual + agregados >= CUPO_MAXIMO_EQUIPO:
-            flash(f"Se alcanzó el cupo máximo de {CUPO_MAXIMO_EQUIPO}. No se cargaron todas las filas.")
-            break
-
-        if not fila or all(c is None or str(c).strip() == "" for c in fila):
-            continue
-
-        cedula = str(fila[0]).strip() if len(fila) > 0 and fila[0] is not None else ""
-        nombres = str(fila[1]).strip() if len(fila) > 1 and fila[1] is not None else ""
-        apellidos = str(fila[2]).strip() if len(fila) > 2 and fila[2] is not None else ""
-        fecha_nac = fila[3] if len(fila) > 3 else None
-
-        if hasattr(fecha_nac, "strftime"):
-            fecha_nac = fecha_nac.strftime("%Y-%m-%d")
-        elif fecha_nac is not None:
-            fecha_nac = str(fecha_nac).strip()
-        else:
-            fecha_nac = ""
-
-        if not (cedula and nombres and apellidos):
-            incompletos += 1
-            continue
-
-        subcategoria = "Juvenil" if fecha_nac.startswith("1982") else "Sub 45"
-
-        if subcategoria == "Juvenil":
-            if juveniles_actuales >= CUPO_MAXIMO_JUVENIL:
-                omitidos_cupo_juvenil += 1
-                continue
-            juveniles_actuales += 1
-
-        try:
-            db.execute(
-                """INSERT INTO jugadores
-                   (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, foto_token, fecha_registro)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (cedula, nombres, apellidos, fecha_nac, equipo["nombre"], CATEGORIA_ACTIVA,
-                 subcategoria, uuid.uuid4().hex, datetime.now().strftime("%Y-%m-%d %H:%M")),
-            )
-            agregados += 1
-        except IntegrityError:
-            db.rollback()
-            duplicados += 1
-
-    db.commit()
-
-    mensaje = f"{agregados} jugador(es) cargado(s) correctamente."
-    if duplicados:
-        mensaje += f" {duplicados} omitido(s) por cédula ya registrada."
-    if incompletos:
-        mensaje += f" {incompletos} fila(s) omitida(s) por datos incompletos."
-    if omitidos_cupo_juvenil:
-        mensaje += f" {omitidos_cupo_juvenil} omitido(s) por superar el cupo máximo de {CUPO_MAXIMO_JUVENIL} Juvenil."
-    flash(mensaje, "ok" if agregados > 0 else "error")
 
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
@@ -760,9 +678,13 @@ def actualizar_jugador(jugador_id):
 
     nombres = request.form.get("nombres", "").strip() or jugador["nombres"]
     apellidos = request.form.get("apellidos", "").strip() or jugador["apellidos"]
-    fecha_nacimiento = request.form.get("fecha_nacimiento", "").strip()
+    fecha_nacimiento = request.form.get("fecha_nacimiento", "").strip() or jugador["fecha_nacimiento"]
     numero_camiseta = request.form.get("numero_camiseta", "").strip()
     subcategoria = _subcategoria_por_nacimiento(fecha_nacimiento)
+
+    if not _jugador_califica(fecha_nacimiento):
+        flash("Cédula no califica: según la fecha de nacimiento, no cumple 45 años este año ni nació en 1982 (Juvenil).")
+        return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
     if (subcategoria == "Juvenil" and jugador["subcategoria"] != "Juvenil"
             and _contar_juveniles(db, jugador["equipo"]) >= CUPO_MAXIMO_JUVENIL):

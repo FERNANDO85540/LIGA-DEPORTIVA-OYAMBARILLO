@@ -378,6 +378,9 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
       destino.style.background = '#fff8e1';
       setTimeout(function () { destino.style.background = ''; }, 2000);
       algunDato = true;
+      // Avisa a otros scripts (ej. el validador de edad/categoría) que este
+      // campo cambió, ya que asignar .value por JS no dispara 'input' solo.
+      destino.dispatchEvent(new Event('input', { bubbles: true }));
     });
     resultados = resultados || [];
     textoMasLargo = textoMasLargo || '';
@@ -469,6 +472,55 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
     form.addEventListener('submit', function () {
       if (input._archivoRotado) {
         input.files = input._archivoRotado;
+      }
+    });
+  }
+});
+
+// Valida en el navegador si la fecha de nacimiento califica para esta liga:
+// nació en 1982 (Juvenil, cupo aparte) o cumple 45 años este año (Sub 45).
+// Si no califica, marca el campo en rojo y bloquea el guardado — no solo
+// avisa, para que no se pueda pasar por alto sin corregir el dato.
+// El servidor valida lo mismo (esto es solo para avisar rápido).
+document.querySelectorAll('input[type="date"][name="fecha_nacimiento"]').forEach(function (input) {
+  if (input.disabled) return;
+
+  const aviso = document.createElement('p');
+  aviso.style.cssText = 'font-size:0.8rem; color:#a13a2f; margin:4px 0 0; font-weight:600;';
+  input.insertAdjacentElement('afterend', aviso);
+
+  function califica(fechaISO) {
+    if (!fechaISO) return null; // sin fecha todavía, no se evalúa
+    if (fechaISO.slice(0, 4) === '1982') return true;
+    const anio = parseInt(fechaISO.slice(0, 4), 10);
+    if (isNaN(anio)) return null;
+    return (new Date().getFullYear() - anio) >= 45;
+  }
+
+  function validar() {
+    const ok = califica(input.value);
+    if (ok === false) {
+      input.style.borderColor = '#a13a2f';
+      input.style.background = '#fdecea';
+      aviso.textContent = '⛔ Cédula no califica: no cumple 45 años este año ni nació en 1982 (Juvenil). No corresponde a ninguna categoría.';
+    } else {
+      input.style.borderColor = '';
+      input.style.background = '';
+      aviso.textContent = '';
+    }
+  }
+
+  input.addEventListener('input', validar);
+  input.addEventListener('change', validar);
+  validar();
+
+  const form = input.closest('form');
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      if (califica(input.value) === false) {
+        e.preventDefault();
+        validar();
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     });
   }
