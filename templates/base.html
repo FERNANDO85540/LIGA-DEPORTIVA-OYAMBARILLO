@@ -235,14 +235,36 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
     ocrTimer = setTimeout(function () { leerCedula(canvas); }, 350);
   }
 
+  // Convierte a blanco y negro y sube el contraste antes de leer: ayuda bastante
+  // con fotos con sombra, poca luz o tomadas a distancia (celular/WhatsApp).
+  function prepararParaOCR(canvasOriginal) {
+    const c = document.createElement('canvas');
+    c.width = canvasOriginal.width;
+    c.height = canvasOriginal.height;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(canvasOriginal, 0, 0);
+    const imgData = ctx.getImageData(0, 0, c.width, c.height);
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const gris = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      const ajustado = Math.min(255, Math.max(0, (gris - 128) * 1.4 + 128));
+      d[i] = d[i + 1] = d[i + 2] = ajustado;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    return c;
+  }
+
   function leerCedula(canvas) {
     ocrStatus.textContent = '🔍 Leyendo cédula, un momento...';
     ocrStatus.style.color = '#888';
-    Tesseract.recognize(canvas, 'spa')
+    Tesseract.recognize(prepararParaOCR(canvas), 'spa')
       .then(function (resultado) {
-        aplicarDatosDetectados(parsearCedulaEcuador(resultado.data.text || ''));
+        const textoCrudo = resultado.data.text || '';
+        console.log('[OCR cédula] texto detectado:', textoCrudo);
+        aplicarDatosDetectados(parsearCedulaEcuador(textoCrudo));
       })
-      .catch(function () {
+      .catch(function (error) {
+        console.error('[OCR cédula] error:', error);
         ocrStatus.textContent = '⚠️ No se pudo leer la cédula automáticamente. Completa los datos a mano.';
         ocrStatus.style.color = '#a13a2f';
       });
