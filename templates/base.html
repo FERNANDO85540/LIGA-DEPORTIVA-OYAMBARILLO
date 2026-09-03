@@ -254,20 +254,35 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
     return c;
   }
 
+  function contarDatosDetectados(d) {
+    return Object.keys(d).filter(function (k) { return d[k]; }).length;
+  }
+
   function leerCedula(canvas) {
     ocrStatus.textContent = '🔍 Leyendo cédula, un momento...';
     ocrStatus.style.color = '#888';
-    Tesseract.recognize(prepararParaOCR(canvas), 'spa')
-      .then(function (resultado) {
-        const textoCrudo = resultado.data.text || '';
-        console.log('[OCR cédula] texto detectado:', textoCrudo);
-        aplicarDatosDetectados(parsearCedulaEcuador(textoCrudo));
-      })
-      .catch(function (error) {
-        console.error('[OCR cédula] error:', error);
-        ocrStatus.textContent = '⚠️ No se pudo leer la cédula automáticamente. Completa los datos a mano.';
-        ocrStatus.style.color = '#a13a2f';
+
+    // Además de la foto completa, si el sistema logra ubicar dónde está la
+    // cédula dentro de la foto (útil cuando la foto no vino recién tomada con
+    // guía, sino ya lista por WhatsApp), también intenta leer solo esa zona
+    // recortada y agrandada. Se queda con el intento que más datos rescate.
+    const intentos = [prepararParaOCR(canvas)];
+    const recorte = detectarRecorteTarjeta(canvas);
+    if (recorte) intentos.push(prepararParaOCR(recorte));
+
+    Promise.all(intentos.map(function (imagen) {
+      return Tesseract.recognize(imagen, 'spa')
+        .then(function (resultado) { return resultado.data.text || ''; })
+        .catch(function (error) { console.error('[OCR cédula] error:', error); return ''; });
+    })).then(function (textos) {
+      let mejor = {};
+      textos.forEach(function (texto, i) {
+        console.log('[OCR cédula] intento ' + (i + 1) + ' de ' + textos.length + ':', texto);
+        const datos = parsearCedulaEcuador(texto);
+        if (contarDatosDetectados(datos) > contarDatosDetectados(mejor)) mejor = datos;
       });
+      aplicarDatosDetectados(mejor);
+    });
   }
 
   function aplicarDatosDetectados(datos) {
@@ -292,6 +307,28 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
       ocrStatus.textContent = '⚠️ No se pudo leer la cédula automáticamente. Completa los datos a mano.';
       ocrStatus.style.color = '#a13a2f';
     }
+  }
+
+  // Si el input lo pide (data-camara-guia) y el navegador soporta cámara,
+  // agrega un botón para tomar la foto ahí mismo con una guía en pantalla:
+  // así el delegado puede fotografiar la cédula del jugador en el momento,
+  // ya bien encuadrada, sin depender de elegir un archivo de la galería.
+  if (input.dataset.camaraGuia && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    const btnCamara = document.createElement('button');
+    btnCamara.type = 'button';
+    btnCamara.textContent = '📷 Tomar foto con guía';
+    btnCamara.style.margin = '8px 0 0';
+    btnCamara.style.fontSize = '0.85rem';
+    input.insertAdjacentElement('afterend', btnCamara);
+
+    btnCamara.addEventListener('click', function () {
+      abrirCamaraConGuia(function (canvasCapturado) {
+        input.dataset.nombreOriginal = 'cedula_' + Date.now();
+        rotacion = 0;
+        imgOriginal = canvasCapturado;
+        render();
+      });
+    });
   }
 
   input.addEventListener('change', function () {
@@ -320,6 +357,186 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
     });
   }
 });
+
+// Abre la cámara del celular con una guía en pantalla (marco proporción cédula)
+// para que el delegado encaje la cédula del jugador ahí mismo. Al capturar,
+// recorta exactamente lo que quedó dentro del marco y se lo entrega a quien
+// llamó a esta función (que lo mete al mismo editor de rotación/OCR de siempre).
+function abrirCamaraConGuia(onCapturar) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed; inset:0; background:#000; z-index:10000; ' +
+    'display:flex; flex-direction:column; align-items:center; justify-content:center; padding:12px;';
+
+  const contenedorVideo = document.createElement('div');
+  contenedorVideo.style.cssText = 'position:relative; display:inline-block; max-width:100%; max-height:65vh;';
+
+  const video = document.createElement('video');
+  video.setAttribute('playsinline', '');
+  video.muted = true;
+  video.style.cssText = 'display:block; max-width:100%; max-height:65vh;';
+
+  const guia = document.createElement('div');
+  // Proporción real de una cédula (85.6 x 53.98 mm ≈ 1.586:1)
+  guia.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); ' +
+    'width:82%; aspect-ratio:1.586; border:3px solid #4ade80; border-radius:12px; ' +
+    'box-shadow:0 0 0 2000px rgba(0,0,0,0.5); pointer-events:none;';
+
+  contenedorVideo.appendChild(video);
+  contenedorVideo.appendChild(guia);
+
+  const ayuda = document.createElement('p');
+  ayuda.textContent = 'Encaja la cédula dentro del marco verde, bien iluminada';
+  ayuda.style.cssText = 'color:#fff; font-size:0.9rem; margin:12px 0; text-align:center;';
+
+  const botones = document.createElement('div');
+  botones.style.cssText = 'display:flex; gap:10px;';
+
+  const btnCapturar = document.createElement('button');
+  btnCapturar.type = 'button';
+  btnCapturar.textContent = '📸 Capturar';
+  btnCapturar.disabled = true;
+
+  const btnCancelar = document.createElement('button');
+  btnCancelar.type = 'button';
+  btnCancelar.textContent = 'Cancelar';
+  btnCancelar.style.background = '#555';
+
+  botones.appendChild(btnCapturar);
+  botones.appendChild(btnCancelar);
+  overlay.appendChild(contenedorVideo);
+  overlay.appendChild(ayuda);
+  overlay.appendChild(botones);
+  document.body.appendChild(overlay);
+
+  let stream = null;
+
+  function cerrar() {
+    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+    overlay.remove();
+  }
+
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+    audio: false,
+  }).then(function (s) {
+    stream = s;
+    video.srcObject = s;
+    video.play();
+    btnCapturar.disabled = false;
+  }).catch(function () {
+    ayuda.textContent = 'No se pudo abrir la cámara. Cierra esta ventana y usa "Seleccionar archivo".';
+  });
+
+  btnCancelar.addEventListener('click', cerrar);
+
+  btnCapturar.addEventListener('click', function () {
+    if (!video.videoWidth) return;
+    const anchoGuiaRatio = 0.82;
+    const relCedula = 1.586;
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const cw = vw * anchoGuiaRatio;
+    const ch = cw / relCedula;
+    const cx = (vw - cw) / 2;
+    const cy = (vh - ch) / 2;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(cw);
+    canvas.height = Math.round(ch);
+    canvas.getContext('2d').drawImage(video, cx, cy, cw, ch, 0, 0, canvas.width, canvas.height);
+
+    cerrar();
+    onCapturar(canvas);
+  });
+}
+
+// Intenta ubicar dónde está la cédula dentro de una foto completa (por ejemplo
+// una foto de WhatsApp donde la cédula sale chica sobre una mesa) buscando la
+// zona con más detalle/contraste, y devuelve esa zona recortada y agrandada.
+// Si no encuentra una zona confiable, devuelve null (no se fuerza un recorte
+// que podría cortar datos en vez de ayudar).
+function detectarRecorteTarjeta(canvasOriginal) {
+  const w = canvasOriginal.width, h = canvasOriginal.height;
+  if (w < 60 || h < 60) return null;
+
+  const escala = Math.min(1, 400 / Math.max(w, h));
+  const sw = Math.max(1, Math.round(w * escala));
+  const sh = Math.max(1, Math.round(h * escala));
+  const chico = document.createElement('canvas');
+  chico.width = sw;
+  chico.height = sh;
+  const cctx = chico.getContext('2d');
+  cctx.drawImage(canvasOriginal, 0, 0, sw, sh);
+  const datos = cctx.getImageData(0, 0, sw, sh).data;
+
+  const gris = new Float32Array(sw * sh);
+  for (let i = 0, p = 0; i < datos.length; i += 4, p++) {
+    gris[p] = 0.299 * datos[i] + 0.587 * datos[i + 1] + 0.114 * datos[i + 2];
+  }
+
+  const energiaFila = new Float64Array(sh);
+  const energiaCol = new Float64Array(sw);
+  for (let y = 0; y < sh; y++) {
+    for (let x = 0; x < sw; x++) {
+      const idx = y * sw + x;
+      const dx = x + 1 < sw ? Math.abs(gris[idx] - gris[idx + 1]) : 0;
+      const dy = y + 1 < sh ? Math.abs(gris[idx] - gris[idx + sw]) : 0;
+      const e = dx + dy;
+      energiaFila[y] += e;
+      energiaCol[x] += e;
+    }
+  }
+
+  function rangoConDatos(energia) {
+    const n = energia.length;
+    const suave = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      let s = 0, c = 0;
+      for (let k = -2; k <= 2; k++) {
+        const j = i + k;
+        if (j >= 0 && j < n) { s += energia[j]; c++; }
+      }
+      suave[i] = s / c;
+    }
+    let maxVal = 0;
+    for (let i = 0; i < n; i++) if (suave[i] > maxVal) maxVal = suave[i];
+    if (maxVal <= 0) return null;
+    const umbral = maxVal * 0.18;
+    let ini = -1, fin = -1;
+    for (let i = 0; i < n; i++) {
+      if (suave[i] >= umbral) { if (ini === -1) ini = i; fin = i; }
+    }
+    if (ini === -1) return null;
+    if (fin - ini < n * 0.12) return null;
+    return [ini, fin];
+  }
+
+  const rangoY = rangoConDatos(energiaFila);
+  const rangoX = rangoConDatos(energiaCol);
+  if (!rangoY || !rangoX) return null;
+
+  const areaDetectada = (rangoX[1] - rangoX[0]) * (rangoY[1] - rangoY[0]);
+  if (areaDetectada > sw * sh * 0.92) return null; // ya ocupa casi toda la foto, no vale recortar
+
+  const fx = w / sw, fy = h / sh;
+  const margenX = (rangoX[1] - rangoX[0]) * 0.06;
+  const margenY = (rangoY[1] - rangoY[0]) * 0.06;
+  const x0 = Math.max(0, Math.round((rangoX[0] - margenX) * fx));
+  const x1 = Math.min(w, Math.round((rangoX[1] + margenX) * fx));
+  const y0 = Math.max(0, Math.round((rangoY[0] - margenY) * fy));
+  const y1 = Math.min(h, Math.round((rangoY[1] + margenY) * fy));
+  const cw = x1 - x0, ch = y1 - y0;
+  if (cw < 30 || ch < 30) return null;
+
+  const anchoObjetivo = 1100;
+  const escalaFinal = Math.max(1, anchoObjetivo / cw);
+  const salida = document.createElement('canvas');
+  salida.width = Math.round(cw * escalaFinal);
+  salida.height = Math.round(ch * escalaFinal);
+  const sctx = salida.getContext('2d');
+  sctx.imageSmoothingQuality = 'high';
+  sctx.drawImage(canvasOriginal, x0, y0, cw, ch, 0, 0, salida.width, salida.height);
+  return salida;
+}
 
 // Interpreta el texto crudo que devuelve el OCR sobre una cédula ecuatoriana
 // y trata de rescatar cédula, apellidos, nombres y fecha de nacimiento.
