@@ -1,12 +1,13 @@
 import io
 import os
 import re
+import shutil
 import sqlite3
 import uuid
 from datetime import datetime, date
 from functools import wraps
 
-from flask import Flask, render_template, request, redirect, url_for, session, flash, g, send_file, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, flash, g, send_file, send_from_directory, jsonify
 from openpyxl import Workbook
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
@@ -14,9 +15,31 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "cambia-esta-clave-en-produccion")
 
 BASE_DIR = os.path.dirname(__file__)
-DB_PATH = os.path.join(BASE_DIR, "liga.db")
-FOTOS_DIR = os.path.join(BASE_DIR, "static", "fotos_jugadores")
+
+# En Render, /data es el disco persistente (sobrevive a los despliegues).
+# Si no existe (ej. en una máquina local), se usa la carpeta del proyecto como antes.
+DATA_DIR = "/data" if os.path.isdir("/data") else BASE_DIR
+DB_PATH = os.path.join(DATA_DIR, "liga.db")
+FOTOS_DIR = os.path.join(DATA_DIR, "fotos_jugadores")
 os.makedirs(FOTOS_DIR, exist_ok=True)
+
+# Migración única: si el disco persistente está recién montado y todavía no
+# tiene datos, pero existen datos viejos en la carpeta efímera del proyecto
+# (de antes de tener disco persistente), se copian una sola vez.
+if DATA_DIR != BASE_DIR:
+    _db_vieja = os.path.join(BASE_DIR, "liga.db")
+    if not os.path.exists(DB_PATH) and os.path.exists(_db_vieja):
+        shutil.copy2(_db_vieja, DB_PATH)
+
+    _fotos_viejas = os.path.join(BASE_DIR, "static", "fotos_jugadores")
+    if os.path.isdir(_fotos_viejas):
+        for _nombre in os.listdir(_fotos_viejas):
+            _destino = os.path.join(FOTOS_DIR, _nombre)
+            if not os.path.exists(_destino):
+                try:
+                    shutil.copy2(os.path.join(_fotos_viejas, _nombre), _destino)
+                except OSError:
+                    pass
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 USANDO_POSTGRES = bool(DATABASE_URL)
@@ -76,6 +99,11 @@ class CursorWrapper:
 
 ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "Oyambarillo2026")
+
+
+@app.route("/fotos_jugadores/<path:filename>")
+def fotos_jugadores(filename):
+    return send_from_directory(FOTOS_DIR, filename)
 
 CUPO_MAXIMO_EQUIPO = 35
 CUPO_MAXIMO_JUVENIL = 3
@@ -547,6 +575,7 @@ def _guardar_imagen_subida(archivo):
     try:
         img = Image.open(archivo)
         img = ImageOps.exif_transpose(img).convert("RGB")
+        img.thumbnail((1600, 1600), Image.LANCZOS)
         img.save(os.path.join(FOTOS_DIR, nuevo_nombre), format="JPEG", quality=88)
     except Exception:
         return None
