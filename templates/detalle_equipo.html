@@ -76,6 +76,29 @@
 </div>
 {% endif %}
 
+{% if session.get('rol') == 'equipo' %}
+<div class="card">
+  <h2>🔑 Cambiar mi clave de acceso</h2>
+  <p style="font-size:0.85rem; color:#555;">
+    Ponle la clave que prefieras para entrar la próxima vez (el administrador siempre puede verla y cambiarla).
+  </p>
+  <form method="post" action="{{ url_for('cambiar_clave_equipo') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+    <div>
+      <label>Nueva clave</label>
+      <div style="display:flex; gap:6px;">
+        <input type="password" name="nueva_clave" id="nueva-clave" placeholder="mínimo 4 caracteres" style="flex:1;">
+        <button type="button" onclick="const i=document.getElementById('nueva-clave'); i.type = i.type==='password' ? 'text' : 'password';" style="margin:0; padding:8px 10px;">👁️</button>
+      </div>
+    </div>
+    <div>
+      <label>Repetir clave</label>
+      <input type="password" name="confirmar_clave" placeholder="repite la clave">
+    </div>
+    <button type="submit">Guardar clave</button>
+  </form>
+</div>
+{% endif %}
+
 <div class="card">
   <h2>Registrar nuevo jugador</h2>
   <form method="post" action="{{ url_for('agregar_jugador_equipo', equipo_id=equipo.id) }}" enctype="multipart/form-data">

@@ -367,6 +367,33 @@ def credenciales_equipo(equipo_id):
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
 
+@app.route("/mi_equipo/cambiar_clave", methods=["POST"])
+@login_required
+def cambiar_clave_equipo():
+    """El delegado del equipo cambia su propia clave de acceso, a la que
+    prefiera. El administrador conserva acceso total de todas formas (puede
+    ver y volver a cambiar la clave de cualquier equipo desde su panel)."""
+    if session.get("rol") != "equipo":
+        flash("Esta opción es solo para el acceso de delegado de equipo.")
+        return redirect(url_for("index"))
+
+    equipo_id = session.get("equipo_id")
+    nueva_clave = request.form.get("nueva_clave", "").strip()
+    confirmar_clave = request.form.get("confirmar_clave", "").strip()
+
+    if not nueva_clave or len(nueva_clave) < 4:
+        flash("La nueva clave debe tener al menos 4 caracteres.")
+    elif nueva_clave != confirmar_clave:
+        flash("Las dos claves no coinciden.")
+    else:
+        db = get_db()
+        db.execute("UPDATE equipos SET clave = ? WHERE id = ?", (nueva_clave, equipo_id))
+        db.commit()
+        flash("Tu clave de acceso se actualizó correctamente.", "ok")
+
+    return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
+
+
 @app.route("/equipos/<int:equipo_id>/credenciales/quitar", methods=["POST"])
 @admin_required
 def quitar_credenciales_equipo(equipo_id):
