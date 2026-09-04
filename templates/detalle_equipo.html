@@ -141,6 +141,7 @@
 <div class="card">
   <h2>Jugadores inscritos ({{ jugadores|length }})</h2>
   <p><a href="{{ url_for('exportar_equipo', equipo_id=equipo.id) }}"><button type="button">⬇️ Descargar Excel de este equipo</button></a></p>
+  <div style="overflow-x:auto;">
   <table>
     <thead>
       <tr>
@@ -195,6 +196,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </div>
 
 {% endblock %}
