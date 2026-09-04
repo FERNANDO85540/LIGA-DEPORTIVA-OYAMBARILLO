@@ -102,8 +102,8 @@
 <div class="card">
   <h2>Registrar nuevo jugador</h2>
   <p style="font-size:0.85rem; color:#555; margin-top:-4px;">
-    💡 Sube la foto de la cédula abajo y el sistema llena Cédula, Nombres, Apellidos y Fecha de nacimiento solo —
-    después podrás corregir cualquier dato o completar lo que falte de forma manual antes de guardar.
+    💡 Sube la foto de la cédula abajo y el sistema llena automáticamente número de cédula, Nombres, Apellidos y
+    Fecha de nacimiento — después podrás corregir cualquier dato o completar lo que falte de forma manual antes de guardar.
   </p>
   <form method="post" action="{{ url_for('agregar_jugador_equipo', equipo_id=equipo.id) }}" enctype="multipart/form-data">
     <label>Cédula</label>
