@@ -890,7 +890,8 @@ def _texto_centrado(draw, cx, y, texto, font, fill):
 
 
 def _generar_carnet(jugador):
-    ancho, alto = 900, 566
+    # Proporción 93x64mm (tamaño real de la lámina de laminado que se usa para el carnet).
+    ancho, alto = 900, 619
     logo_path = os.path.join(BASE_DIR, "static", "logo_ldbo.png")
 
     # ---------- FRENTE ----------
@@ -1032,11 +1033,7 @@ def carnet_jugador_pdf(jugador_id):
 
 
 CARNET_ANCHO_MM = 93
-# El diseño del carnet (_generar_carnet) tiene proporción 900x566 (~1.59:1, similar
-# a una tarjeta de presentación estándar). 64mm de alto con 93mm de ancho da una
-# proporción distinta (1.45:1) y estira/aplasta la foto y el texto al escalar.
-# Se ajusta el alto a 58.5mm para mantener la misma proporción sin deformar nada.
-CARNET_ALTO_MM = 58.5
+CARNET_ALTO_MM = 64
 CARNET_PDF_DPI = 150
 
 
