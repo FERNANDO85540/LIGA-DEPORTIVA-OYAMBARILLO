@@ -99,6 +99,8 @@ class CursorWrapper:
 
 ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "Oyambarillo2026")
+IMPRENTA_USER = os.environ.get("IMPRENTA_USER", "carnets")
+IMPRENTA_PASS = os.environ.get("IMPRENTA_PASS", "Carnets2026")
 
 
 @app.route("/fotos_jugadores/<path:filename>")
@@ -190,6 +192,12 @@ def init_db():
         db.execute("ALTER TABLE jugadores ADD COLUMN foto_token TEXT")
         for row in db.execute("SELECT id FROM jugadores").fetchall():
             db.execute("UPDATE jugadores SET foto_token = ? WHERE id = ?", (uuid.uuid4().hex, row["id"]))
+    if "carnet_impreso" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN carnet_impreso INTEGER NOT NULL DEFAULT 0")
+    if "carnet_valor" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN carnet_valor REAL")
+    if "carnet_fecha" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN carnet_fecha TEXT")
 
     db.execute(f"""
         CREATE TABLE IF NOT EXISTS equipos (
@@ -261,6 +269,18 @@ def admin_required(f):
     return wrapper
 
 
+def imprenta_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+        if session.get("rol") not in ("admin", "imprenta"):
+            flash("Esta acción requiere acceso al módulo de carnets.")
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return wrapper
+
+
 def equipo_permitido(equipo_id):
     if session.get("rol") == "admin":
         return True
@@ -285,6 +305,12 @@ def login():
             session["logged_in"] = True
             session["rol"] = "admin"
             return redirect(url_for("inscripcion"))
+
+        if user == IMPRENTA_USER and pw == IMPRENTA_PASS:
+            session.clear()
+            session["logged_in"] = True
+            session["rol"] = "imprenta"
+            return redirect(url_for("carnets_modulo"))
 
         db = get_db()
         equipo = db.execute(
@@ -320,6 +346,8 @@ def index():
             flash("Tu sesión ya no es válida. Ingresa nuevamente.")
             return redirect(url_for("login"))
         return redirect(url_for("detalle_equipo", equipo_id=equipo["id"]))
+    if session.get("rol") == "imprenta":
+        return redirect(url_for("carnets_modulo"))
     return redirect(url_for("inscripcion"))
 
 
@@ -1000,6 +1028,133 @@ def carnet_jugador_pdf(jugador_id):
     frente.save(buf, format="PDF", save_all=True, append_images=[reverso])
     buf.seek(0)
     nombre_archivo = f"carnet_{jugador['cedula']}.pdf"
+    return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=nombre_archivo)
+
+
+CARNET_ANCHO_MM = 93
+# El diseño del carnet (_generar_carnet) tiene proporción 900x566 (~1.59:1, similar
+# a una tarjeta de presentación estándar). 64mm de alto con 93mm de ancho da una
+# proporción distinta (1.45:1) y estira/aplasta la foto y el texto al escalar.
+# Se ajusta el alto a 58.5mm para mantener la misma proporción sin deformar nada.
+CARNET_ALTO_MM = 58.5
+CARNET_PDF_DPI = 150
+
+
+def _mm_a_px(mm, dpi=CARNET_PDF_DPI):
+    return int(round(mm / 25.4 * dpi))
+
+
+def _armar_paginas_carnets(jugadores, dpi=CARNET_PDF_DPI):
+    """Arma páginas A4 (frente y reverso por separado) con los carnets en cuadrícula,
+    a 93x64mm cada uno, listas para imprimir y recortar."""
+    margen = _mm_a_px(8, dpi)
+    espacio = _mm_a_px(4, dpi)
+    pagina_w, pagina_h = _mm_a_px(210, dpi), _mm_a_px(297, dpi)
+    carnet_w, carnet_h = _mm_a_px(CARNET_ANCHO_MM, dpi), _mm_a_px(CARNET_ALTO_MM, dpi)
+
+    columnas = max(1, (pagina_w - 2 * margen + espacio) // (carnet_w + espacio))
+    filas = max(1, (pagina_h - 2 * margen + espacio) // (carnet_h + espacio))
+    por_pagina = columnas * filas
+
+    paginas = []
+    for inicio in range(0, len(jugadores), por_pagina):
+        lote = jugadores[inicio:inicio + por_pagina]
+        pag_frente = Image.new("RGB", (pagina_w, pagina_h), "white")
+        pag_reverso = Image.new("RGB", (pagina_w, pagina_h), "white")
+        for i, jugador in enumerate(lote):
+            fila, col = divmod(i, columnas)
+            x = margen + col * (carnet_w + espacio)
+            y = margen + fila * (carnet_h + espacio)
+            frente, reverso = _generar_carnet(jugador)
+            pag_frente.paste(frente.resize((carnet_w, carnet_h), Image.LANCZOS), (x, y))
+            pag_reverso.paste(reverso.resize((carnet_w, carnet_h), Image.LANCZOS), (x, y))
+        paginas.append(pag_frente)
+        paginas.append(pag_reverso)
+    return paginas
+
+
+@app.route("/carnets")
+@imprenta_required
+def carnets_modulo():
+    db = get_db()
+    equipos = db.execute("SELECT * FROM equipos ORDER BY nombre").fetchall()
+    equipo_id = request.args.get("equipo_id", "").strip()
+    jugadores = []
+    equipo_actual = None
+    if equipo_id:
+        equipo_actual = db.execute("SELECT * FROM equipos WHERE id = ?", (equipo_id,)).fetchone()
+        if equipo_actual:
+            jugadores = db.execute(
+                "SELECT * FROM jugadores WHERE equipo = ? ORDER BY apellidos, nombres",
+                (equipo_actual["nombre"],),
+            ).fetchall()
+    total = len(jugadores)
+    impresos = sum(1 for j in jugadores if j["carnet_impreso"])
+    recaudado = sum((j["carnet_valor"] or 0) for j in jugadores if j["carnet_impreso"])
+    return render_template(
+        "carnets_modulo.html",
+        equipos=equipos,
+        equipo_actual=equipo_actual,
+        jugadores=jugadores,
+        total=total,
+        impresos=impresos,
+        recaudado=recaudado,
+    )
+
+
+@app.route("/carnets/<int:jugador_id>/estado", methods=["POST"])
+@imprenta_required
+def carnets_estado(jugador_id):
+    db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
+    if not jugador:
+        flash("Jugador no encontrado.")
+        return redirect(url_for("carnets_modulo"))
+
+    impreso = 1 if request.form.get("carnet_impreso") == "on" else 0
+    valor = _to_float(request.form.get("carnet_valor", "0"))
+    fecha = jugador["carnet_fecha"]
+    if impreso and not jugador["carnet_impreso"]:
+        fecha = datetime.now().strftime("%Y-%m-%d %H:%M")
+    elif not impreso:
+        fecha = None
+
+    db.execute(
+        "UPDATE jugadores SET carnet_impreso = ?, carnet_valor = ?, carnet_fecha = ? WHERE id = ?",
+        (impreso, valor, fecha, jugador_id),
+    )
+    db.commit()
+    flash("Carnet actualizado.", "ok")
+
+    equipo = db.execute("SELECT id FROM equipos WHERE nombre = ?", (jugador["equipo"],)).fetchone()
+    return redirect(url_for("carnets_modulo", equipo_id=equipo["id"] if equipo else ""))
+
+
+@app.route("/carnets/pdf")
+@imprenta_required
+def carnets_pdf():
+    db = get_db()
+    equipo_id = request.args.get("equipo_id", "").strip()
+    equipo = db.execute("SELECT * FROM equipos WHERE id = ?", (equipo_id,)).fetchone() if equipo_id else None
+    if not equipo:
+        flash("Selecciona un equipo para generar los carnets.")
+        return redirect(url_for("carnets_modulo"))
+
+    jugadores = db.execute(
+        "SELECT * FROM jugadores WHERE equipo = ? ORDER BY apellidos, nombres",
+        (equipo["nombre"],),
+    ).fetchall()
+    if not jugadores:
+        flash("Ese equipo todavía no tiene jugadores inscritos.")
+        return redirect(url_for("carnets_modulo", equipo_id=equipo_id))
+
+    paginas = _armar_paginas_carnets(jugadores)
+    buf = io.BytesIO()
+    paginas[0].save(
+        buf, format="PDF", save_all=True, append_images=paginas[1:], resolution=CARNET_PDF_DPI
+    )
+    buf.seek(0)
+    nombre_archivo = f"carnets_{equipo['nombre'].replace(' ', '_')}.pdf"
     return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=nombre_archivo)
 
 

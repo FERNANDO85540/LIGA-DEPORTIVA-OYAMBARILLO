@@ -8,7 +8,10 @@
 
 <div class="card">
   <h2>Equipos participantes</h2>
-  <p><a href="{{ url_for('exportar_general') }}"><button type="button">⬇️ Descargar Excel general (todos los equipos)</button></a></p>
+  <p>
+    <a href="{{ url_for('exportar_general') }}"><button type="button">⬇️ Descargar Excel general (todos los equipos)</button></a>
+    <a href="{{ url_for('carnets_modulo') }}"><button type="button">🪪 Módulo de carnets (imprimir y marcar entregados)</button></a>
+  </p>
   <div class="cupos-grid">
     {% for e in equipos %}
       <div class="cupo-item">

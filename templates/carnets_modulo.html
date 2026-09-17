@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.4rem;">🪪 Módulo de carnets</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">Selecciona un equipo para generar el PDF de impresión y marcar los carnets entregados.</p>
+</div>
+
+<div class="card">
+  <h2>Elegir equipo</h2>
+  <form method="get" action="{{ url_for('carnets_modulo') }}" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+    <div style="flex:1; min-width:220px;">
+      <label>Equipo</label>
+      <select name="equipo_id" onchange="this.form.submit()">
+        <option value="">-- Selecciona un equipo --</option>
+        {% for e in equipos %}
+          <option value="{{ e.id }}" {% if equipo_actual and equipo_actual.id == e.id %}selected{% endif %}>{{ e.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit">Ver equipo</button>
+  </form>
+</div>
+
+{% if equipo_actual %}
+<div class="card">
+  <h2>{{ equipo_actual.nombre }} — {{ total }} jugador(es)</h2>
+  <p style="font-size:0.9rem; color:#555;">
+    ✅ Carnets impresos: <strong>{{ impresos }}/{{ total }}</strong>
+    &nbsp;·&nbsp; 💵 Recaudado: <strong>${{ '%.2f' % recaudado }}</strong>
+  </p>
+
+  {% if jugadores %}
+  <p>
+    <a href="{{ url_for('carnets_pdf', equipo_id=equipo_actual.id) }}">
+      <button type="button">📄 Descargar PDF para imprimir (carnets de {{ equipo_actual.nombre }})</button>
+    </a>
+  </p>
+  <p style="font-size:0.8rem; color:#888; margin-top:-8px;">
+    El PDF sale en hojas A4, con los carnets de 93×64mm listos para recortar (primero las páginas de frente, luego las de reverso en el mismo orden).
+  </p>
+
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead>
+      <tr>
+        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Categoría</th><th>Carnet impreso</th><th>Valor cobrado</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for j in jugadores %}
+      <tr>
+        <td data-label="Cédula">{{ j.cedula }}</td>
+        <td data-label="Nombres">{{ j.nombres }}</td>
+        <td data-label="Apellidos">{{ j.apellidos }}</td>
+        <td data-label="Categoría">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
+        <td data-label="Carnet impreso">
+          <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:400;">
+            <input type="checkbox" name="carnet_impreso" form="form-carnet-{{ j.id }}" style="width:auto;" {% if j.carnet_impreso %}checked{% endif %}>
+            {% if j.carnet_impreso %}<span class="badge badge-ok">✅ Impreso</span>{% else %}<span class="badge" style="background:#eef3ee; color:#555;">Pendiente</span>{% endif %}
+          </label>
+        </td>
+        <td data-label="Valor cobrado">
+          <input type="number" step="0.01" min="0" name="carnet_valor" form="form-carnet-{{ j.id }}" value="{{ j.carnet_valor or '' }}" placeholder="$0.00" style="width:110px;">
+        </td>
+        <td data-label="" class="table-actions">
+          <form id="form-carnet-{{ j.id }}" method="post" action="{{ url_for('carnets_estado', jugador_id=j.id) }}" style="margin:0;">
+            <button type="submit" style="padding:4px 10px; font-size:0.8rem;">Guardar</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p style="color:#888;">Este equipo todavía no tiene jugadores inscritos.</p>
+  {% endif %}
+</div>
+{% endif %}
+
+{% endblock %}
