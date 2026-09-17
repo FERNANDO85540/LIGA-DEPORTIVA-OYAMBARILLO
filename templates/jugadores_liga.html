@@ -14,7 +14,7 @@
     Útil para revisar si un jugador ya está inscrito en otro equipo antes de registrarlo.
   </p>
   <div style="overflow-x:auto;">
-    <table id="tablaLiga">
+    <table id="tablaLiga" class="tabla-responsive">
       <thead>
         <tr>
           <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Equipo</th><th>Categoría</th><th>Estado</th>
@@ -23,12 +23,12 @@
       <tbody>
         {% for j in jugadores %}
         <tr>
-          <td>{{ j.cedula }}</td>
-          <td>{{ j.nombres }}</td>
-          <td>{{ j.apellidos }}</td>
-          <td>{{ j.equipo }}</td>
-          <td>{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
-          <td>
+          <td data-label="Cédula">{{ j.cedula }}</td>
+          <td data-label="Nombres">{{ j.nombres }}</td>
+          <td data-label="Apellidos">{{ j.apellidos }}</td>
+          <td data-label="Equipo">{{ j.equipo }}</td>
+          <td data-label="Categoría">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
+          <td data-label="Estado">
             {% if j.calificado %}
               <span class="badge badge-ok">✅ Calificado</span>
             {% else %}

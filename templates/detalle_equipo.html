@@ -146,21 +146,21 @@
   <h2>Jugadores inscritos ({{ jugadores|length }})</h2>
   <p><a href="{{ url_for('exportar_equipo', equipo_id=equipo.id) }}"><button type="button">⬇️ Descargar Excel de este equipo</button></a></p>
   <div style="overflow-x:auto;">
-  <table>
+  <table class="tabla-responsive">
     <thead>
       <tr>
-        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Categoría</th><th>Nac.</th><th>Documentos</th><th>Estado</th><th>Registrado</th><th></th>
+        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Categoría</th><th>Nac.</th><th>Documentos</th><th>Estado</th><th>Registrado</th><th>Acciones</th>
       </tr>
     </thead>
     <tbody>
       {% for j in jugadores %}
       <tr>
-        <td>{{ j.cedula }}</td>
-        <td>{{ j.nombres }}</td>
-        <td>{{ j.apellidos }}</td>
-        <td>{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
-        <td>{{ j.fecha_nacimiento or '-' }}</td>
-        <td>
+        <td data-label="Cédula">{{ j.cedula }}</td>
+        <td data-label="Nombres">{{ j.nombres }}</td>
+        <td data-label="Apellidos">{{ j.apellidos }}</td>
+        <td data-label="Categoría">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
+        <td data-label="Nac.">{{ j.fecha_nacimiento or '-' }}</td>
+        <td data-label="Documentos">
           {% set completos = (j.foto and j.cedula_frontal) %}
           {% if completos %}
             <span class="badge badge-ok">✅ Completos</span>
@@ -170,26 +170,26 @@
             <span class="badge badge-full">Sin documentos</span>
           {% endif %}
         </td>
-        <td>
+        <td data-label="Estado">
           {% if j.calificado %}
             <span class="badge badge-ok">✅ Calificado</span>
           {% else %}
             <span class="badge" style="background:#eef3ee; color:#555;">Sin calificar</span>
           {% endif %}
         </td>
-        <td>{{ j.fecha_registro }}</td>
-        <td style="white-space:nowrap;">
+        <td data-label="Registrado">{{ j.fecha_registro }}</td>
+        <td data-label="Acciones" class="table-actions">
           {% set puede_editar = session.get('rol') == 'admin' or not j.calificado %}
           <a href="{{ url_for('ficha_jugador', jugador_id=j.id) }}">
             <button type="button" style="margin:0; padding:4px 10px; font-size:0.8rem;">{{ 'Editar' if puede_editar else 'Ver ficha' }}</button>
           </a>
           {% if session.get('rol') == 'admin' %}
-          <form method="post" action="{{ url_for('calificar_jugador', jugador_id=j.id) }}" style="display:inline;">
-            <button type="submit" style="margin:0; padding:4px 10px; font-size:0.8rem;">{{ 'Quitar calificación' if j.calificado else '✅ Calificar' }}</button>
+          <form method="post" action="{{ url_for('calificar_jugador', jugador_id=j.id) }}">
+            <button type="submit" style="padding:4px 10px; font-size:0.8rem;">{{ 'Quitar calificación' if j.calificado else '✅ Calificar' }}</button>
           </form>
           {% endif %}
           {% if puede_editar %}
-          <form method="post" action="{{ url_for('eliminar_jugador', jugador_id=j.id) }}" onsubmit="return confirm('¿Eliminar este jugador?');" style="display:inline;">
+          <form method="post" action="{{ url_for('eliminar_jugador', jugador_id=j.id) }}" onsubmit="return confirm('¿Eliminar este jugador?');">
             <button type="submit" class="btn-del">Eliminar</button>
           </form>
           {% endif %}

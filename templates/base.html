@@ -110,6 +110,46 @@
   .cupos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 8px; }
   .cupo-item { border: 1px solid var(--borde); border-radius: 8px; padding: 10px 12px; font-size: 0.85rem; }
   .cupo-item strong { display: block; font-size: 0.95rem; }
+
+  .table-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .table-actions form { margin: 0; display: inline; }
+  .table-actions button { margin: 0; }
+
+  @media (max-width: 700px) {
+    .tabla-responsive thead { display: none; }
+    .tabla-responsive, .tabla-responsive tbody, .tabla-responsive tr, .tabla-responsive td {
+      display: block;
+      width: 100%;
+    }
+    .tabla-responsive tr {
+      border: 1px solid var(--borde);
+      border-radius: 10px;
+      margin-bottom: 12px;
+      padding: 4px 12px;
+      background: white;
+    }
+    .tabla-responsive td {
+      border-bottom: 1px solid var(--fondo);
+      padding: 8px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      text-align: right;
+    }
+    .tabla-responsive td:last-child { border-bottom: none; }
+    .tabla-responsive td::before {
+      content: attr(data-label);
+      font-weight: 600;
+      color: #555;
+      text-align: left;
+      flex-shrink: 0;
+    }
+    .tabla-responsive td.table-actions {
+      justify-content: flex-end;
+    }
+    .tabla-responsive td.table-actions::before { display: none; }
+  }
 </style>
 </head>
 <body>
