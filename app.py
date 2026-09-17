@@ -1045,31 +1045,36 @@ def _mm_a_px(mm, dpi=CARNET_PDF_DPI):
 
 
 def _armar_paginas_carnets(jugadores, dpi=CARNET_PDF_DPI):
-    """Arma páginas A4 (frente y reverso por separado) con los carnets en cuadrícula,
-    a 93x64mm cada uno, listas para imprimir y recortar."""
+    """Arma páginas A4 con los carnets en cuadrícula. El frente y el reverso de cada
+    jugador van juntos (frente arriba, reverso justo abajo, separados por una línea
+    guía) para que no haya que buscar el reverso en otra página."""
     margen = _mm_a_px(8, dpi)
     espacio = _mm_a_px(4, dpi)
+    espacio_interno = _mm_a_px(3, dpi)
     pagina_w, pagina_h = _mm_a_px(210, dpi), _mm_a_px(297, dpi)
     carnet_w, carnet_h = _mm_a_px(CARNET_ANCHO_MM, dpi), _mm_a_px(CARNET_ALTO_MM, dpi)
+    unidad_w = carnet_w
+    unidad_h = carnet_h * 2 + espacio_interno
 
-    columnas = max(1, (pagina_w - 2 * margen + espacio) // (carnet_w + espacio))
-    filas = max(1, (pagina_h - 2 * margen + espacio) // (carnet_h + espacio))
+    columnas = max(1, (pagina_w - 2 * margen + espacio) // (unidad_w + espacio))
+    filas = max(1, (pagina_h - 2 * margen + espacio) // (unidad_h + espacio))
     por_pagina = columnas * filas
 
     paginas = []
     for inicio in range(0, len(jugadores), por_pagina):
         lote = jugadores[inicio:inicio + por_pagina]
-        pag_frente = Image.new("RGB", (pagina_w, pagina_h), "white")
-        pag_reverso = Image.new("RGB", (pagina_w, pagina_h), "white")
+        pagina = Image.new("RGB", (pagina_w, pagina_h), "white")
+        draw = ImageDraw.Draw(pagina)
         for i, jugador in enumerate(lote):
             fila, col = divmod(i, columnas)
-            x = margen + col * (carnet_w + espacio)
-            y = margen + fila * (carnet_h + espacio)
+            x = margen + col * (unidad_w + espacio)
+            y = margen + fila * (unidad_h + espacio)
             frente, reverso = _generar_carnet(jugador)
-            pag_frente.paste(frente.resize((carnet_w, carnet_h), Image.LANCZOS), (x, y))
-            pag_reverso.paste(reverso.resize((carnet_w, carnet_h), Image.LANCZOS), (x, y))
-        paginas.append(pag_frente)
-        paginas.append(pag_reverso)
+            pagina.paste(frente.resize((carnet_w, carnet_h), Image.LANCZOS), (x, y))
+            linea_y = y + carnet_h + espacio_interno // 2
+            draw.line([(x, linea_y), (x + carnet_w, linea_y)], fill="#bbbbbb", width=2)
+            pagina.paste(reverso.resize((carnet_w, carnet_h), Image.LANCZOS), (x, y + carnet_h + espacio_interno))
+        paginas.append(pagina)
     return paginas
 
 
