@@ -16,3 +16,7 @@ services:
         value: admin
       - key: ADMIN_PASS
         sync: false
+      - key: IMPRENTA_USER
+        value: carnets
+      - key: IMPRENTA_PASS
+        sync: false

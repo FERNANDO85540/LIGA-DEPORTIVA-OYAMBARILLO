@@ -100,7 +100,7 @@ class CursorWrapper:
 ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "Oyambarillo2026")
 IMPRENTA_USER = os.environ.get("IMPRENTA_USER", "carnets")
-IMPRENTA_PASS = os.environ.get("IMPRENTA_PASS", "Carnets2026")
+IMPRENTA_PASS = os.environ.get("IMPRENTA_PASS", "")
 
 
 @app.route("/fotos_jugadores/<path:filename>")
@@ -306,7 +306,7 @@ def login():
             session["rol"] = "admin"
             return redirect(url_for("inscripcion"))
 
-        if user == IMPRENTA_USER and pw == IMPRENTA_PASS:
+        if IMPRENTA_PASS and user == IMPRENTA_USER and pw == IMPRENTA_PASS:
             session.clear()
             session["logged_in"] = True
             session["rol"] = "imprenta"
