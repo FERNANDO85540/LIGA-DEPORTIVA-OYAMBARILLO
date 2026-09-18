@@ -22,8 +22,8 @@
     <ul style="margin:0; padding-left:20px;">
       {% for p in partidos_equipo %}
         {% if p.rival %}
-          <li><strong>Jornada {{ p.jornada.numero }}</strong>{% if p.jornada.fecha %} ({{ p.jornada.fecha }}){% endif %}:
-            {{ 'Local vs' if p.local else 'Visitante ante' }} {{ p.rival }}{% if p.hora %} — {{ p.hora }}{% endif %}</li>
+          <li><strong>Jornada {{ p.jornada.numero }}</strong>{% if p.fecha %} — {{ p.fecha }}{% endif %}{% if p.hora %} {{ p.hora }}{% endif %}:
+            {{ 'Local vs' if p.local else 'Visitante ante' }} {{ p.rival }}</li>
         {% else %}
           <li><strong>Jornada {{ p.jornada.numero }}</strong>{% if p.jornada.fecha %} ({{ p.jornada.fecha }}){% endif %}: <span style="color:#888;">Descansa</span></li>
         {% endif %}

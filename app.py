@@ -248,9 +248,13 @@ def init_db():
             jornada_id INTEGER NOT NULL,
             equipo_local TEXT NOT NULL,
             equipo_visitante TEXT NOT NULL,
-            hora TEXT
+            hora TEXT,
+            fecha TEXT
         )
     """)
+    if "fecha" not in _columnas_existentes(db, "partidos"):
+        db.execute("ALTER TABLE partidos ADD COLUMN fecha TEXT")
+
     db.execute(f"""
         CREATE TABLE IF NOT EXISTS descansos (
             id {tipo_id},
@@ -585,9 +589,12 @@ def detalle_equipo(equipo_id):
         if partido:
             rival = partido["equipo_visitante"] if partido["equipo_local"] == equipo["nombre"] else partido["equipo_local"]
             local = partido["equipo_local"] == equipo["nombre"]
-            partidos_equipo.append({"jornada": jr, "rival": rival, "local": local, "hora": partido["hora"]})
+            partidos_equipo.append({
+                "jornada": jr, "rival": rival, "local": local,
+                "hora": partido["hora"], "fecha": partido["fecha"],
+            })
         elif descansa:
-            partidos_equipo.append({"jornada": jr, "rival": None, "local": None, "hora": None})
+            partidos_equipo.append({"jornada": jr, "rival": None, "local": None, "hora": None, "fecha": None})
 
     return render_template(
         "detalle_equipo.html",
@@ -1318,12 +1325,13 @@ def agregar_jornada():
     locales = request.form.getlist("equipo_local")
     visitantes = request.form.getlist("equipo_visitante")
     horas = request.form.getlist("hora")
+    fechas_partido = request.form.getlist("fecha_partido")
     descansos = [e for e in request.form.getlist("descansos") if e]
 
     partidos_validos = []
     equipos_usados = set()
-    for local, visitante, hora in zip(locales, visitantes, horas):
-        local, visitante, hora = local.strip(), visitante.strip(), hora.strip()
+    for local, visitante, hora, fecha_partido in zip(locales, visitantes, horas, fechas_partido):
+        local, visitante, hora, fecha_partido = local.strip(), visitante.strip(), hora.strip(), fecha_partido.strip()
         if not local or not visitante:
             continue
         if local == visitante:
@@ -1334,7 +1342,7 @@ def agregar_jornada():
             return redirect(url_for("comision_modulo"))
         equipos_usados.add(local)
         equipos_usados.add(visitante)
-        partidos_validos.append((local, visitante, hora))
+        partidos_validos.append((local, visitante, hora, fecha_partido))
 
     for equipo in descansos:
         if equipo in equipos_usados:
@@ -1348,10 +1356,10 @@ def agregar_jornada():
     returning = " RETURNING id" if USANDO_POSTGRES else ""
     cur = db.execute(f"INSERT INTO jornadas (numero, fecha) VALUES (?, ?){returning}", (int(numero), fecha or None))
     jornada_id = cur.fetchone()["id"] if USANDO_POSTGRES else cur.lastrowid
-    for local, visitante, hora in partidos_validos:
+    for local, visitante, hora, fecha_partido in partidos_validos:
         db.execute(
-            "INSERT INTO partidos (jornada_id, equipo_local, equipo_visitante, hora) VALUES (?, ?, ?, ?)",
-            (jornada_id, local, visitante, hora or None),
+            "INSERT INTO partidos (jornada_id, equipo_local, equipo_visitante, hora, fecha) VALUES (?, ?, ?, ?, ?)",
+            (jornada_id, local, visitante, hora or None, fecha_partido or None),
         )
     for equipo in descansos:
         db.execute("INSERT INTO descansos (jornada_id, equipo) VALUES (?, ?)", (jornada_id, equipo))
