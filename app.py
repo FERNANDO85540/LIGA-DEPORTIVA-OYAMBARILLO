@@ -1430,9 +1430,15 @@ def sanciones_modulo():
         ORDER BY s.fecha DESC, s.id DESC
     """).fetchall()
 
+    jugadores_js = [
+        {"id": j["id"], "label": f"{j['apellidos']} {j['nombres']} ({j['cedula']})", "equipo": j["equipo"]}
+        for j in jugadores
+    ]
+
     return render_template(
         "sanciones_modulo.html",
         jugadores=jugadores,
+        jugadores_js=jugadores_js,
         jornadas=jornadas,
         tarjetas=tarjetas,
         acumulado=acumulado,

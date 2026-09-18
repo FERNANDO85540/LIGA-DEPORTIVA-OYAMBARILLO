@@ -19,19 +19,11 @@
   <form method="post" action="{{ url_for('agregar_tarjeta') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
     <div style="flex:1; min-width:220px;">
       <label>Jugador</label>
-      <select name="jugador_id" required>
-        <option value="">-- Selecciona un jugador --</option>
-        {% set equipo_actual = namespace(nombre=None) %}
-        {% for j in jugadores %}
-          {% if j.equipo != equipo_actual.nombre %}
-            {% if not loop.first %}</optgroup>{% endif %}
-            <optgroup label="{{ j.equipo }}">
-            {% set equipo_actual.nombre = j.equipo %}
-          {% endif %}
-          <option value="{{ j.id }}">{{ j.apellidos }} {{ j.nombres }} ({{ j.cedula }})</option>
-          {% if loop.last %}</optgroup>{% endif %}
-        {% endfor %}
-      </select>
+      <div class="buscador-jugador" id="buscadorTarjetaJugador">
+        <input type="text" class="buscador-input" placeholder="Escribe nombre, apellido o cédula..." autocomplete="off" required>
+        <input type="hidden" class="buscador-valor" name="jugador_id">
+        <div class="buscador-lista" style="display:none;"></div>
+      </div>
     </div>
     <div>
       <label>Tipo</label>
@@ -123,19 +115,11 @@
   <form method="post" action="{{ url_for('agregar_sancion') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
     <div style="flex:1; min-width:220px;">
       <label>Jugador</label>
-      <select name="jugador_id" required>
-        <option value="">-- Selecciona un jugador --</option>
-        {% set equipo_actual2 = namespace(nombre=None) %}
-        {% for j in jugadores %}
-          {% if j.equipo != equipo_actual2.nombre %}
-            {% if not loop.first %}</optgroup>{% endif %}
-            <optgroup label="{{ j.equipo }}">
-            {% set equipo_actual2.nombre = j.equipo %}
-          {% endif %}
-          <option value="{{ j.id }}">{{ j.apellidos }} {{ j.nombres }} ({{ j.cedula }})</option>
-          {% if loop.last %}</optgroup>{% endif %}
-        {% endfor %}
-      </select>
+      <div class="buscador-jugador" id="buscadorSancionJugador">
+        <input type="text" class="buscador-input" placeholder="Escribe nombre, apellido o cédula..." autocomplete="off" required>
+        <input type="hidden" class="buscador-valor" name="jugador_id">
+        <div class="buscador-lista" style="display:none;"></div>
+      </div>
     </div>
     <div>
       <label>Jornadas de sanción</label>
@@ -202,6 +186,15 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script>
+(function () {
+  const JUGADORES = {{ jugadores_js|tojson }};
+  ['buscadorTarjetaJugador', 'buscadorSancionJugador'].forEach(function (id) {
+    const raiz = document.getElementById(id);
+    if (raiz) window.initBuscadorJugador(raiz, JUGADORES);
+  });
+})();
+</script>
 <script>
 (function () {
   const buscador = document.getElementById('buscadorSanciones');

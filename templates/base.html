@@ -115,6 +115,18 @@
   .table-actions form { margin: 0; display: inline; }
   .table-actions button { margin: 0; }
 
+  .buscador-jugador { position: relative; }
+  .buscador-lista {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 20;
+    background: white; border: 1px solid var(--borde); border-radius: 6px;
+    max-height: 220px; overflow-y: auto; box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+    margin-top: 2px;
+  }
+  .buscador-item { padding: 8px 10px; cursor: pointer; font-size: 0.9rem; }
+  .buscador-item:hover, .buscador-item.activo { background: #eef3ee; }
+  .buscador-item .equipo-chico { color: #888; font-size: 0.8rem; }
+  .buscador-sin-resultados { padding: 8px 10px; color: #888; font-size: 0.85rem; }
+
   @media (max-width: 700px) {
     .tabla-responsive thead { display: none; }
     .tabla-responsive, .tabla-responsive tbody, .tabla-responsive tr, .tabla-responsive td {
@@ -1019,6 +1031,59 @@ function parsearCedulaEcuador(texto) {
 
   return resultado;
 }
+</script>
+<script>
+// Buscador de jugador reutilizable: convierte un <select> gigante (todos los
+// jugadores de la liga) en un campo de texto con autocompletado.
+// Uso: window.initBuscadorJugador(elementoConClaseBuscadorJugador, listaDeJugadores)
+// donde listaDeJugadores es [{id, label, equipo}, ...] y el contenedor tiene
+// dentro un input.buscador-input, un input[type=hidden].buscador-valor y un
+// div.buscador-lista.
+window.initBuscadorJugador = function (raiz, jugadores) {
+  const input = raiz.querySelector('.buscador-input');
+  const valor = raiz.querySelector('.buscador-valor');
+  const lista = raiz.querySelector('.buscador-lista');
+
+  function cerrar() {
+    lista.style.display = 'none';
+    lista.innerHTML = '';
+  }
+
+  function mostrar(items) {
+    lista.innerHTML = '';
+    if (items.length === 0) {
+      const vacio = document.createElement('div');
+      vacio.className = 'buscador-sin-resultados';
+      vacio.textContent = 'Sin resultados.';
+      lista.appendChild(vacio);
+    } else {
+      items.slice(0, 40).forEach(function (j) {
+        const item = document.createElement('div');
+        item.className = 'buscador-item';
+        item.innerHTML = j.label + ' <span class="equipo-chico">— ' + j.equipo + '</span>';
+        item.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          input.value = j.label;
+          valor.value = j.id;
+          cerrar();
+        });
+        lista.appendChild(item);
+      });
+    }
+    lista.style.display = 'block';
+  }
+
+  input.addEventListener('input', function () {
+    valor.value = '';
+    const q = input.value.trim().toLowerCase();
+    if (!q) { cerrar(); return; }
+    mostrar(jugadores.filter(function (j) { return j.label.toLowerCase().includes(q); }));
+  });
+  input.addEventListener('focus', function () {
+    if (input.value.trim()) mostrar(jugadores.filter(function (j) { return j.label.toLowerCase().includes(input.value.trim().toLowerCase()); }));
+  });
+  input.addEventListener('blur', cerrar);
+};
 </script>
 {% block extra_scripts %}{% endblock %}
 </body>
