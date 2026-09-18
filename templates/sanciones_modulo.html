@@ -7,6 +7,14 @@
 </div>
 
 <div class="card">
+  <h2>🔍 Buscar jugador</h2>
+  <input type="text" id="buscadorSanciones" placeholder="Buscar por nombre, apellido o equipo...">
+  <p style="font-size:0.8rem; color:#888; margin:6px 0 0;">
+    Filtra a la vez la acumulación de tarjetas, el historial de tarjetas y las sanciones.
+  </p>
+</div>
+
+<div class="card">
   <h2>Registrar tarjeta</h2>
   <form method="post" action="{{ url_for('agregar_tarjeta') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
     <div style="flex:1; min-width:220px;">
@@ -57,7 +65,7 @@
     <p style="color:#888;">Todavía no hay tarjetas registradas.</p>
   {% else %}
   <div style="overflow-x:auto;">
-  <table class="tabla-responsive">
+  <table class="tabla-responsive" id="tablaAcumulado">
     <thead>
       <tr><th>Jugador</th><th>Equipo</th><th>🟨 Amarillas</th><th>🟥 Rojas</th><th>Multas acumuladas</th></tr>
     </thead>
@@ -83,7 +91,7 @@
     <p style="color:#888;">No hay tarjetas registradas.</p>
   {% else %}
   <div style="overflow-x:auto;">
-  <table class="tabla-responsive">
+  <table class="tabla-responsive" id="tablaTarjetas">
     <thead>
       <tr><th>Jugador</th><th>Equipo</th><th>Tipo</th><th>Jornada</th><th>Valor multa</th><th>Observación</th><th>Fecha</th><th></th></tr>
     </thead>
@@ -158,7 +166,7 @@
     <p style="color:#888;">No hay sanciones registradas.</p>
   {% else %}
   <div style="overflow-x:auto;">
-  <table class="tabla-responsive">
+  <table class="tabla-responsive" id="tablaSanciones">
     <thead>
       <tr><th>Jugador</th><th>Equipo</th><th>Motivo</th><th>Jornadas sancionado</th><th>Desde</th><th>Valor multa</th><th>Pagada</th><th></th></tr>
     </thead>
@@ -191,4 +199,25 @@
   {% endif %}
 </div>
 
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const buscador = document.getElementById('buscadorSanciones');
+  const tablas = ['tablaAcumulado', 'tablaTarjetas', 'tablaSanciones']
+    .map(function (id) { return document.getElementById(id); })
+    .filter(Boolean);
+  const filas = tablas.flatMap(function (tabla) {
+    return Array.from(tabla.querySelectorAll('tbody tr'));
+  });
+
+  buscador.addEventListener('input', function () {
+    const q = buscador.value.trim().toLowerCase();
+    filas.forEach(function (fila) {
+      fila.style.display = fila.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+})();
+</script>
 {% endblock %}
