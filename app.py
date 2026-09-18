@@ -101,6 +101,8 @@ ADMIN_USER = os.environ.get("ADMIN_USER", "admin")
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "Oyambarillo2026")
 IMPRENTA_USER = os.environ.get("IMPRENTA_USER", "carnets")
 IMPRENTA_PASS = os.environ.get("IMPRENTA_PASS", "")
+CALIFICACION_USER = os.environ.get("CALIFICACION_USER", "comision")
+CALIFICACION_PASS = os.environ.get("CALIFICACION_PASS", "")
 
 
 @app.route("/fotos_jugadores/<path:filename>")
@@ -230,6 +232,30 @@ def init_db():
     if count == 0:
         for nombre in EQUIPOS_INICIALES:
             db.execute("INSERT INTO equipos (nombre) VALUES (?)", (nombre,))
+
+    db.execute(f"""
+        CREATE TABLE IF NOT EXISTS jornadas (
+            id {tipo_id},
+            numero INTEGER NOT NULL,
+            fecha TEXT
+        )
+    """)
+    db.execute(f"""
+        CREATE TABLE IF NOT EXISTS partidos (
+            id {tipo_id},
+            jornada_id INTEGER NOT NULL,
+            equipo_local TEXT NOT NULL,
+            equipo_visitante TEXT NOT NULL,
+            hora TEXT
+        )
+    """)
+    db.execute(f"""
+        CREATE TABLE IF NOT EXISTS descansos (
+            id {tipo_id},
+            jornada_id INTEGER NOT NULL,
+            equipo TEXT NOT NULL
+        )
+    """)
     db.commit()
     db.close()
 
@@ -281,6 +307,18 @@ def imprenta_required(f):
     return wrapper
 
 
+def calificacion_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+        if session.get("rol") not in ("admin", "calificacion"):
+            flash("Esta acción requiere acceso al módulo de la Comisión de Calificación.")
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return wrapper
+
+
 def equipo_permitido(equipo_id):
     if session.get("rol") == "admin":
         return True
@@ -311,6 +349,12 @@ def login():
             session["logged_in"] = True
             session["rol"] = "imprenta"
             return redirect(url_for("carnets_modulo"))
+
+        if CALIFICACION_PASS and user == CALIFICACION_USER and pw == CALIFICACION_PASS:
+            session.clear()
+            session["logged_in"] = True
+            session["rol"] = "calificacion"
+            return redirect(url_for("comision_modulo"))
 
         db = get_db()
         equipo = db.execute(
@@ -348,6 +392,8 @@ def index():
         return redirect(url_for("detalle_equipo", equipo_id=equipo["id"]))
     if session.get("rol") == "imprenta":
         return redirect(url_for("carnets_modulo"))
+    if session.get("rol") == "calificacion":
+        return redirect(url_for("comision_modulo"))
     return redirect(url_for("inscripcion"))
 
 
@@ -481,6 +527,22 @@ def detalle_equipo(equipo_id):
     saldo = equipo["valor_inscripcion"] - equipo["abono"]
     juveniles_count = _contar_juveniles(db, equipo["nombre"])
 
+    partidos_equipo = []
+    for jr in db.execute("SELECT * FROM jornadas ORDER BY numero, id").fetchall():
+        partido = db.execute(
+            "SELECT * FROM partidos WHERE jornada_id = ? AND (equipo_local = ? OR equipo_visitante = ?)",
+            (jr["id"], equipo["nombre"], equipo["nombre"]),
+        ).fetchone()
+        descansa = db.execute(
+            "SELECT * FROM descansos WHERE jornada_id = ? AND equipo = ?", (jr["id"], equipo["nombre"])
+        ).fetchone()
+        if partido:
+            rival = partido["equipo_visitante"] if partido["equipo_local"] == equipo["nombre"] else partido["equipo_local"]
+            local = partido["equipo_local"] == equipo["nombre"]
+            partidos_equipo.append({"jornada": jr, "rival": rival, "local": local, "hora": partido["hora"]})
+        elif descansa:
+            partidos_equipo.append({"jornada": jr, "rival": None, "local": None, "hora": None})
+
     return render_template(
         "detalle_equipo.html",
         equipo=equipo,
@@ -490,6 +552,7 @@ def detalle_equipo(equipo_id):
         categoria=CATEGORIA_ACTIVA,
         juveniles_count=juveniles_count,
         cupo_maximo_juvenil=CUPO_MAXIMO_JUVENIL,
+        partidos_equipo=partidos_equipo,
     )
 
 
@@ -859,7 +922,7 @@ def quitar_foto_jugador(jugador_id, campo):
 
 
 @app.route("/jugador/<int:jugador_id>/calificar", methods=["POST"])
-@admin_required
+@calificacion_required
 def calificar_jugador(jugador_id):
     db = get_db()
     jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
@@ -1158,6 +1221,109 @@ def carnets_pdf():
     buf.seek(0)
     nombre_archivo = f"carnets_{equipo['nombre'].replace(' ', '_')}.pdf"
     return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=nombre_archivo)
+
+
+def _fixture_completo(db):
+    jornadas_rows = db.execute("SELECT * FROM jornadas ORDER BY numero, id").fetchall()
+    jornadas = []
+    for jr in jornadas_rows:
+        partidos = db.execute(
+            "SELECT * FROM partidos WHERE jornada_id = ? ORDER BY id", (jr["id"],)
+        ).fetchall()
+        descansos = db.execute(
+            "SELECT * FROM descansos WHERE jornada_id = ? ORDER BY id", (jr["id"],)
+        ).fetchall()
+        jornadas.append({"jornada": jr, "partidos": partidos, "descansos": descansos})
+    return jornadas
+
+
+@app.route("/comision")
+@calificacion_required
+def comision_modulo():
+    db = get_db()
+    equipos = db.execute("SELECT * FROM equipos ORDER BY nombre").fetchall()
+    jornadas = _fixture_completo(db)
+    jugadores = db.execute(
+        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos, nombres",
+        (CATEGORIA_ACTIVA,),
+    ).fetchall()
+    ultima = db.execute("SELECT MAX(numero) m FROM jornadas").fetchone()["m"]
+    siguiente_numero = (ultima or 0) + 1
+
+    return render_template(
+        "comision_modulo.html",
+        equipos=equipos,
+        jornadas=jornadas,
+        jugadores=jugadores,
+        siguiente_numero=siguiente_numero,
+    )
+
+
+@app.route("/comision/jornada/agregar", methods=["POST"])
+@calificacion_required
+def agregar_jornada():
+    db = get_db()
+    numero = request.form.get("numero", "").strip()
+    fecha = request.form.get("fecha", "").strip()
+    if not numero.isdigit():
+        flash("Ingresa un número de jornada válido.")
+        return redirect(url_for("comision_modulo"))
+
+    locales = request.form.getlist("equipo_local")
+    visitantes = request.form.getlist("equipo_visitante")
+    horas = request.form.getlist("hora")
+    descansos = [e for e in request.form.getlist("descansos") if e]
+
+    partidos_validos = []
+    equipos_usados = set()
+    for local, visitante, hora in zip(locales, visitantes, horas):
+        local, visitante, hora = local.strip(), visitante.strip(), hora.strip()
+        if not local or not visitante:
+            continue
+        if local == visitante:
+            flash("Un equipo no puede jugar contra sí mismo.")
+            return redirect(url_for("comision_modulo"))
+        if local in equipos_usados or visitante in equipos_usados:
+            flash("Hay un equipo asignado a más de un partido en la misma jornada.")
+            return redirect(url_for("comision_modulo"))
+        equipos_usados.add(local)
+        equipos_usados.add(visitante)
+        partidos_validos.append((local, visitante, hora))
+
+    for equipo in descansos:
+        if equipo in equipos_usados:
+            flash(f"'{equipo}' no puede descansar y jugar en la misma jornada.")
+            return redirect(url_for("comision_modulo"))
+
+    if not partidos_validos and not descansos:
+        flash("Agrega al menos un partido o un equipo que descansa.")
+        return redirect(url_for("comision_modulo"))
+
+    returning = " RETURNING id" if USANDO_POSTGRES else ""
+    cur = db.execute(f"INSERT INTO jornadas (numero, fecha) VALUES (?, ?){returning}", (int(numero), fecha or None))
+    jornada_id = cur.fetchone()["id"] if USANDO_POSTGRES else cur.lastrowid
+    for local, visitante, hora in partidos_validos:
+        db.execute(
+            "INSERT INTO partidos (jornada_id, equipo_local, equipo_visitante, hora) VALUES (?, ?, ?, ?)",
+            (jornada_id, local, visitante, hora or None),
+        )
+    for equipo in descansos:
+        db.execute("INSERT INTO descansos (jornada_id, equipo) VALUES (?, ?)", (jornada_id, equipo))
+    db.commit()
+    flash(f"Jornada {numero} agregada.", "ok")
+    return redirect(url_for("comision_modulo"))
+
+
+@app.route("/comision/jornada/<int:jornada_id>/eliminar", methods=["POST"])
+@calificacion_required
+def eliminar_jornada(jornada_id):
+    db = get_db()
+    db.execute("DELETE FROM partidos WHERE jornada_id = ?", (jornada_id,))
+    db.execute("DELETE FROM descansos WHERE jornada_id = ?", (jornada_id,))
+    db.execute("DELETE FROM jornadas WHERE id = ?", (jornada_id,))
+    db.commit()
+    flash("Jornada eliminada.", "ok")
+    return redirect(url_for("comision_modulo"))
 
 
 @app.route("/jugador/<int:jugador_id>/eliminar", methods=["POST"])

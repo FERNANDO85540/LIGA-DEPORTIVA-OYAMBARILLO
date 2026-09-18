@@ -14,6 +14,24 @@
   </p>
 </div>
 
+<div class="card">
+  <h2>📅 Mis partidos y descansos</h2>
+  {% if not partidos_equipo %}
+    <p style="color:#888;">La Comisión de Calificación todavía no ha publicado el fixture.</p>
+  {% else %}
+    <ul style="margin:0; padding-left:20px;">
+      {% for p in partidos_equipo %}
+        {% if p.rival %}
+          <li><strong>Jornada {{ p.jornada.numero }}</strong>{% if p.jornada.fecha %} ({{ p.jornada.fecha }}){% endif %}:
+            {{ 'Local vs' if p.local else 'Visitante ante' }} {{ p.rival }}{% if p.hora %} — {{ p.hora }}{% endif %}</li>
+        {% else %}
+          <li><strong>Jornada {{ p.jornada.numero }}</strong>{% if p.jornada.fecha %} ({{ p.jornada.fecha }}){% endif %}: <span style="color:#888;">Descansa</span></li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>
+
 {% if session.get('rol') == 'admin' %}
 <div class="card">
   <h2>Inscripción del equipo (pago)</h2>

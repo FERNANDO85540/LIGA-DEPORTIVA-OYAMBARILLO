@@ -20,3 +20,7 @@ services:
         value: carnets
       - key: IMPRENTA_PASS
         sync: false
+      - key: CALIFICACION_USER
+        value: comision
+      - key: CALIFICACION_PASS
+        sync: false

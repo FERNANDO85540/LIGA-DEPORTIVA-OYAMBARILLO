@@ -11,6 +11,7 @@
   <p>
     <a href="{{ url_for('exportar_general') }}"><button type="button">⬇️ Descargar Excel general (todos los equipos)</button></a>
     <a href="{{ url_for('carnets_modulo') }}"><button type="button">🪪 Módulo de carnets (imprimir y marcar entregados)</button></a>
+    <a href="{{ url_for('comision_modulo') }}"><button type="button">🗓️ Comisión de Calificación (fixture y calificación)</button></a>
   </p>
   <div class="cupos-grid">
     {% for e in equipos %}
