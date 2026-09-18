@@ -24,3 +24,7 @@ services:
         value: comision
       - key: CALIFICACION_PASS
         sync: false
+      - key: SANCIONES_USER
+        value: sanciones
+      - key: SANCIONES_PASS
+        sync: false

@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.4rem;">🟨🟥 Comisión de Penas y Sanciones</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">Tarjetas, acumulación, sanciones y multas por jugador.</p>
+</div>
+
+<div class="card">
+  <h2>Registrar tarjeta</h2>
+  <form method="post" action="{{ url_for('agregar_tarjeta') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+    <div style="flex:1; min-width:220px;">
+      <label>Jugador</label>
+      <select name="jugador_id" required>
+        <option value="">-- Selecciona un jugador --</option>
+        {% set equipo_actual = namespace(nombre=None) %}
+        {% for j in jugadores %}
+          {% if j.equipo != equipo_actual.nombre %}
+            {% if not loop.first %}</optgroup>{% endif %}
+            <optgroup label="{{ j.equipo }}">
+            {% set equipo_actual.nombre = j.equipo %}
+          {% endif %}
+          <option value="{{ j.id }}">{{ j.apellidos }} {{ j.nombres }} ({{ j.cedula }})</option>
+          {% if loop.last %}</optgroup>{% endif %}
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Tipo</label>
+      <select name="tipo" required>
+        <option value="amarilla">🟨 Amarilla</option>
+        <option value="roja">🟥 Roja</option>
+      </select>
+    </div>
+    <div>
+      <label>Jornada (opcional)</label>
+      <select name="jornada_id">
+        <option value="">-- Sin jornada --</option>
+        {% for jo in jornadas %}<option value="{{ jo.id }}">Jornada {{ jo.numero }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Valor multa (opcional)</label>
+      <input type="number" step="0.01" min="0" name="valor_multa" placeholder="$0.00" style="width:120px;">
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <label>Observación (opcional)</label>
+      <input type="text" name="observacion" placeholder="ej. doble amarilla, reclamo al árbitro...">
+    </div>
+    <button type="submit">Registrar tarjeta</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Acumulación de tarjetas por jugador</h2>
+  {% if not acumulado %}
+    <p style="color:#888;">Todavía no hay tarjetas registradas.</p>
+  {% else %}
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead>
+      <tr><th>Jugador</th><th>Equipo</th><th>🟨 Amarillas</th><th>🟥 Rojas</th><th>Multas acumuladas</th></tr>
+    </thead>
+    <tbody>
+      {% for a in acumulado %}
+      <tr>
+        <td data-label="Jugador">{{ a.apellidos }} {{ a.nombres }}</td>
+        <td data-label="Equipo">{{ a.equipo }}</td>
+        <td data-label="Amarillas">{{ a.amarillas }}</td>
+        <td data-label="Rojas">{{ a.rojas }}</td>
+        <td data-label="Multas">${{ '%.2f' % a.multas }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Historial de tarjetas ({{ tarjetas|length }})</h2>
+  {% if not tarjetas %}
+    <p style="color:#888;">No hay tarjetas registradas.</p>
+  {% else %}
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead>
+      <tr><th>Jugador</th><th>Equipo</th><th>Tipo</th><th>Jornada</th><th>Valor multa</th><th>Observación</th><th>Fecha</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for t in tarjetas %}
+      <tr>
+        <td data-label="Jugador">{{ t.j_apellidos }} {{ t.j_nombres }}</td>
+        <td data-label="Equipo">{{ t.j_equipo }}</td>
+        <td data-label="Tipo">{% if t.tipo == 'roja' %}🟥 Roja{% else %}🟨 Amarilla{% endif %}</td>
+        <td data-label="Jornada">{{ 'Jornada ' + t.jornada_numero|string if t.jornada_numero else '-' }}</td>
+        <td data-label="Valor multa">{{ '$%.2f' % t.valor_multa if t.valor_multa else '-' }}</td>
+        <td data-label="Observación">{{ t.observacion or '-' }}</td>
+        <td data-label="Fecha">{{ t.fecha }}</td>
+        <td data-label="" class="table-actions">
+          <form method="post" action="{{ url_for('eliminar_tarjeta', tarjeta_id=t.id) }}" onsubmit="return confirm('¿Eliminar esta tarjeta?');" style="margin:0;">
+            <button type="submit" class="btn-del">Eliminar</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Registrar sanción</h2>
+  <form method="post" action="{{ url_for('agregar_sancion') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+    <div style="flex:1; min-width:220px;">
+      <label>Jugador</label>
+      <select name="jugador_id" required>
+        <option value="">-- Selecciona un jugador --</option>
+        {% set equipo_actual2 = namespace(nombre=None) %}
+        {% for j in jugadores %}
+          {% if j.equipo != equipo_actual2.nombre %}
+            {% if not loop.first %}</optgroup>{% endif %}
+            <optgroup label="{{ j.equipo }}">
+            {% set equipo_actual2.nombre = j.equipo %}
+          {% endif %}
+          <option value="{{ j.id }}">{{ j.apellidos }} {{ j.nombres }} ({{ j.cedula }})</option>
+          {% if loop.last %}</optgroup>{% endif %}
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Jornadas de sanción</label>
+      <input type="number" name="jornadas_sancionado" min="1" value="1" required style="width:100px;">
+    </div>
+    <div>
+      <label>Sancionado desde (opcional)</label>
+      <select name="jornada_desde_id">
+        <option value="">-- Sin especificar --</option>
+        {% for jo in jornadas %}<option value="{{ jo.id }}">Jornada {{ jo.numero }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label>Valor multa (opcional)</label>
+      <input type="number" step="0.01" min="0" name="valor_multa" placeholder="$0.00" style="width:120px;">
+    </div>
+    <div style="flex:1; min-width:200px;">
+      <label>Motivo (opcional)</label>
+      <input type="text" name="motivo" placeholder="ej. expulsión por doble amarilla, agresión...">
+    </div>
+    <button type="submit">Registrar sanción</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Sanciones ({{ sanciones|length }})</h2>
+  {% if not sanciones %}
+    <p style="color:#888;">No hay sanciones registradas.</p>
+  {% else %}
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead>
+      <tr><th>Jugador</th><th>Equipo</th><th>Motivo</th><th>Jornadas sancionado</th><th>Desde</th><th>Valor multa</th><th>Pagada</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for s in sanciones %}
+      <tr>
+        <td data-label="Jugador">{{ s.j_apellidos }} {{ s.j_nombres }}</td>
+        <td data-label="Equipo">{{ s.j_equipo }}</td>
+        <td data-label="Motivo">{{ s.motivo or '-' }}</td>
+        <td data-label="Jornadas sancionado">{{ s.jornadas_sancionado }}</td>
+        <td data-label="Desde">{{ 'Jornada ' + s.jornada_desde_numero|string if s.jornada_desde_numero else '-' }}</td>
+        <td data-label="Valor multa">{{ '$%.2f' % s.valor_multa if s.valor_multa else '-' }}</td>
+        <td data-label="Pagada">
+          <form method="post" action="{{ url_for('marcar_sancion_pagada', sancion_id=s.id) }}" style="margin:0;">
+            <button type="submit" class="badge" style="border:none; cursor:pointer; {% if s.pagada %}background:#e6f4ea; color:var(--verde-osc);{% else %}background:#fdecea; color:#a13a2f;{% endif %}">
+              {{ '✅ Pagada' if s.pagada else '⏳ Pendiente' }}
+            </button>
+          </form>
+        </td>
+        <td data-label="" class="table-actions">
+          <form method="post" action="{{ url_for('eliminar_sancion', sancion_id=s.id) }}" onsubmit="return confirm('¿Eliminar esta sanción?');" style="margin:0;">
+            <button type="submit" class="btn-del">Eliminar</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

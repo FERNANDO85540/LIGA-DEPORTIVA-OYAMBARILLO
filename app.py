@@ -103,6 +103,8 @@ IMPRENTA_USER = os.environ.get("IMPRENTA_USER", "carnets")
 IMPRENTA_PASS = os.environ.get("IMPRENTA_PASS", "")
 CALIFICACION_USER = os.environ.get("CALIFICACION_USER", "comision")
 CALIFICACION_PASS = os.environ.get("CALIFICACION_PASS", "")
+SANCIONES_USER = os.environ.get("SANCIONES_USER", "sanciones")
+SANCIONES_PASS = os.environ.get("SANCIONES_PASS", "")
 
 
 @app.route("/fotos_jugadores/<path:filename>")
@@ -256,6 +258,30 @@ def init_db():
             equipo TEXT NOT NULL
         )
     """)
+
+    db.execute(f"""
+        CREATE TABLE IF NOT EXISTS tarjetas (
+            id {tipo_id},
+            jugador_id INTEGER NOT NULL,
+            jornada_id INTEGER,
+            tipo TEXT NOT NULL,
+            valor_multa REAL,
+            observacion TEXT,
+            fecha TEXT NOT NULL
+        )
+    """)
+    db.execute(f"""
+        CREATE TABLE IF NOT EXISTS sanciones (
+            id {tipo_id},
+            jugador_id INTEGER NOT NULL,
+            motivo TEXT,
+            jornadas_sancionado INTEGER NOT NULL DEFAULT 1,
+            jornada_desde_id INTEGER,
+            valor_multa REAL,
+            pagada INTEGER NOT NULL DEFAULT 0,
+            fecha TEXT NOT NULL
+        )
+    """)
     db.commit()
     db.close()
 
@@ -319,6 +345,18 @@ def calificacion_required(f):
     return wrapper
 
 
+def sanciones_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+        if session.get("rol") not in ("admin", "sanciones"):
+            flash("Esta acción requiere acceso al módulo de Penas y Sanciones.")
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return wrapper
+
+
 def equipo_permitido(equipo_id):
     if session.get("rol") == "admin":
         return True
@@ -355,6 +393,12 @@ def login():
             session["logged_in"] = True
             session["rol"] = "calificacion"
             return redirect(url_for("comision_modulo"))
+
+        if SANCIONES_PASS and user == SANCIONES_USER and pw == SANCIONES_PASS:
+            session.clear()
+            session["logged_in"] = True
+            session["rol"] = "sanciones"
+            return redirect(url_for("sanciones_modulo"))
 
         db = get_db()
         equipo = db.execute(
@@ -394,6 +438,8 @@ def index():
         return redirect(url_for("carnets_modulo"))
     if session.get("rol") == "calificacion":
         return redirect(url_for("comision_modulo"))
+    if session.get("rol") == "sanciones":
+        return redirect(url_for("sanciones_modulo"))
     return redirect(url_for("inscripcion"))
 
 
@@ -1324,6 +1370,149 @@ def eliminar_jornada(jornada_id):
     db.commit()
     flash("Jornada eliminada.", "ok")
     return redirect(url_for("comision_modulo"))
+
+
+@app.route("/sanciones")
+@sanciones_required
+def sanciones_modulo():
+    db = get_db()
+    jugadores = db.execute(
+        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos, nombres",
+        (CATEGORIA_ACTIVA,),
+    ).fetchall()
+    jornadas = db.execute("SELECT * FROM jornadas ORDER BY numero, id").fetchall()
+
+    tarjetas = db.execute("""
+        SELECT t.*, j.nombres AS j_nombres, j.apellidos AS j_apellidos, j.equipo AS j_equipo,
+               jo.numero AS jornada_numero
+        FROM tarjetas t
+        JOIN jugadores j ON j.id = t.jugador_id
+        LEFT JOIN jornadas jo ON jo.id = t.jornada_id
+        ORDER BY t.fecha DESC, t.id DESC
+    """).fetchall()
+
+    acumulado_map = {}
+    orden_map = []
+    for t in tarjetas:
+        key = t["jugador_id"]
+        if key not in acumulado_map:
+            acumulado_map[key] = {
+                "nombres": t["j_nombres"], "apellidos": t["j_apellidos"], "equipo": t["j_equipo"],
+                "amarillas": 0, "rojas": 0, "multas": 0.0,
+            }
+            orden_map.append(key)
+        if t["tipo"] == "amarilla":
+            acumulado_map[key]["amarillas"] += 1
+        else:
+            acumulado_map[key]["rojas"] += 1
+        acumulado_map[key]["multas"] += t["valor_multa"] or 0
+
+    acumulado = sorted(
+        acumulado_map.values(),
+        key=lambda x: (x["rojas"], x["amarillas"]),
+        reverse=True,
+    )
+
+    sanciones = db.execute("""
+        SELECT s.*, j.nombres AS j_nombres, j.apellidos AS j_apellidos, j.equipo AS j_equipo,
+               jo.numero AS jornada_desde_numero
+        FROM sanciones s
+        JOIN jugadores j ON j.id = s.jugador_id
+        LEFT JOIN jornadas jo ON jo.id = s.jornada_desde_id
+        ORDER BY s.fecha DESC, s.id DESC
+    """).fetchall()
+
+    return render_template(
+        "sanciones_modulo.html",
+        jugadores=jugadores,
+        jornadas=jornadas,
+        tarjetas=tarjetas,
+        acumulado=acumulado,
+        sanciones=sanciones,
+    )
+
+
+@app.route("/sanciones/tarjeta/agregar", methods=["POST"])
+@sanciones_required
+def agregar_tarjeta():
+    db = get_db()
+    jugador_id = request.form.get("jugador_id", "").strip()
+    tipo = request.form.get("tipo", "").strip()
+    jornada_id = request.form.get("jornada_id", "").strip() or None
+    valor_multa = _to_float(request.form.get("valor_multa", "0"))
+    observacion = request.form.get("observacion", "").strip()
+
+    if not jugador_id.isdigit() or tipo not in ("amarilla", "roja"):
+        flash("Selecciona un jugador y el tipo de tarjeta.")
+        return redirect(url_for("sanciones_modulo"))
+
+    db.execute(
+        "INSERT INTO tarjetas (jugador_id, jornada_id, tipo, valor_multa, observacion, fecha) VALUES (?, ?, ?, ?, ?, ?)",
+        (int(jugador_id), jornada_id, tipo, valor_multa, observacion or None, datetime.now().strftime("%Y-%m-%d %H:%M")),
+    )
+    db.commit()
+    flash("Tarjeta registrada.", "ok")
+    return redirect(url_for("sanciones_modulo"))
+
+
+@app.route("/sanciones/tarjeta/<int:tarjeta_id>/eliminar", methods=["POST"])
+@sanciones_required
+def eliminar_tarjeta(tarjeta_id):
+    db = get_db()
+    db.execute("DELETE FROM tarjetas WHERE id = ?", (tarjeta_id,))
+    db.commit()
+    flash("Tarjeta eliminada.", "ok")
+    return redirect(url_for("sanciones_modulo"))
+
+
+@app.route("/sanciones/sancion/agregar", methods=["POST"])
+@sanciones_required
+def agregar_sancion():
+    db = get_db()
+    jugador_id = request.form.get("jugador_id", "").strip()
+    motivo = request.form.get("motivo", "").strip()
+    jornadas_sancionado = request.form.get("jornadas_sancionado", "1").strip()
+    jornada_desde_id = request.form.get("jornada_desde_id", "").strip() or None
+    valor_multa = _to_float(request.form.get("valor_multa", "0"))
+
+    if not jugador_id.isdigit() or not jornadas_sancionado.isdigit() or int(jornadas_sancionado) < 1:
+        flash("Selecciona un jugador y la cantidad de jornadas de sanción.")
+        return redirect(url_for("sanciones_modulo"))
+
+    db.execute(
+        """INSERT INTO sanciones (jugador_id, motivo, jornadas_sancionado, jornada_desde_id, valor_multa, pagada, fecha)
+           VALUES (?, ?, ?, ?, ?, 0, ?)""",
+        (int(jugador_id), motivo or None, int(jornadas_sancionado), jornada_desde_id, valor_multa,
+         datetime.now().strftime("%Y-%m-%d %H:%M")),
+    )
+    db.commit()
+    flash("Sanción registrada.", "ok")
+    return redirect(url_for("sanciones_modulo"))
+
+
+@app.route("/sanciones/sancion/<int:sancion_id>/eliminar", methods=["POST"])
+@sanciones_required
+def eliminar_sancion(sancion_id):
+    db = get_db()
+    db.execute("DELETE FROM sanciones WHERE id = ?", (sancion_id,))
+    db.commit()
+    flash("Sanción eliminada.", "ok")
+    return redirect(url_for("sanciones_modulo"))
+
+
+@app.route("/sanciones/sancion/<int:sancion_id>/pagada", methods=["POST"])
+@sanciones_required
+def marcar_sancion_pagada(sancion_id):
+    db = get_db()
+    sancion = db.execute("SELECT * FROM sanciones WHERE id = ?", (sancion_id,)).fetchone()
+    if not sancion:
+        flash("Sanción no encontrada.")
+        return redirect(url_for("sanciones_modulo"))
+    nuevo = 0 if sancion["pagada"] else 1
+    db.execute("UPDATE sanciones SET pagada = ? WHERE id = ?", (nuevo, sancion_id))
+    db.commit()
+    flash("Estado de pago actualizado.", "ok")
+    return redirect(url_for("sanciones_modulo"))
 
 
 @app.route("/jugador/<int:jugador_id>/eliminar", methods=["POST"])
