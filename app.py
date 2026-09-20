@@ -1005,10 +1005,27 @@ def _texto_centrado(draw, cx, y, texto, font, fill):
     draw.text((cx - ancho_texto / 2, y), texto, font=font, fill=fill)
 
 
+_LOGO_CACHE = {}
+
+
+def _logo_thumb(tam):
+    """Logo del carnet ya reducido de tamaño, cacheado en memoria para no
+    reabrir y decodificar el PNG del disco en cada jugador (se generan
+    hasta 35 carnets seguidos por equipo)."""
+    if tam not in _LOGO_CACHE:
+        logo_path = os.path.join(BASE_DIR, "static", "logo_ldbo.png")
+        if os.path.exists(logo_path):
+            img = Image.open(logo_path).convert("RGBA")
+            img.thumbnail(tam)
+            _LOGO_CACHE[tam] = img
+        else:
+            _LOGO_CACHE[tam] = None
+    return _LOGO_CACHE[tam]
+
+
 def _generar_carnet(jugador):
     # Proporción 93x64mm (tamaño real de la lámina de laminado que se usa para el carnet).
     ancho, alto = 900, 619
-    logo_path = os.path.join(BASE_DIR, "static", "logo_ldbo.png")
 
     # ---------- FRENTE ----------
     frente = Image.new("RGB", (ancho, alto), "#eef6f0")
@@ -1031,16 +1048,19 @@ def _generar_carnet(jugador):
     _texto_centrado(draw, ancho / 2, 18, "LIGA DEPORTIVA OYAMBARILLO", f_titulo, "#14532d")
     _texto_centrado(draw, ancho / 2, 62, "CAMPEONATO OFICIAL 2026", f_sub, "#b45309")
 
-    if os.path.exists(logo_path):
-        logo = Image.open(logo_path).convert("RGBA")
-        logo.thumbnail((120, 120))
+    logo = _logo_thumb((120, 120))
+    if logo:
         frente.paste(logo, (18, 5), logo)
 
     foto_x, foto_y, foto_w, foto_h = 610, 155, 250, 280
     if jugador["foto"]:
         foto_path = os.path.join(FOTOS_DIR, jugador["foto"])
         if os.path.exists(foto_path):
-            foto = Image.open(foto_path).convert("RGB")
+            foto = Image.open(foto_path)
+            # Decodifica ya reducido (más rápido y con mucha menos memoria que
+            # abrir la foto a su resolución completa solo para achicarla después).
+            foto.draft("RGB", (foto_w * 2, foto_h * 2))
+            foto = foto.convert("RGB")
             foto = ImageOps.fit(foto, (foto_w, foto_h))
             frente.paste(foto, (foto_x, foto_y))
     draw.rectangle([foto_x, foto_y, foto_x + foto_w, foto_y + foto_h], outline="#14532d", width=4)
@@ -1086,9 +1106,9 @@ def _generar_carnet(jugador):
     rdraw.text((50, 190), "F. Nacimiento:", font=f_rlabel, fill="black")
     rdraw.text((50, 232), jugador["fecha_nacimiento"] or "-", font=f_rvalor, fill="#14532d")
 
-    if os.path.exists(logo_path):
-        sello = Image.open(logo_path).convert("RGBA")
-        sello.thumbnail((220, 220))
+    sello = _logo_thumb((220, 220))
+    if sello:
+        sello = sello.copy()
         sello_alpha = sello.split()[3].point(lambda p: p * 0.5)
         sello.putalpha(sello_alpha)
         reverso.paste(sello, (ancho - sello.width - 60, 280), sello)
@@ -1150,7 +1170,7 @@ def carnet_jugador_pdf(jugador_id):
 
 CARNET_ANCHO_MM = 93
 CARNET_ALTO_MM = 64
-CARNET_PDF_DPI = 150
+CARNET_PDF_DPI = 120
 
 
 def _mm_a_px(mm, dpi=CARNET_PDF_DPI):
