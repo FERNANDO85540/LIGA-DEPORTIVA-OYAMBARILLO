@@ -1570,7 +1570,14 @@ def eliminar_jugador(jugador_id):
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
 
-init_db()
+try:
+    init_db()
+except Exception as e:
+    # Si la base de datos no responde al arrancar (ej. suspendida por el
+    # proveedor), no tumbamos todo el proceso: dejamos que arranque igual
+    # para que las páginas que no dependen de la base (y los mensajes de
+    # error) se puedan mostrar en vez de un 502 total.
+    print(f"ADVERTENCIA: no se pudo inicializar la base de datos al arrancar: {e}")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5001))
