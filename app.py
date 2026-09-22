@@ -2144,7 +2144,7 @@ def publico_jugadores():
     )
     # Solo datos que pueden verse públicamente: sin cédula.
     jugadores = db.execute(
-        """SELECT nombres, apellidos, equipo, categoria, subcategoria, numero_camiseta, calificado
+        """SELECT nombres, apellidos, equipo, categoria, subcategoria, numero_camiseta, calificado, foto
            FROM jugadores WHERE categoria = ? AND division = ? ORDER BY equipo, apellidos, nombres""",
         (categoria, division),
     ).fetchall()
