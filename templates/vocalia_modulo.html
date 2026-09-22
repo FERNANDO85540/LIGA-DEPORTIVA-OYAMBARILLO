@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.4rem;">🗳️ Vocalía</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">Elige un partido para llenar su hoja oficial: asistencia, tarjetas, goles, incidentes y árbitro.</p>
+</div>
+
+{% set categoria_endpoint = 'vocalia_modulo' %}
+{% include "_categoria_cards.html" %}
+{% include "_division_cards.html" %}
+
+<div class="card">
+  <h2>Partidos — {{ categoria }}{% if division %} - {{ division }}{% endif %}</h2>
+  {% if not jornadas %}
+    <p style="color:#888;">Todavía no hay jornadas creadas.</p>
+  {% endif %}
+  {% for item in jornadas %}
+  <div style="border:1px solid var(--borde); border-radius:8px; padding:12px 16px; margin-bottom:12px;">
+    <strong>Jornada {{ item.jornada.numero }}{% if item.jornada.fecha %} — {{ item.jornada.fecha }}{% endif %}</strong>
+    {% if not item.partidos %}
+      <p style="color:#888; font-size:0.85rem; margin:8px 0 0;">Sin partidos en esta jornada.</p>
+    {% endif %}
+    {% for p in item.partidos %}
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; margin-top:10px; padding-top:10px; border-top:1px solid var(--fondo);">
+      <span>
+        {% if p.en_vivo %}<span class="badge" style="background:#fdecea; color:#c0392b;">🔴 EN VIVO</span>{% endif %}
+        <strong>{{ p.equipo_local }}</strong>
+        {% if p.jugado or p.en_vivo %}{{ p.goles_local }} - {{ p.goles_visitante }}{% else %}vs{% endif %}
+        <strong>{{ p.equipo_visitante }}</strong>
+        {% if p.fecha %} — {{ p.fecha }}{% endif %}{% if p.hora %} {{ p.hora }}{% endif %}
+        {% if p.jugado %}<span class="badge badge-ok">✅ Finalizado</span>{% endif %}
+      </span>
+      <a href="{{ url_for('vocalia_hoja', partido_id=p.id) }}"><button type="button" style="margin:0; padding:6px 12px; font-size:0.85rem;">📋 Llenar hoja</button></a>
+    </div>
+    {% endfor %}
+    {% for d in item.descansos %}
+      <p style="color:#888; font-size:0.85rem; margin:8px 0 0;">Descansa: {{ d.equipo }}</p>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

@@ -15,6 +15,7 @@
   <p style="margin:6px 0 0; opacity:0.95;">
     {% if jornada %}Jornada {{ jornada.numero }}{% endif %}
     {% if partido.fecha %} · {{ partido.fecha }}{% endif %}{% if partido.hora %} {{ partido.hora }}{% endif %}
+    {% if partido.arbitro %} · 🧑‍⚖️ Árbitro: {{ partido.arbitro }}{% endif %}
   </p>
 </div>
 
@@ -39,7 +40,10 @@
 </div>
 
 <div class="cupos-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items:start;">
-  {% for datos, nombre_equipo, tarjetas in [(local, partido.equipo_local, tarjetas_local), (visitante, partido.equipo_visitante, tarjetas_visitante)] %}
+  {% for datos, nombre_equipo, tarjetas, asistencia in [
+      (local, partido.equipo_local, tarjetas_local, asistencia_local),
+      (visitante, partido.equipo_visitante, tarjetas_visitante, asistencia_visitante)
+  ] %}
   <div class="card">
     <h2 style="text-align:center; font-size:1.05rem;">{{ nombre_equipo }}</h2>
     {% if not datos %}
@@ -83,8 +87,26 @@
       {% endfor %}
     </ul>
     {% endif %}
+
+    {% if asistencia %}
+    <p style="font-size:0.8rem; color:#555; margin:16px 0 4px;"><strong>Nómina oficial (según vocalía):</strong></p>
+    <p style="font-size:0.8rem; color:#555; margin:0;">
+      {% for a in asistencia %}{{ a.numero_camiseta }} {{ a.apellidos }}{% if not loop.last %}, {% endif %}{% endfor %}
+    </p>
+    {% endif %}
   </div>
   {% endfor %}
 </div>
+
+{% if incidentes %}
+<div class="card">
+  <h2 style="font-size:1rem;">📝 Incidentes del encuentro</h2>
+  <ul style="margin:0; padding-left:20px; font-size:0.85rem;">
+    {% for i in incidentes %}
+    <li><span style="color:#888;">{{ i.fecha }}</span> — {{ i.descripcion }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
 
 {% endblock %}

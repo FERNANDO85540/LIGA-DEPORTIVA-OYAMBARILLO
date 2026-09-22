@@ -107,6 +107,8 @@ SANCIONES_USER = os.environ.get("SANCIONES_USER", "sanciones")
 SANCIONES_PASS = os.environ.get("SANCIONES_PASS", "")
 TECNICA_USER = os.environ.get("TECNICA_USER", "tecnica")
 TECNICA_PASS = os.environ.get("TECNICA_PASS", "")
+VOCALIA_USER = os.environ.get("VOCALIA_USER", "vocalia")
+VOCALIA_PASS = os.environ.get("VOCALIA_PASS", "")
 
 
 @app.route("/fotos_jugadores/<path:filename>")
@@ -461,6 +463,8 @@ def init_db():
             fecha TEXT NOT NULL
         )
     """)
+    if "partido_id" not in _columnas_existentes(db, "tarjetas"):
+        db.execute("ALTER TABLE tarjetas ADD COLUMN partido_id INTEGER")
     db.execute(f"""
         CREATE TABLE IF NOT EXISTS sanciones (
             id {tipo_id},
@@ -483,6 +487,8 @@ def init_db():
         db.execute("ALTER TABLE partidos ADD COLUMN jugado INTEGER NOT NULL DEFAULT 0")
     if "en_vivo" not in pcols:
         db.execute("ALTER TABLE partidos ADD COLUMN en_vivo INTEGER NOT NULL DEFAULT 0")
+    if "arbitro" not in pcols:
+        db.execute("ALTER TABLE partidos ADD COLUMN arbitro TEXT")
 
     db.execute(f"""
         CREATE TABLE IF NOT EXISTS goles (
@@ -536,6 +542,23 @@ def init_db():
             jugador_id INTEGER NOT NULL,
             posicion TEXT NOT NULL,
             titular INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+
+    db.execute(f"""
+        CREATE TABLE IF NOT EXISTS vocalia_asistencia (
+            id {tipo_id},
+            partido_id INTEGER NOT NULL,
+            jugador_id INTEGER NOT NULL,
+            participo INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+    db.execute(f"""
+        CREATE TABLE IF NOT EXISTS vocalia_incidentes (
+            id {tipo_id},
+            partido_id INTEGER NOT NULL,
+            descripcion TEXT NOT NULL,
+            fecha TEXT NOT NULL
         )
     """)
 
@@ -626,6 +649,30 @@ def tecnica_required(f):
     return wrapper
 
 
+def vocalia_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+        if session.get("rol") not in ("admin", "vocalia"):
+            flash("Esta acción requiere acceso al módulo de Vocalía.")
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def tecnica_o_vocalia_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+        if session.get("rol") not in ("admin", "tecnica", "vocalia"):
+            flash("Esta acción requiere acceso a Comisión Técnica o Vocalía.")
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return wrapper
+
+
 def equipo_permitido(equipo_id):
     if session.get("rol") == "admin":
         return True
@@ -675,6 +722,12 @@ def login():
             session["rol"] = "tecnica"
             return redirect(url_for("tecnica_modulo"))
 
+        if VOCALIA_PASS and user == VOCALIA_USER and pw == VOCALIA_PASS:
+            session.clear()
+            session["logged_in"] = True
+            session["rol"] = "vocalia"
+            return redirect(url_for("vocalia_modulo"))
+
         db = get_db()
         equipo = db.execute(
             "SELECT * FROM equipos WHERE usuario = ? AND clave = ?", (user, pw)
@@ -717,6 +770,8 @@ def index():
         return redirect(url_for("sanciones_modulo"))
     if session.get("rol") == "tecnica":
         return redirect(url_for("tecnica_modulo"))
+    if session.get("rol") == "vocalia":
+        return redirect(url_for("vocalia_modulo"))
     return redirect(url_for("inscripcion"))
 
 
@@ -1020,12 +1075,32 @@ def publico_alineaciones(partido_id):
             (jornada["id"], equipo_nombre),
         ).fetchall()
 
+    asistencia_local = db.execute(
+        """SELECT j.nombres, j.apellidos, j.numero_camiseta
+           FROM vocalia_asistencia va JOIN jugadores j ON j.id = va.jugador_id
+           WHERE va.partido_id = ? AND va.participo = 1 AND j.equipo = ?
+           ORDER BY j.apellidos, j.nombres""",
+        (partido_id, partido["equipo_local"]),
+    ).fetchall()
+    asistencia_visitante = db.execute(
+        """SELECT j.nombres, j.apellidos, j.numero_camiseta
+           FROM vocalia_asistencia va JOIN jugadores j ON j.id = va.jugador_id
+           WHERE va.partido_id = ? AND va.participo = 1 AND j.equipo = ?
+           ORDER BY j.apellidos, j.nombres""",
+        (partido_id, partido["equipo_visitante"]),
+    ).fetchall()
+    incidentes = db.execute(
+        "SELECT * FROM vocalia_incidentes WHERE partido_id = ? ORDER BY fecha", (partido_id,)
+    ).fetchall()
+
     return render_template(
         "publico_alineaciones.html",
         partido=partido, jornada=jornada,
         local=_armar(partido["equipo_local"]), visitante=_armar(partido["equipo_visitante"]),
         tarjetas_local=_tarjetas(partido["equipo_local"]),
         tarjetas_visitante=_tarjetas(partido["equipo_visitante"]),
+        asistencia_local=asistencia_local, asistencia_visitante=asistencia_visitante,
+        incidentes=incidentes,
     )
 
 
@@ -2337,18 +2412,26 @@ def quitar_resultado(partido_id):
     return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
 
 
+def _redirect_post_partido(partido_id, categoria, division):
+    """Vocalía vuelve a su hoja del encuentro; el resto (técnica/admin) vuelve
+    al módulo de la Comisión Técnica."""
+    if session.get("rol") == "vocalia":
+        return redirect(url_for("vocalia_hoja", partido_id=partido_id))
+    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+
+
 @app.route("/tecnica/partido/<int:partido_id>/en_vivo/iniciar", methods=["POST"])
-@tecnica_required
+@tecnica_o_vocalia_required
 def iniciar_en_vivo(partido_id):
     db = get_db()
     partido = db.execute("SELECT * FROM partidos WHERE id = ?", (partido_id,)).fetchone()
     categoria, division = _categoria_de_partido(db, partido_id)
     if not partido:
         flash("Partido no encontrado.")
-        return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+        return _redirect_post_partido(partido_id, categoria, division)
     if partido["jugado"]:
         flash("Ese partido ya está finalizado.")
-        return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+        return _redirect_post_partido(partido_id, categoria, division)
     goles_local = partido["goles_local"] if partido["goles_local"] is not None else 0
     goles_visitante = partido["goles_visitante"] if partido["goles_visitante"] is not None else 0
     db.execute(
@@ -2357,11 +2440,11 @@ def iniciar_en_vivo(partido_id):
     )
     db.commit()
     flash("Partido marcado como EN VIVO — ya se ve en la página pública.", "ok")
-    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+    return _redirect_post_partido(partido_id, categoria, division)
 
 
 @app.route("/tecnica/partido/<int:partido_id>/en_vivo/actualizar", methods=["POST"])
-@tecnica_required
+@tecnica_o_vocalia_required
 def actualizar_marcador_en_vivo(partido_id):
     db = get_db()
     categoria, division = _categoria_de_partido(db, partido_id)
@@ -2369,36 +2452,36 @@ def actualizar_marcador_en_vivo(partido_id):
     gv = request.form.get("goles_visitante", "").strip()
     if not gl.isdigit() or not gv.isdigit():
         flash("Ingresa un marcador válido (números).")
-        return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+        return _redirect_post_partido(partido_id, categoria, division)
     db.execute(
         "UPDATE partidos SET goles_local = ?, goles_visitante = ? WHERE id = ? AND en_vivo = 1",
         (int(gl), int(gv), partido_id),
     )
     db.commit()
     flash("Marcador actualizado.", "ok")
-    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+    return _redirect_post_partido(partido_id, categoria, division)
 
 
 @app.route("/tecnica/partido/<int:partido_id>/en_vivo/finalizar", methods=["POST"])
-@tecnica_required
+@tecnica_o_vocalia_required
 def finalizar_en_vivo(partido_id):
     db = get_db()
     categoria, division = _categoria_de_partido(db, partido_id)
     db.execute("UPDATE partidos SET jugado = 1, en_vivo = 0 WHERE id = ?", (partido_id,))
     db.commit()
     flash("Partido finalizado.", "ok")
-    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+    return _redirect_post_partido(partido_id, categoria, division)
 
 
 @app.route("/tecnica/partido/<int:partido_id>/en_vivo/cancelar", methods=["POST"])
-@tecnica_required
+@tecnica_o_vocalia_required
 def cancelar_en_vivo(partido_id):
     db = get_db()
     categoria, division = _categoria_de_partido(db, partido_id)
     db.execute("UPDATE partidos SET en_vivo = 0 WHERE id = ?", (partido_id,))
     db.commit()
     flash("Se quitó el estado EN VIVO de ese partido.", "ok")
-    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+    return _redirect_post_partido(partido_id, categoria, division)
 
 
 def _partidos_en_vivo(db):
@@ -2407,6 +2490,207 @@ def _partidos_en_vivo(db):
            FROM partidos p JOIN jornadas jo ON jo.id = p.jornada_id
            WHERE p.en_vivo = 1 ORDER BY p.id DESC"""
     ).fetchall()
+
+
+# ---------- Vocalía: hoja oficial del encuentro (asistencia, tarjetas, goles, incidentes, árbitro) ----------
+
+@app.route("/vocalia")
+@vocalia_required
+def vocalia_modulo():
+    db = get_db()
+    categoria, division = _categoria_y_division(
+        db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
+    )
+    jornadas = _fixture_completo(db, categoria, division)
+    return render_template(
+        "vocalia_modulo.html",
+        categoria=categoria, categorias_liga=_categorias_liga(db),
+        division=division, divisiones=_divisiones_de_categoria(db, categoria),
+        jornadas=jornadas,
+    )
+
+
+@app.route("/vocalia/partido/<int:partido_id>", methods=["GET"])
+@vocalia_required
+def vocalia_hoja(partido_id):
+    db = get_db()
+    partido = db.execute("SELECT * FROM partidos WHERE id = ?", (partido_id,)).fetchone()
+    if not partido:
+        flash("Partido no encontrado.")
+        return redirect(url_for("vocalia_modulo"))
+    jornada = db.execute("SELECT * FROM jornadas WHERE id = ?", (partido["jornada_id"],)).fetchone()
+
+    jugadores_local = db.execute(
+        "SELECT * FROM jugadores WHERE equipo = ? ORDER BY apellidos, nombres", (partido["equipo_local"],)
+    ).fetchall()
+    jugadores_visitante = db.execute(
+        "SELECT * FROM jugadores WHERE equipo = ? ORDER BY apellidos, nombres", (partido["equipo_visitante"],)
+    ).fetchall()
+
+    asistencia_rows = db.execute(
+        "SELECT jugador_id, participo FROM vocalia_asistencia WHERE partido_id = ?", (partido_id,)
+    ).fetchall()
+    asistencia = {r["jugador_id"]: r["participo"] for r in asistencia_rows}
+
+    tarjetas = db.execute(
+        """SELECT t.*, j.nombres, j.apellidos, j.equipo
+           FROM tarjetas t JOIN jugadores j ON j.id = t.jugador_id
+           WHERE t.partido_id = ? ORDER BY t.fecha""",
+        (partido_id,),
+    ).fetchall()
+
+    goles = db.execute(
+        """SELECT g.*, j.nombres, j.apellidos, j.equipo
+           FROM goles g JOIN jugadores j ON j.id = g.jugador_id
+           WHERE g.partido_id = ? ORDER BY g.fecha""",
+        (partido_id,),
+    ).fetchall()
+
+    incidentes = db.execute(
+        "SELECT * FROM vocalia_incidentes WHERE partido_id = ? ORDER BY fecha", (partido_id,)
+    ).fetchall()
+
+    jugadores_js = [
+        {"id": j["id"], "label": f"{j['apellidos']} {j['nombres']} ({j['numero_camiseta'] or '-'}) — {j['equipo']}", "equipo": j["equipo"]}
+        for j in list(jugadores_local) + list(jugadores_visitante)
+    ]
+
+    return render_template(
+        "vocalia_hoja.html",
+        partido=partido, jornada=jornada,
+        jugadores_local=jugadores_local, jugadores_visitante=jugadores_visitante,
+        asistencia=asistencia, tarjetas=tarjetas, goles=goles, incidentes=incidentes,
+        jugadores_js=jugadores_js,
+    )
+
+
+@app.route("/vocalia/partido/<int:partido_id>/arbitro/guardar", methods=["POST"])
+@vocalia_required
+def guardar_arbitro(partido_id):
+    db = get_db()
+    arbitro = request.form.get("arbitro", "").strip()
+    db.execute("UPDATE partidos SET arbitro = ? WHERE id = ?", (arbitro or None, partido_id))
+    db.commit()
+    flash("Árbitro guardado.", "ok")
+    return redirect(url_for("vocalia_hoja", partido_id=partido_id))
+
+
+@app.route("/vocalia/partido/<int:partido_id>/asistencia/guardar", methods=["POST"])
+@vocalia_required
+def guardar_asistencia_vocalia(partido_id):
+    db = get_db()
+    todos_ids = [int(x) for x in request.form.getlist("todos_ids") if x.isdigit()]
+    marcados = {int(x) for x in request.form.getlist("participo") if x.isdigit()}
+    db.execute("DELETE FROM vocalia_asistencia WHERE partido_id = ?", (partido_id,))
+    for jugador_id in todos_ids:
+        db.execute(
+            "INSERT INTO vocalia_asistencia (partido_id, jugador_id, participo) VALUES (?, ?, ?)",
+            (partido_id, jugador_id, 1 if jugador_id in marcados else 0),
+        )
+    db.commit()
+    flash("Asistencia guardada.", "ok")
+    return redirect(url_for("vocalia_hoja", partido_id=partido_id))
+
+
+@app.route("/vocalia/partido/<int:partido_id>/tarjeta/agregar", methods=["POST"])
+@vocalia_required
+def agregar_tarjeta_vocalia(partido_id):
+    db = get_db()
+    partido = db.execute("SELECT * FROM partidos WHERE id = ?", (partido_id,)).fetchone()
+    if not partido:
+        flash("Partido no encontrado.")
+        return redirect(url_for("vocalia_modulo"))
+    jugador_id = request.form.get("jugador_id", "").strip()
+    tipo = request.form.get("tipo", "").strip()
+    observacion = request.form.get("observacion", "").strip()
+    if not jugador_id.isdigit() or tipo not in ("amarilla", "roja"):
+        flash("Selecciona un jugador y el tipo de tarjeta.")
+        return redirect(url_for("vocalia_hoja", partido_id=partido_id))
+    db.execute(
+        "INSERT INTO tarjetas (jugador_id, jornada_id, partido_id, tipo, observacion, fecha) VALUES (?, ?, ?, ?, ?, ?)",
+        (int(jugador_id), partido["jornada_id"], partido_id, tipo, observacion or None,
+         datetime.now().strftime("%Y-%m-%d %H:%M")),
+    )
+    db.commit()
+    flash("Tarjeta registrada.", "ok")
+    return redirect(url_for("vocalia_hoja", partido_id=partido_id))
+
+
+@app.route("/vocalia/tarjeta/<int:tarjeta_id>/eliminar", methods=["POST"])
+@vocalia_required
+def eliminar_tarjeta_vocalia(tarjeta_id):
+    db = get_db()
+    tarjeta = db.execute("SELECT partido_id FROM tarjetas WHERE id = ?", (tarjeta_id,)).fetchone()
+    partido_id = tarjeta["partido_id"] if tarjeta else None
+    db.execute("DELETE FROM tarjetas WHERE id = ?", (tarjeta_id,))
+    db.commit()
+    flash("Tarjeta eliminada.", "ok")
+    if partido_id:
+        return redirect(url_for("vocalia_hoja", partido_id=partido_id))
+    return redirect(url_for("vocalia_modulo"))
+
+
+@app.route("/vocalia/partido/<int:partido_id>/gol/agregar", methods=["POST"])
+@vocalia_required
+def agregar_gol_vocalia(partido_id):
+    db = get_db()
+    jugador_id = request.form.get("jugador_id", "").strip()
+    cantidad = request.form.get("cantidad", "1").strip()
+    if not jugador_id.isdigit() or not cantidad.isdigit() or int(cantidad) < 1:
+        flash("Selecciona un jugador y una cantidad de goles válida.")
+        return redirect(url_for("vocalia_hoja", partido_id=partido_id))
+    db.execute(
+        "INSERT INTO goles (jugador_id, partido_id, cantidad, fecha) VALUES (?, ?, ?, ?)",
+        (int(jugador_id), partido_id, int(cantidad), datetime.now().strftime("%Y-%m-%d %H:%M")),
+    )
+    db.commit()
+    flash("Gol(es) registrado(s).", "ok")
+    return redirect(url_for("vocalia_hoja", partido_id=partido_id))
+
+
+@app.route("/vocalia/gol/<int:gol_id>/eliminar", methods=["POST"])
+@vocalia_required
+def eliminar_gol_vocalia(gol_id):
+    db = get_db()
+    gol = db.execute("SELECT partido_id FROM goles WHERE id = ?", (gol_id,)).fetchone()
+    partido_id = gol["partido_id"] if gol else None
+    db.execute("DELETE FROM goles WHERE id = ?", (gol_id,))
+    db.commit()
+    flash("Registro de gol eliminado.", "ok")
+    if partido_id:
+        return redirect(url_for("vocalia_hoja", partido_id=partido_id))
+    return redirect(url_for("vocalia_modulo"))
+
+
+@app.route("/vocalia/partido/<int:partido_id>/incidente/agregar", methods=["POST"])
+@vocalia_required
+def agregar_incidente(partido_id):
+    db = get_db()
+    descripcion = request.form.get("descripcion", "").strip()
+    if not descripcion:
+        flash("Escribe una descripción del incidente.")
+        return redirect(url_for("vocalia_hoja", partido_id=partido_id))
+    db.execute(
+        "INSERT INTO vocalia_incidentes (partido_id, descripcion, fecha) VALUES (?, ?, ?)",
+        (partido_id, descripcion, datetime.now().strftime("%Y-%m-%d %H:%M")),
+    )
+    db.commit()
+    flash("Incidente registrado.", "ok")
+    return redirect(url_for("vocalia_hoja", partido_id=partido_id))
+
+
+@app.route("/vocalia/incidente/<int:incidente_id>/eliminar", methods=["POST"])
+@vocalia_required
+def eliminar_incidente(incidente_id):
+    db = get_db()
+    incidente = db.execute("SELECT partido_id FROM vocalia_incidentes WHERE id = ?", (incidente_id,)).fetchone()
+    partido_id = incidente["partido_id"] if incidente else None
+    db.execute("DELETE FROM vocalia_incidentes WHERE id = ?", (incidente_id,))
+    db.commit()
+    flash("Incidente eliminado.", "ok")
+    if partido_id:
+        return redirect(url_for("vocalia_hoja", partido_id=partido_id))
+    return redirect(url_for("vocalia_modulo"))
 
 
 @app.route("/tecnica/gol/agregar", methods=["POST"])
