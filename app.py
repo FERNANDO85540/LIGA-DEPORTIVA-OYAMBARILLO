@@ -2601,7 +2601,7 @@ def vocalia_hoja(partido_id):
     ).fetchall()
 
     jugadores_js = [
-        {"id": j["id"], "label": f"{j['apellidos']} {j['nombres']} ({j['numero_camiseta'] or '-'}) — {j['equipo']}", "equipo": j["equipo"]}
+        {"id": j["id"], "label": f"{j['apellidos']} {j['nombres']} ({j['numero_camiseta'] or '-'})", "equipo": j["equipo"]}
         for j in list(jugadores_local) + list(jugadores_visitante)
     ]
 
