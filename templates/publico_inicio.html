@@ -1,10 +1,34 @@
 {% extends "base.html" %}
+
+{% block extra_head %}
+{% if partidos_en_vivo %}
+<meta http-equiv="refresh" content="30">
+{% endif %}
+{% endblock %}
+
 {% block content %}
 
 <div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
   <h1 style="margin:0; font-size:1.5rem;">⚽ Liga Deportiva Oyambarillo</h1>
   <p style="margin:6px 0 0; opacity:0.95;">Consulta pública — sin necesidad de cuenta.</p>
 </div>
+
+{% if partidos_en_vivo %}
+<div class="card" style="border:2px solid #c0392b;">
+  <h2 style="margin-top:0; color:#c0392b;">🔴 En disputa ahora</h2>
+  {% for p in partidos_en_vivo %}
+  <a href="{{ url_for('publico_alineaciones', partido_id=p.id) }}" style="text-decoration:none; color:inherit;">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+                border:1px solid var(--borde); border-radius:8px; padding:10px 14px; margin-bottom:8px;">
+      <span><strong>{{ p.equipo_local }}</strong> vs <strong>{{ p.equipo_visitante }}</strong>
+        <span style="font-size:0.8rem; color:#888;">— Jornada {{ p.jornada_numero }}</span></span>
+      <span style="font-size:1.2rem; font-weight:800; color:#c0392b;">{{ p.goles_local }} - {{ p.goles_visitante }}</span>
+    </div>
+  </a>
+  {% endfor %}
+  <p style="font-size:0.8rem; color:#888; margin:6px 0 0;">Esta página se actualiza sola cada 30 segundos mientras haya un partido en disputa.</p>
+</div>
+{% endif %}
 
 <div class="cupos-grid" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));">
   <a href="{{ url_for('publico_tabla') }}" style="text-decoration:none; color:inherit;">

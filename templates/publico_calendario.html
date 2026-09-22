@@ -21,8 +21,9 @@
     <ul style="margin:10px 0 0; padding-left:20px;">
       {% for p in item.partidos %}
         <li>
+          {% if p.en_vivo %}<span class="badge" style="background:#fdecea; color:#c0392b;">🔴 EN VIVO</span>{% endif %}
           {{ p.equipo_local }}
-          {% if p.jugado %}
+          {% if p.jugado or p.en_vivo %}
             <strong>{{ p.goles_local }} - {{ p.goles_visitante }}</strong>
           {% else %}
             <strong>vs</strong>

@@ -90,21 +90,48 @@
     {% endif %}
     {% for p in item.partidos %}
     <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:10px; padding-top:10px; border-top:1px solid var(--fondo);">
-      <form method="post" action="{{ url_for('registrar_resultado', partido_id=p.id) }}" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0;">
-        <span style="min-width:140px;">{{ p.equipo_local }}</span>
-        <input type="number" name="goles_local" min="0" value="{{ p.goles_local if p.goles_local is not none else '' }}" style="width:60px;">
-        <span>—</span>
-        <input type="number" name="goles_visitante" min="0" value="{{ p.goles_visitante if p.goles_visitante is not none else '' }}" style="width:60px;">
-        <span style="min-width:140px;">{{ p.equipo_visitante }}</span>
-        <button type="submit" style="padding:6px 12px; font-size:0.85rem;">Guardar resultado</button>
-      </form>
-      {% if p.jugado %}
+      {% if p.en_vivo %}
+        <form method="post" action="{{ url_for('actualizar_marcador_en_vivo', partido_id=p.id) }}" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0;">
+          <span style="min-width:140px;">{{ p.equipo_local }}</span>
+          <input type="number" name="goles_local" min="0" value="{{ p.goles_local if p.goles_local is not none else 0 }}" style="width:60px;">
+          <span>—</span>
+          <input type="number" name="goles_visitante" min="0" value="{{ p.goles_visitante if p.goles_visitante is not none else 0 }}" style="width:60px;">
+          <span style="min-width:140px;">{{ p.equipo_visitante }}</span>
+          <button type="submit" style="padding:6px 12px; font-size:0.85rem;">Actualizar marcador</button>
+        </form>
+        <span class="badge" style="background:#fdecea; color:#c0392b;">🔴 EN VIVO</span>
+        <form method="post" action="{{ url_for('finalizar_en_vivo', partido_id=p.id) }}" onsubmit="return confirm('¿Finalizar este partido con el marcador actual?');" style="margin:0;">
+          <button type="submit" style="padding:6px 12px; font-size:0.85rem;">⏹️ Finalizar partido</button>
+        </form>
+        <form method="post" action="{{ url_for('cancelar_en_vivo', partido_id=p.id) }}" style="margin:0;">
+          <button type="submit" class="btn-del">Cancelar en vivo</button>
+        </form>
+      {% elif p.jugado %}
+        <form method="post" action="{{ url_for('registrar_resultado', partido_id=p.id) }}" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0;">
+          <span style="min-width:140px;">{{ p.equipo_local }}</span>
+          <input type="number" name="goles_local" min="0" value="{{ p.goles_local if p.goles_local is not none else '' }}" style="width:60px;">
+          <span>—</span>
+          <input type="number" name="goles_visitante" min="0" value="{{ p.goles_visitante if p.goles_visitante is not none else '' }}" style="width:60px;">
+          <span style="min-width:140px;">{{ p.equipo_visitante }}</span>
+          <button type="submit" style="padding:6px 12px; font-size:0.85rem;">Guardar resultado</button>
+        </form>
         <span class="badge badge-ok">✅ Jugado</span>
         <form method="post" action="{{ url_for('quitar_resultado', partido_id=p.id) }}" onsubmit="return confirm('¿Quitar el resultado de este partido?');" style="margin:0;">
           <button type="submit" class="btn-del">Quitar resultado</button>
         </form>
       {% else %}
+        <form method="post" action="{{ url_for('registrar_resultado', partido_id=p.id) }}" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0;">
+          <span style="min-width:140px;">{{ p.equipo_local }}</span>
+          <input type="number" name="goles_local" min="0" value="{{ p.goles_local if p.goles_local is not none else '' }}" style="width:60px;">
+          <span>—</span>
+          <input type="number" name="goles_visitante" min="0" value="{{ p.goles_visitante if p.goles_visitante is not none else '' }}" style="width:60px;">
+          <span style="min-width:140px;">{{ p.equipo_visitante }}</span>
+          <button type="submit" style="padding:6px 12px; font-size:0.85rem;">Guardar resultado</button>
+        </form>
         <span class="badge" style="background:#eef3ee; color:#555;">Pendiente</span>
+        <form method="post" action="{{ url_for('iniciar_en_vivo', partido_id=p.id) }}" style="margin:0;">
+          <button type="submit" style="padding:6px 12px; font-size:0.85rem; background:#c0392b;">🔴 Marcar EN VIVO</button>
+        </form>
       {% endif %}
     </div>
     {% endfor %}

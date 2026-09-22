@@ -481,6 +481,8 @@ def init_db():
         db.execute("ALTER TABLE partidos ADD COLUMN goles_visitante INTEGER")
     if "jugado" not in pcols:
         db.execute("ALTER TABLE partidos ADD COLUMN jugado INTEGER NOT NULL DEFAULT 0")
+    if "en_vivo" not in pcols:
+        db.execute("ALTER TABLE partidos ADD COLUMN en_vivo INTEGER NOT NULL DEFAULT 0")
 
     db.execute(f"""
         CREATE TABLE IF NOT EXISTS goles (
@@ -2335,6 +2337,78 @@ def quitar_resultado(partido_id):
     return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
 
 
+@app.route("/tecnica/partido/<int:partido_id>/en_vivo/iniciar", methods=["POST"])
+@tecnica_required
+def iniciar_en_vivo(partido_id):
+    db = get_db()
+    partido = db.execute("SELECT * FROM partidos WHERE id = ?", (partido_id,)).fetchone()
+    categoria, division = _categoria_de_partido(db, partido_id)
+    if not partido:
+        flash("Partido no encontrado.")
+        return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+    if partido["jugado"]:
+        flash("Ese partido ya está finalizado.")
+        return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+    goles_local = partido["goles_local"] if partido["goles_local"] is not None else 0
+    goles_visitante = partido["goles_visitante"] if partido["goles_visitante"] is not None else 0
+    db.execute(
+        "UPDATE partidos SET en_vivo = 1, goles_local = ?, goles_visitante = ? WHERE id = ?",
+        (goles_local, goles_visitante, partido_id),
+    )
+    db.commit()
+    flash("Partido marcado como EN VIVO — ya se ve en la página pública.", "ok")
+    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+
+
+@app.route("/tecnica/partido/<int:partido_id>/en_vivo/actualizar", methods=["POST"])
+@tecnica_required
+def actualizar_marcador_en_vivo(partido_id):
+    db = get_db()
+    categoria, division = _categoria_de_partido(db, partido_id)
+    gl = request.form.get("goles_local", "").strip()
+    gv = request.form.get("goles_visitante", "").strip()
+    if not gl.isdigit() or not gv.isdigit():
+        flash("Ingresa un marcador válido (números).")
+        return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+    db.execute(
+        "UPDATE partidos SET goles_local = ?, goles_visitante = ? WHERE id = ? AND en_vivo = 1",
+        (int(gl), int(gv), partido_id),
+    )
+    db.commit()
+    flash("Marcador actualizado.", "ok")
+    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+
+
+@app.route("/tecnica/partido/<int:partido_id>/en_vivo/finalizar", methods=["POST"])
+@tecnica_required
+def finalizar_en_vivo(partido_id):
+    db = get_db()
+    categoria, division = _categoria_de_partido(db, partido_id)
+    db.execute("UPDATE partidos SET jugado = 1, en_vivo = 0 WHERE id = ?", (partido_id,))
+    db.commit()
+    flash("Partido finalizado.", "ok")
+    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+
+
+@app.route("/tecnica/partido/<int:partido_id>/en_vivo/cancelar", methods=["POST"])
+@tecnica_required
+def cancelar_en_vivo(partido_id):
+    db = get_db()
+    categoria, division = _categoria_de_partido(db, partido_id)
+    db.execute("UPDATE partidos SET en_vivo = 0 WHERE id = ?", (partido_id,))
+    db.commit()
+    flash("Se quitó el estado EN VIVO de ese partido.", "ok")
+    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+
+
+def _partidos_en_vivo(db):
+    return db.execute(
+        """SELECT p.*, jo.numero AS jornada_numero
+           FROM partidos p JOIN jornadas jo ON jo.id = p.jornada_id
+           WHERE p.en_vivo = 1 ORDER BY p.id DESC"""
+    ).fetchall()
+
+
 @app.route("/tecnica/gol/agregar", methods=["POST"])
 @tecnica_required
 def agregar_gol():
@@ -2380,7 +2454,8 @@ def eliminar_gol(gol_id):
 
 @app.route("/publico")
 def publico_inicio():
-    return render_template("publico_inicio.html")
+    db = get_db()
+    return render_template("publico_inicio.html", partidos_en_vivo=_partidos_en_vivo(db))
 
 
 @app.route("/publico/tabla")
