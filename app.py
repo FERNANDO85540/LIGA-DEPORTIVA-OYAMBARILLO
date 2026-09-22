@@ -133,6 +133,28 @@ def _edad_minima_categoria(db, categoria):
     fila = db.execute("SELECT edad_minima FROM categorias WHERE nombre = ?", (categoria,)).fetchone()
     return fila["edad_minima"] if fila else None
 
+
+def _divisiones_de_categoria(db, categoria):
+    """Nombres de las divisiones/series de una categoría (ej. Senior -> Máxima,
+    Primera), en el orden en que se crearon. Lista vacía si esa categoría no
+    se divide en series (ej. Sub 45)."""
+    return [
+        f["nombre"] for f in
+        db.execute("SELECT nombre FROM divisiones WHERE categoria = ? ORDER BY id", (categoria,)).fetchall()
+    ]
+
+
+def _categoria_y_division(db, categoria_arg, division_arg):
+    """Valida la categoría pedida y, si esa categoría tiene divisiones, la
+    división pedida (o la primera por defecto). Si la categoría no tiene
+    divisiones, la división siempre es '' (no aplica)."""
+    categoria = _categoria_valida(db, categoria_arg)
+    divisiones = _divisiones_de_categoria(db, categoria)
+    if not divisiones:
+        return categoria, ""
+    division = division_arg if division_arg in divisiones else divisiones[0]
+    return categoria, division
+
 EQUIPOS_INICIALES = [
     "San Juan", "El Progreso", "La Union", "Santa Rosa",
     "Los Andes", "Independiente", "Deportivo Central", "Juventud",
@@ -221,6 +243,8 @@ def init_db():
         db.execute("ALTER TABLE jugadores ADD COLUMN carnet_fecha TEXT")
     if "documentos_fecha" not in jcols:
         db.execute("ALTER TABLE jugadores ADD COLUMN documentos_fecha TEXT")
+    if "division" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN division TEXT NOT NULL DEFAULT ''")
 
     db.execute(f"""
         CREATE TABLE IF NOT EXISTS equipos (
@@ -340,6 +364,21 @@ def init_db():
     if db.execute("SELECT COUNT(*) c FROM categorias").fetchone()["c"] == 0:
         db.execute("INSERT INTO categorias (nombre, edad_minima) VALUES (?, ?)", ("Sub 45", 45))
         db.execute("INSERT INTO categorias (nombre, edad_minima) VALUES (?, ?)", ("Senior", None))
+
+    db.execute(f"""
+        CREATE TABLE IF NOT EXISTS divisiones (
+            id {tipo_id},
+            categoria TEXT NOT NULL,
+            nombre TEXT NOT NULL
+        )
+    """)
+
+    ecols = _columnas_existentes(db, "equipos")
+    if "division" not in ecols:
+        db.execute("ALTER TABLE equipos ADD COLUMN division TEXT NOT NULL DEFAULT ''")
+    jocols = _columnas_existentes(db, "jornadas")
+    if "division" not in jocols:
+        db.execute("ALTER TABLE jornadas ADD COLUMN division TEXT NOT NULL DEFAULT ''")
 
     db.commit()
     db.close()
@@ -527,16 +566,21 @@ def index():
 def agregar_equipo():
     db = get_db()
     nombre = request.form.get("nombre", "").strip()
-    categoria = _categoria_valida(db, request.form.get("categoria", CATEGORIA_ACTIVA))
+    categoria, division = _categoria_y_division(
+        db, request.form.get("categoria", CATEGORIA_ACTIVA), request.form.get("division", "")
+    )
     if nombre:
         try:
-            db.execute("INSERT INTO equipos (nombre, categoria) VALUES (?, ?)", (nombre, categoria))
+            db.execute(
+                "INSERT INTO equipos (nombre, categoria, division) VALUES (?, ?, ?)",
+                (nombre, categoria, division),
+            )
             db.commit()
             flash(f"Equipo '{nombre}' agregado.", "ok")
         except IntegrityError:
             db.rollback()
             flash(f"Ya existe un equipo llamado '{nombre}'.")
-    return redirect(url_for("inscripcion", categoria=categoria))
+    return redirect(url_for("inscripcion", categoria=categoria, division=division))
 
 
 @app.route("/equipos/<int:equipo_id>/renombrar", methods=["POST"])
@@ -655,7 +699,8 @@ def detalle_equipo(equipo_id):
 
     partidos_equipo = []
     for jr in db.execute(
-        "SELECT * FROM jornadas WHERE categoria = ? ORDER BY numero, id", (equipo["categoria"],)
+        "SELECT * FROM jornadas WHERE categoria = ? AND division = ? ORDER BY numero, id",
+        (equipo["categoria"], equipo["division"]),
     ).fetchall():
         partido = db.execute(
             "SELECT * FROM partidos WHERE jornada_id = ? AND (equipo_local = ? OR equipo_visitante = ?)",
@@ -746,9 +791,12 @@ def jugadores_liga():
     equipos, visible tanto para el admin como para los delegados -- para
     que cualquiera pueda revisar quién está inscrito y en qué equipo."""
     db = get_db()
-    categoria = _categoria_valida(db, request.args.get("categoria", CATEGORIA_ACTIVA))
+    categoria, division = _categoria_y_division(
+        db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
+    )
     jugadores = db.execute(
-        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos", (categoria,)
+        "SELECT * FROM jugadores WHERE categoria = ? AND division = ? ORDER BY equipo, apellidos",
+        (categoria, division),
     ).fetchall()
     equipos_distintos = sorted(set(j["equipo"] for j in jugadores))
     return render_template(
@@ -756,6 +804,8 @@ def jugadores_liga():
         jugadores=jugadores,
         categoria=categoria,
         categorias_liga=_categorias_liga(db),
+        division=division,
+        divisiones=_divisiones_de_categoria(db, categoria),
         total_equipos=len(equipos_distintos),
     )
 
@@ -787,11 +837,15 @@ def documentos_recientes():
 @admin_required
 def exportar_general():
     db = get_db()
-    categoria = _categoria_valida(db, request.args.get("categoria", CATEGORIA_ACTIVA))
+    categoria, division = _categoria_y_division(
+        db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
+    )
     jugadores = db.execute(
-        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos", (categoria,)
+        "SELECT * FROM jugadores WHERE categoria = ? AND division = ? ORDER BY equipo, apellidos",
+        (categoria, division),
     ).fetchall()
-    nombre_archivo = f"jugadores_liga_oyambarillo_{categoria.replace(' ', '_')}.xlsx"
+    sufijo = f"{categoria}_{division}" if division else categoria
+    nombre_archivo = f"jugadores_liga_oyambarillo_{sufijo.replace(' ', '_')}.xlsx"
     return _exportar_jugadores_excel(jugadores, nombre_archivo, incluir_equipo=True)
 
 
@@ -889,15 +943,17 @@ def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacim
 
     ahora = datetime.now().strftime("%Y-%m-%d %H:%M")
     documentos_fecha = ahora if (foto or cedula_frontal or cedula_reverso) else None
+    equipo_row = db.execute("SELECT division FROM equipos WHERE nombre = ?", (equipo_nombre,)).fetchone()
+    division = equipo_row["division"] if equipo_row else ""
 
     returning = " RETURNING id" if USANDO_POSTGRES else ""
     try:
         cur = db.execute(
             f"""INSERT INTO jugadores
-               (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, numero_camiseta,
+               (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, division, subcategoria, numero_camiseta,
                 foto, cedula_frontal, cedula_reverso, foto_token, fecha_registro, documentos_fecha)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?){returning}""",
-            (cedula, nombres, apellidos, fecha_nacimiento, equipo_nombre, categoria,
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?){returning}""",
+            (cedula, nombres, apellidos, fecha_nacimiento, equipo_nombre, categoria, division,
              subcategoria, numero_camiseta, foto, cedula_frontal, cedula_reverso,
              uuid.uuid4().hex, ahora, documentos_fecha),
         )
@@ -975,10 +1031,12 @@ def agregar_jugador_equipo(equipo_id):
 @admin_required
 def inscripcion():
     db = get_db()
-    categoria = _categoria_valida(db, request.args.get("categoria", CATEGORIA_ACTIVA))
+    categoria, division = _categoria_y_division(
+        db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
+    )
 
     equipos_rows = db.execute(
-        "SELECT * FROM equipos WHERE categoria = ? ORDER BY nombre", (categoria,)
+        "SELECT * FROM equipos WHERE categoria = ? AND division = ? ORDER BY nombre", (categoria, division)
     ).fetchall()
 
     cupos = {}
@@ -996,6 +1054,8 @@ def inscripcion():
         cupo_maximo=CUPO_MAXIMO_EQUIPO,
         categoria=categoria,
         categorias_liga=_categorias_liga(db),
+        division=division,
+        divisiones=_divisiones_de_categoria(db, categoria),
         subcategorias=SUBCATEGORIAS,
     )
 
@@ -1010,7 +1070,17 @@ def categorias_modulo():
         equipos_count = db.execute(
             "SELECT COUNT(*) c FROM equipos WHERE categoria = ?", (f["nombre"],)
         ).fetchone()["c"]
-        categorias.append({"fila": f, "equipos_count": equipos_count})
+        divisiones_rows = db.execute(
+            "SELECT * FROM divisiones WHERE categoria = ? ORDER BY id", (f["nombre"],)
+        ).fetchall()
+        divisiones = []
+        for d in divisiones_rows:
+            d_equipos_count = db.execute(
+                "SELECT COUNT(*) c FROM equipos WHERE categoria = ? AND division = ?",
+                (f["nombre"], d["nombre"]),
+            ).fetchone()["c"]
+            divisiones.append({"fila": d, "equipos_count": d_equipos_count})
+        categorias.append({"fila": f, "equipos_count": equipos_count, "divisiones": divisiones})
     return render_template("categorias_modulo.html", categorias=categorias)
 
 
@@ -1068,9 +1138,60 @@ def eliminar_categoria(categoria_id):
         flash("No se puede eliminar la última categoría de la liga.")
         return redirect(url_for("categorias_modulo"))
 
+    db.execute("DELETE FROM divisiones WHERE categoria = ?", (categoria["nombre"],))
     db.execute("DELETE FROM categorias WHERE id = ?", (categoria_id,))
     db.commit()
     flash(f"Categoría '{categoria['nombre']}' eliminada.", "ok")
+    return redirect(url_for("categorias_modulo"))
+
+
+@app.route("/categorias/<int:categoria_id>/divisiones/agregar", methods=["POST"])
+@admin_required
+def agregar_division(categoria_id):
+    db = get_db()
+    categoria = db.execute("SELECT * FROM categorias WHERE id = ?", (categoria_id,)).fetchone()
+    if not categoria:
+        flash("Categoría no encontrada.")
+        return redirect(url_for("categorias_modulo"))
+
+    nombre = request.form.get("nombre", "").strip()
+    if not nombre:
+        flash("Ingresa un nombre para la división.")
+        return redirect(url_for("categorias_modulo"))
+
+    ya_existe = db.execute(
+        "SELECT 1 FROM divisiones WHERE categoria = ? AND nombre = ?", (categoria["nombre"], nombre)
+    ).fetchone()
+    if ya_existe:
+        flash(f"'{categoria['nombre']}' ya tiene una división llamada '{nombre}'.")
+        return redirect(url_for("categorias_modulo"))
+
+    db.execute("INSERT INTO divisiones (categoria, nombre) VALUES (?, ?)", (categoria["nombre"], nombre))
+    db.commit()
+    flash(f"División '{nombre}' agregada a {categoria['nombre']}.", "ok")
+    return redirect(url_for("categorias_modulo"))
+
+
+@app.route("/divisiones/<int:division_id>/eliminar", methods=["POST"])
+@admin_required
+def eliminar_division(division_id):
+    db = get_db()
+    division = db.execute("SELECT * FROM divisiones WHERE id = ?", (division_id,)).fetchone()
+    if not division:
+        flash("División no encontrada.")
+        return redirect(url_for("categorias_modulo"))
+
+    equipos_count = db.execute(
+        "SELECT COUNT(*) c FROM equipos WHERE categoria = ? AND division = ?",
+        (division["categoria"], division["nombre"]),
+    ).fetchone()["c"]
+    if equipos_count > 0:
+        flash(f"No se puede eliminar '{division['nombre']}': todavía tiene {equipos_count} equipo(s).")
+        return redirect(url_for("categorias_modulo"))
+
+    db.execute("DELETE FROM divisiones WHERE id = ?", (division_id,))
+    db.commit()
+    flash(f"División '{division['nombre']}' eliminada.", "ok")
     return redirect(url_for("categorias_modulo"))
 
 
@@ -1426,7 +1547,7 @@ def _armar_paginas_carnets(jugadores, dpi=CARNET_PDF_DPI):
 @imprenta_required
 def carnets_modulo():
     db = get_db()
-    equipos = db.execute("SELECT * FROM equipos ORDER BY categoria, nombre").fetchall()
+    equipos = db.execute("SELECT * FROM equipos ORDER BY categoria, division, nombre").fetchall()
     equipo_id = request.args.get("equipo_id", "").strip()
     jugadores = []
     equipo_actual = None
@@ -1507,9 +1628,10 @@ def carnets_pdf():
     return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=nombre_archivo)
 
 
-def _fixture_completo(db, categoria=CATEGORIA_ACTIVA):
+def _fixture_completo(db, categoria=CATEGORIA_ACTIVA, division=""):
     jornadas_rows = db.execute(
-        "SELECT * FROM jornadas WHERE categoria = ? ORDER BY numero, id", (categoria,)
+        "SELECT * FROM jornadas WHERE categoria = ? AND division = ? ORDER BY numero, id",
+        (categoria, division),
     ).fetchall()
     jornadas = []
     for jr in jornadas_rows:
@@ -1527,10 +1649,12 @@ def _fixture_completo(db, categoria=CATEGORIA_ACTIVA):
 @calificacion_required
 def comision_modulo():
     db = get_db()
-    categoria = _categoria_valida(db, request.args.get("categoria", CATEGORIA_ACTIVA))
+    categoria, division = _categoria_y_division(
+        db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
+    )
     jugadores = db.execute(
-        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos, nombres",
-        (categoria,),
+        "SELECT * FROM jugadores WHERE categoria = ? AND division = ? ORDER BY equipo, apellidos, nombres",
+        (categoria, division),
     ).fetchall()
 
     return render_template(
@@ -1538,6 +1662,8 @@ def comision_modulo():
         jugadores=jugadores,
         categoria=categoria,
         categorias_liga=_categorias_liga(db),
+        division=division,
+        divisiones=_divisiones_de_categoria(db, categoria),
     )
 
 
@@ -1545,12 +1671,14 @@ def comision_modulo():
 @tecnica_required
 def agregar_jornada():
     db = get_db()
-    categoria = _categoria_valida(db, request.form.get("categoria", CATEGORIA_ACTIVA))
+    categoria, division = _categoria_y_division(
+        db, request.form.get("categoria", CATEGORIA_ACTIVA), request.form.get("division", "")
+    )
     numero = request.form.get("numero", "").strip()
     fecha = request.form.get("fecha", "").strip()
     if not numero.isdigit():
         flash("Ingresa un número de jornada válido.")
-        return redirect(url_for("tecnica_modulo", categoria=categoria))
+        return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
 
     locales = request.form.getlist("equipo_local")
     visitantes = request.form.getlist("equipo_visitante")
@@ -1566,10 +1694,10 @@ def agregar_jornada():
             continue
         if local == visitante:
             flash("Un equipo no puede jugar contra sí mismo.")
-            return redirect(url_for("tecnica_modulo", categoria=categoria))
+            return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
         if local in equipos_usados or visitante in equipos_usados:
             flash("Hay un equipo asignado a más de un partido en la misma jornada.")
-            return redirect(url_for("tecnica_modulo", categoria=categoria))
+            return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
         equipos_usados.add(local)
         equipos_usados.add(visitante)
         partidos_validos.append((local, visitante, hora, fecha_partido))
@@ -1577,16 +1705,16 @@ def agregar_jornada():
     for equipo in descansos:
         if equipo in equipos_usados:
             flash(f"'{equipo}' no puede descansar y jugar en la misma jornada.")
-            return redirect(url_for("tecnica_modulo", categoria=categoria))
+            return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
 
     if not partidos_validos and not descansos:
         flash("Agrega al menos un partido o un equipo que descansa.")
-        return redirect(url_for("tecnica_modulo", categoria=categoria))
+        return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
 
     returning = " RETURNING id" if USANDO_POSTGRES else ""
     cur = db.execute(
-        f"INSERT INTO jornadas (numero, fecha, categoria) VALUES (?, ?, ?){returning}",
-        (int(numero), fecha or None, categoria),
+        f"INSERT INTO jornadas (numero, fecha, categoria, division) VALUES (?, ?, ?, ?){returning}",
+        (int(numero), fecha or None, categoria, division),
     )
     jornada_id = cur.fetchone()["id"] if USANDO_POSTGRES else cur.lastrowid
     for local, visitante, hora, fecha_partido in partidos_validos:
@@ -1598,7 +1726,7 @@ def agregar_jornada():
         db.execute("INSERT INTO descansos (jornada_id, equipo) VALUES (?, ?)", (jornada_id, equipo))
     db.commit()
     flash(f"Jornada {numero} agregada.", "ok")
-    return redirect(url_for("tecnica_modulo", categoria=categoria))
+    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
 
 
 @app.route("/tecnica/jornada/<int:jornada_id>/eliminar", methods=["POST"])
@@ -1607,12 +1735,13 @@ def eliminar_jornada(jornada_id):
     db = get_db()
     jornada = db.execute("SELECT * FROM jornadas WHERE id = ?", (jornada_id,)).fetchone()
     categoria = jornada["categoria"] if jornada else CATEGORIA_ACTIVA
+    division = jornada["division"] if jornada else ""
     db.execute("DELETE FROM partidos WHERE jornada_id = ?", (jornada_id,))
     db.execute("DELETE FROM descansos WHERE jornada_id = ?", (jornada_id,))
     db.execute("DELETE FROM jornadas WHERE id = ?", (jornada_id,))
     db.commit()
     flash("Jornada eliminada.", "ok")
-    return redirect(url_for("tecnica_modulo", categoria=categoria))
+    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
 
 
 @app.route("/sanciones")
@@ -1763,8 +1892,10 @@ def marcar_sancion_pagada(sancion_id):
     return redirect(url_for("sanciones_modulo"))
 
 
-def _calcular_tabla_posiciones(db, categoria=CATEGORIA_ACTIVA):
-    equipos = db.execute("SELECT nombre FROM equipos WHERE categoria = ? ORDER BY nombre", (categoria,)).fetchall()
+def _calcular_tabla_posiciones(db, categoria=CATEGORIA_ACTIVA, division=""):
+    equipos = db.execute(
+        "SELECT nombre FROM equipos WHERE categoria = ? AND division = ? ORDER BY nombre", (categoria, division)
+    ).fetchall()
     tabla = {
         e["nombre"]: {"equipo": e["nombre"], "pj": 0, "g": 0, "e": 0, "p": 0, "gf": 0, "gc": 0, "pts": 0}
         for e in equipos
@@ -1772,9 +1903,9 @@ def _calcular_tabla_posiciones(db, categoria=CATEGORIA_ACTIVA):
 
     partidos = db.execute(
         """SELECT p.* FROM partidos p JOIN jornadas jo ON jo.id = p.jornada_id
-           WHERE jo.categoria = ? AND p.jugado = 1
+           WHERE jo.categoria = ? AND jo.division = ? AND p.jugado = 1
              AND p.goles_local IS NOT NULL AND p.goles_visitante IS NOT NULL""",
-        (categoria,),
+        (categoria, division),
     ).fetchall()
     for p in partidos:
         local, visitante = p["equipo_local"], p["equipo_visitante"]
@@ -1808,18 +1939,18 @@ def _calcular_tabla_posiciones(db, categoria=CATEGORIA_ACTIVA):
     return filas
 
 
-def _calcular_goleadores(db, categoria=CATEGORIA_ACTIVA, limite=15):
+def _calcular_goleadores(db, categoria=CATEGORIA_ACTIVA, division="", limite=15):
     return db.execute(
         """
         SELECT j.id, j.nombres, j.apellidos, j.equipo, SUM(g.cantidad) AS goles
         FROM goles g
         JOIN jugadores j ON j.id = g.jugador_id
-        WHERE j.categoria = ?
+        WHERE j.categoria = ? AND j.division = ?
         GROUP BY j.id, j.nombres, j.apellidos, j.equipo
         ORDER BY goles DESC
         LIMIT ?
         """,
-        (categoria, limite),
+        (categoria, division, limite),
     ).fetchall()
 
 
@@ -1827,36 +1958,44 @@ def _calcular_goleadores(db, categoria=CATEGORIA_ACTIVA, limite=15):
 @tecnica_required
 def tecnica_modulo():
     db = get_db()
-    categoria = _categoria_valida(db, request.args.get("categoria", CATEGORIA_ACTIVA))
-    equipos = db.execute("SELECT * FROM equipos WHERE categoria = ? ORDER BY nombre", (categoria,)).fetchall()
-    jornadas = _fixture_completo(db, categoria)
-    ultima = db.execute("SELECT MAX(numero) m FROM jornadas WHERE categoria = ?", (categoria,)).fetchone()["m"]
+    categoria, division = _categoria_y_division(
+        db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
+    )
+    equipos = db.execute(
+        "SELECT * FROM equipos WHERE categoria = ? AND division = ? ORDER BY nombre", (categoria, division)
+    ).fetchall()
+    jornadas = _fixture_completo(db, categoria, division)
+    ultima = db.execute(
+        "SELECT MAX(numero) m FROM jornadas WHERE categoria = ? AND division = ?", (categoria, division)
+    ).fetchone()["m"]
     siguiente_numero = (ultima or 0) + 1
     jugadores = db.execute(
-        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos, nombres",
-        (categoria,),
+        "SELECT * FROM jugadores WHERE categoria = ? AND division = ? ORDER BY equipo, apellidos, nombres",
+        (categoria, division),
     ).fetchall()
     jugadores_js = [
         {"id": j["id"], "label": f"{j['apellidos']} {j['nombres']} ({j['cedula']})", "equipo": j["equipo"]}
         for j in jugadores
     ]
-    tabla = _calcular_tabla_posiciones(db, categoria)
-    goleadores = _calcular_goleadores(db, categoria)
+    tabla = _calcular_tabla_posiciones(db, categoria, division)
+    goleadores = _calcular_goleadores(db, categoria, division)
     goles_registrados = db.execute(
         """
         SELECT g.*, j.nombres AS j_nombres, j.apellidos AS j_apellidos, j.equipo AS j_equipo
         FROM goles g
         JOIN jugadores j ON j.id = g.jugador_id
-        WHERE j.categoria = ?
+        WHERE j.categoria = ? AND j.division = ?
         ORDER BY g.fecha DESC, g.id DESC
         """,
-        (categoria,),
+        (categoria, division),
     ).fetchall()
 
     return render_template(
         "tecnica_modulo.html",
         categoria=categoria,
         categorias_liga=_categorias_liga(db),
+        division=division,
+        divisiones=_divisiones_de_categoria(db, categoria),
         equipos=equipos,
         siguiente_numero=siguiente_numero,
         jornadas=jornadas,
@@ -1869,10 +2008,11 @@ def tecnica_modulo():
 
 def _categoria_de_partido(db, partido_id):
     fila = db.execute(
-        "SELECT jo.categoria AS categoria FROM partidos p JOIN jornadas jo ON jo.id = p.jornada_id WHERE p.id = ?",
+        "SELECT jo.categoria AS categoria, jo.division AS division "
+        "FROM partidos p JOIN jornadas jo ON jo.id = p.jornada_id WHERE p.id = ?",
         (partido_id,),
     ).fetchone()
-    return fila["categoria"] if fila else CATEGORIA_ACTIVA
+    return (fila["categoria"], fila["division"]) if fila else (CATEGORIA_ACTIVA, "")
 
 
 @app.route("/tecnica/partido/<int:partido_id>/resultado", methods=["POST"])
@@ -1880,36 +2020,36 @@ def _categoria_de_partido(db, partido_id):
 def registrar_resultado(partido_id):
     db = get_db()
     partido = db.execute("SELECT * FROM partidos WHERE id = ?", (partido_id,)).fetchone()
-    categoria = _categoria_de_partido(db, partido_id)
+    categoria, division = _categoria_de_partido(db, partido_id)
     if not partido:
         flash("Partido no encontrado.")
-        return redirect(url_for("tecnica_modulo", categoria=categoria))
+        return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
     gl = request.form.get("goles_local", "").strip()
     gv = request.form.get("goles_visitante", "").strip()
     if not gl.isdigit() or not gv.isdigit():
         flash("Ingresa un marcador válido (números).")
-        return redirect(url_for("tecnica_modulo", categoria=categoria))
+        return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
     db.execute(
         "UPDATE partidos SET goles_local = ?, goles_visitante = ?, jugado = 1 WHERE id = ?",
         (int(gl), int(gv), partido_id),
     )
     db.commit()
     flash("Resultado registrado.", "ok")
-    return redirect(url_for("tecnica_modulo", categoria=categoria))
+    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
 
 
 @app.route("/tecnica/partido/<int:partido_id>/quitar_resultado", methods=["POST"])
 @tecnica_required
 def quitar_resultado(partido_id):
     db = get_db()
-    categoria = _categoria_de_partido(db, partido_id)
+    categoria, division = _categoria_de_partido(db, partido_id)
     db.execute(
         "UPDATE partidos SET goles_local = NULL, goles_visitante = NULL, jugado = 0 WHERE id = ?",
         (partido_id,),
     )
     db.commit()
     flash("Resultado eliminado.", "ok")
-    return redirect(url_for("tecnica_modulo", categoria=categoria))
+    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
 
 
 @app.route("/tecnica/gol/agregar", methods=["POST"])
@@ -1924,8 +2064,9 @@ def agregar_gol():
         flash("Selecciona un jugador y una cantidad de goles válida.")
         return redirect(url_for("tecnica_modulo"))
 
-    jugador = db.execute("SELECT categoria FROM jugadores WHERE id = ?", (int(jugador_id),)).fetchone()
+    jugador = db.execute("SELECT categoria, division FROM jugadores WHERE id = ?", (int(jugador_id),)).fetchone()
     categoria = jugador["categoria"] if jugador else CATEGORIA_ACTIVA
+    division = jugador["division"] if jugador else ""
 
     db.execute(
         "INSERT INTO goles (jugador_id, partido_id, cantidad, fecha) VALUES (?, ?, ?, ?)",
@@ -1933,7 +2074,7 @@ def agregar_gol():
     )
     db.commit()
     flash("Gol(es) registrado(s).", "ok")
-    return redirect(url_for("tecnica_modulo", categoria=categoria))
+    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
 
 
 @app.route("/tecnica/gol/<int:gol_id>/eliminar", methods=["POST"])
@@ -1941,14 +2082,15 @@ def agregar_gol():
 def eliminar_gol(gol_id):
     db = get_db()
     gol = db.execute(
-        "SELECT j.categoria AS categoria FROM goles g JOIN jugadores j ON j.id = g.jugador_id WHERE g.id = ?",
+        "SELECT j.categoria AS categoria, j.division AS division FROM goles g JOIN jugadores j ON j.id = g.jugador_id WHERE g.id = ?",
         (gol_id,),
     ).fetchone()
     categoria = gol["categoria"] if gol else CATEGORIA_ACTIVA
+    division = gol["division"] if gol else ""
     db.execute("DELETE FROM goles WHERE id = ?", (gol_id,))
     db.commit()
     flash("Registro de gol eliminado.", "ok")
-    return redirect(url_for("tecnica_modulo", categoria=categoria))
+    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
 
 
 # ---------- Sección pública: consulta libre, sin necesidad de cuenta ----------
@@ -1961,29 +2103,39 @@ def publico_inicio():
 @app.route("/publico/tabla")
 def publico_tabla():
     db = get_db()
-    categoria = _categoria_valida(db, request.args.get("categoria", CATEGORIA_ACTIVA))
-    tabla = _calcular_tabla_posiciones(db, categoria)
-    goleadores = _calcular_goleadores(db, categoria)
+    categoria, division = _categoria_y_division(
+        db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
+    )
+    tabla = _calcular_tabla_posiciones(db, categoria, division)
+    goleadores = _calcular_goleadores(db, categoria, division)
     return render_template(
-        "publico_tabla.html", tabla=tabla, goleadores=goleadores, categoria=categoria, categorias_liga=_categorias_liga(db)
+        "publico_tabla.html", tabla=tabla, goleadores=goleadores, categoria=categoria,
+        categorias_liga=_categorias_liga(db), division=division, divisiones=_divisiones_de_categoria(db, categoria),
     )
 
 
 @app.route("/publico/calendario")
 def publico_calendario():
     db = get_db()
-    categoria = _categoria_valida(db, request.args.get("categoria", CATEGORIA_ACTIVA))
-    jornadas = _fixture_completo(db, categoria)
+    categoria, division = _categoria_y_division(
+        db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
+    )
+    jornadas = _fixture_completo(db, categoria, division)
     return render_template(
-        "publico_calendario.html", jornadas=jornadas, categoria=categoria, categorias_liga=_categorias_liga(db)
+        "publico_calendario.html", jornadas=jornadas, categoria=categoria,
+        categorias_liga=_categorias_liga(db), division=division, divisiones=_divisiones_de_categoria(db, categoria),
     )
 
 
 @app.route("/publico/equipos")
 def publico_equipos():
     db = get_db()
-    categoria = _categoria_valida(db, request.args.get("categoria", CATEGORIA_ACTIVA))
-    equipos = db.execute("SELECT * FROM equipos WHERE categoria = ? ORDER BY nombre", (categoria,)).fetchall()
+    categoria, division = _categoria_y_division(
+        db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
+    )
+    equipos = db.execute(
+        "SELECT * FROM equipos WHERE categoria = ? AND division = ? ORDER BY nombre", (categoria, division)
+    ).fetchall()
     conteos = {}
     for e in equipos:
         conteos[e["nombre"]] = db.execute(
@@ -1991,43 +2143,49 @@ def publico_equipos():
             (e["nombre"], categoria),
         ).fetchone()["c"]
     return render_template(
-        "publico_equipos.html", equipos=equipos, conteos=conteos, categoria=categoria, categorias_liga=_categorias_liga(db)
+        "publico_equipos.html", equipos=equipos, conteos=conteos, categoria=categoria,
+        categorias_liga=_categorias_liga(db), division=division, divisiones=_divisiones_de_categoria(db, categoria),
     )
 
 
 @app.route("/publico/jugadores")
 def publico_jugadores():
     db = get_db()
-    categoria = _categoria_valida(db, request.args.get("categoria", CATEGORIA_ACTIVA))
+    categoria, division = _categoria_y_division(
+        db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
+    )
     # Solo datos que pueden verse públicamente: sin cédula.
     jugadores = db.execute(
         """SELECT nombres, apellidos, equipo, categoria, subcategoria, numero_camiseta, calificado
-           FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos, nombres""",
-        (categoria,),
+           FROM jugadores WHERE categoria = ? AND division = ? ORDER BY equipo, apellidos, nombres""",
+        (categoria, division),
     ).fetchall()
     return render_template(
-        "publico_jugadores.html", jugadores=jugadores, categoria=categoria, categorias_liga=_categorias_liga(db)
+        "publico_jugadores.html", jugadores=jugadores, categoria=categoria,
+        categorias_liga=_categorias_liga(db), division=division, divisiones=_divisiones_de_categoria(db, categoria),
     )
 
 
 @app.route("/publico/resultados")
 def publico_resultados():
     db = get_db()
-    categoria = _categoria_valida(db, request.args.get("categoria", CATEGORIA_ACTIVA))
+    categoria, division = _categoria_y_division(
+        db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
+    )
     partidos = db.execute(
         """
         SELECT p.*, jo.numero AS jornada_numero
         FROM partidos p
         JOIN jornadas jo ON jo.id = p.jornada_id
-        WHERE p.jugado = 1 AND jo.categoria = ?
+        WHERE p.jugado = 1 AND jo.categoria = ? AND jo.division = ?
         ORDER BY jo.numero DESC, p.id DESC
         """,
-        (categoria,),
+        (categoria, division),
     ).fetchall()
-    goleadores = _calcular_goleadores(db, categoria)
+    goleadores = _calcular_goleadores(db, categoria, division)
     return render_template(
         "publico_resultados.html", partidos=partidos, goleadores=goleadores, categoria=categoria,
-        categorias_liga=_categorias_liga(db),
+        categorias_liga=_categorias_liga(db), division=division, divisiones=_divisiones_de_categoria(db, categoria),
     )
 
 

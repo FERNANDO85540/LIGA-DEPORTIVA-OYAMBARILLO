@@ -27,27 +27,41 @@
   </p>
 </div>
 
+{% for c in categorias %}
 <div class="card">
-  <h2>Categorías existentes</h2>
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+    <div>
+      <h2 style="margin-bottom:2px;">{{ c.fila.nombre }}</h2>
+      <span style="font-size:0.85rem; color:#888;">{{ c.equipos_count }} equipo(s) en total</span>
+    </div>
+    <form method="post" action="{{ url_for('eliminar_categoria', categoria_id=c.fila.id) }}" onsubmit="return confirm('¿Eliminar la categoría {{ c.fila.nombre }}?');" style="margin:0;">
+      <button type="submit" class="btn-del" {% if c.equipos_count > 0 or categorias|length <= 1 %}disabled title="{{ 'Tiene equipos, no se puede eliminar' if c.equipos_count > 0 else 'Debe existir al menos una categoría' }}"{% endif %}>Eliminar categoría</button>
+    </form>
+  </div>
+
+  <form method="post" action="{{ url_for('editar_categoria', categoria_id=c.fila.id) }}" style="display:flex; gap:8px; align-items:center; margin-top:14px;">
+    <label style="margin:0;">Edad mínima</label>
+    <input type="number" name="edad_minima" min="1" value="{{ c.fila.edad_minima or '' }}" placeholder="Sin restricción" style="width:130px;">
+    <button type="submit" style="padding:6px 12px; font-size:0.85rem;">Guardar</button>
+  </form>
+
+  <h3 style="margin-top:20px; margin-bottom:8px; font-size:1rem;">Divisiones / series de {{ c.fila.nombre }}</h3>
+  <p style="font-size:0.8rem; color:#888; margin:0 0 10px;">
+    Opcional — solo si esta categoría se divide en series con equipos y tablas separadas (ej. Senior → Máxima, Primera).
+    Si no agregas ninguna, {{ c.fila.nombre }} funciona como una sola división, igual que ahora.
+  </p>
+  {% if c.divisiones %}
   <div style="overflow-x:auto;">
   <table class="tabla-responsive">
-    <thead>
-      <tr><th>Categoría</th><th>Edad mínima</th><th>Equipos</th><th></th></tr>
-    </thead>
+    <thead><tr><th>División</th><th>Equipos</th><th></th></tr></thead>
     <tbody>
-      {% for c in categorias %}
+      {% for d in c.divisiones %}
       <tr>
-        <td data-label="Categoría"><strong>{{ c.fila.nombre }}</strong></td>
-        <td data-label="Edad mínima">
-          <form method="post" action="{{ url_for('editar_categoria', categoria_id=c.fila.id) }}" style="display:flex; gap:6px; align-items:center; margin:0;">
-            <input type="number" name="edad_minima" min="1" value="{{ c.fila.edad_minima or '' }}" placeholder="Sin restricción" style="width:130px;">
-            <button type="submit" style="padding:4px 10px; font-size:0.8rem;">Guardar</button>
-          </form>
-        </td>
-        <td data-label="Equipos">{{ c.equipos_count }}</td>
+        <td data-label="División"><strong>{{ d.fila.nombre }}</strong></td>
+        <td data-label="Equipos">{{ d.equipos_count }}</td>
         <td data-label="" class="table-actions">
-          <form method="post" action="{{ url_for('eliminar_categoria', categoria_id=c.fila.id) }}" onsubmit="return confirm('¿Eliminar la categoría {{ c.fila.nombre }}?');" style="margin:0;">
-            <button type="submit" class="btn-del" {% if c.equipos_count > 0 %}disabled title="Tiene equipos, no se puede eliminar"{% endif %}>Eliminar</button>
+          <form method="post" action="{{ url_for('eliminar_division', division_id=d.fila.id) }}" onsubmit="return confirm('¿Eliminar la división {{ d.fila.nombre }}?');" style="margin:0;">
+            <button type="submit" class="btn-del" {% if d.equipos_count > 0 %}disabled title="Tiene equipos, no se puede eliminar"{% endif %}>Eliminar</button>
           </form>
         </td>
       </tr>
@@ -55,9 +69,15 @@
     </tbody>
   </table>
   </div>
-  {% if categorias|length <= 1 %}
-  <p style="font-size:0.8rem; color:#888; margin-top:10px;">Debe existir al menos una categoría.</p>
   {% endif %}
+  <form method="post" action="{{ url_for('agregar_division', categoria_id=c.fila.id) }}" style="display:flex; gap:8px; align-items:flex-end; margin-top:10px;">
+    <div>
+      <label>Nueva división</label>
+      <input type="text" name="nombre" placeholder="ej. Máxima" required style="width:180px;">
+    </div>
+    <button type="submit" style="padding:6px 12px; font-size:0.85rem;">Agregar división</button>
+  </form>
 </div>
+{% endfor %}
 
 {% endblock %}

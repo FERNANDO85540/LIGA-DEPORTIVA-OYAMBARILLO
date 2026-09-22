@@ -8,9 +8,10 @@
 
 {% set categoria_endpoint = 'inscripcion' %}
 {% include "_categoria_cards.html" %}
+{% include "_division_cards.html" %}
 
 <div class="card">
-  <h2>Equipos participantes — {{ categoria }}</h2>
+  <h2>Equipos participantes — {{ categoria }}{% if division %} - {{ division }}{% endif %}</h2>
   <p>
     <a href="{{ url_for('exportar_general', categoria=categoria) }}"><button type="button">⬇️ Descargar Excel general ({{ categoria }})</button></a>
     <a href="{{ url_for('carnets_modulo') }}"><button type="button">🪪 Módulo de carnets (imprimir y marcar entregados)</button></a>
@@ -35,14 +36,15 @@
         </form>
       </div>
     {% else %}
-      <p style="color:#888;">Todavía no hay equipos en la categoría {{ categoria }}.</p>
+      <p style="color:#888;">Todavía no hay equipos en {{ categoria }}{% if division %} - {{ division }}{% endif %}.</p>
     {% endfor %}
   </div>
 
   <form method="post" action="{{ url_for('agregar_equipo') }}" style="margin-top:16px; display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
     <input type="hidden" name="categoria" value="{{ categoria }}">
+    <input type="hidden" name="division" value="{{ division }}">
     <div style="flex:1; min-width:200px;">
-      <label>Agregar nuevo equipo a {{ categoria }}</label>
+      <label>Agregar nuevo equipo a {{ categoria }}{% if division %} - {{ division }}{% endif %}</label>
       <input type="text" name="nombre" placeholder="Nombre del equipo" required>
     </div>
     <button type="submit">Agregar equipo</button>
