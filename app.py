@@ -2674,7 +2674,6 @@ def agregar_cambio(partido_id):
         return redirect(url_for("vocalia_hoja", partido_id=partido_id))
     sale_id = request.form.get("jugador_sale_id", "").strip()
     entra_id = request.form.get("jugador_entra_id", "").strip()
-    minuto = request.form.get("minuto", "").strip()
     if not sale_id.isdigit() or not entra_id.isdigit():
         flash("Selecciona el jugador que sale y el que entra.")
         return redirect(url_for("vocalia_hoja", partido_id=partido_id))
@@ -2684,10 +2683,12 @@ def agregar_cambio(partido_id):
     if int(sale_id) not in ids_validos or int(entra_id) not in ids_validos:
         flash("Los jugadores del cambio deben pertenecer al equipo seleccionado.")
         return redirect(url_for("vocalia_hoja", partido_id=partido_id))
+    ahora = datetime.now()
+    minuto = ahora.strftime("%H:%M")
     db.execute(
         "INSERT INTO vocalia_cambios (partido_id, equipo, jugador_sale_id, jugador_entra_id, minuto, fecha) "
         "VALUES (?, ?, ?, ?, ?, ?)",
-        (partido_id, equipo, int(sale_id), int(entra_id), minuto or None, datetime.now().strftime("%Y-%m-%d %H:%M")),
+        (partido_id, equipo, int(sale_id), int(entra_id), minuto, ahora.strftime("%Y-%m-%d %H:%M")),
     )
     db.commit()
     flash("Cambio registrado.", "ok")

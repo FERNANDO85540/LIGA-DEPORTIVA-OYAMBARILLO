@@ -80,7 +80,18 @@
             <input type="hidden" name="todos_ids" value="{{ j.id }}">
             {{ j.numero_camiseta or loop.index }}
           </td>
-          <td data-label="Jugador"><strong>{{ j.apellidos }} {{ j.nombres }}</strong></td>
+          <td data-label="Jugador">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div style="width:32px; height:32px; flex-shrink:0; border-radius:50%; overflow:hidden; background:#eef3ee; display:flex; align-items:center; justify-content:center; border:1px solid var(--borde);">
+                {% if j.foto %}
+                <img src="{{ url_for('fotos_jugadores', filename=j.foto) }}" alt="" loading="lazy" style="width:100%; height:100%; object-fit:cover;">
+                {% else %}
+                <span style="font-size:1rem; color:#b7c2ba;">👤</span>
+                {% endif %}
+              </div>
+              <strong>{{ j.apellidos }} {{ j.nombres }}</strong>
+            </div>
+          </td>
           <td data-label="Participó"><input type="checkbox" name="participo" value="{{ j.id }}" style="width:auto;" {% if asistencia.get(j.id) %}checked{% endif %}></td>
           <td data-label="🟨"><input type="checkbox" name="amarilla" value="{{ j.id }}" style="width:auto;" {% if j.id in amarillas_ids %}checked{% endif %}></td>
           <td data-label="🟥"><input type="checkbox" name="roja" value="{{ j.id }}" style="width:auto;" {% if j.id in rojas_ids %}checked{% endif %}></td>
@@ -126,12 +137,9 @@
         <div class="buscador-lista" style="display:none;"></div>
       </div>
     </div>
-    <div>
-      <label>Minuto (opcional)</label>
-      <input type="text" name="minuto" placeholder="ej. 65" style="width:90px;">
-    </div>
     <button type="submit">Registrar cambio</button>
   </form>
+  <p style="font-size:0.8rem; color:#888; margin:6px 0 0;">La hora del cambio se registra sola, con el reloj del sistema.</p>
 
   {% if cambios %}
   <ul style="margin:16px 0 0; padding-left:20px;">
@@ -139,7 +147,7 @@
     <li>
       {{ c.equipo }} — Sale: {{ c.sale_apellidos }} {{ c.sale_nombres }} ({{ c.sale_numero }}) &rarr;
       Entra: {{ c.entra_apellidos }} {{ c.entra_nombres }} ({{ c.entra_numero }})
-      {% if c.minuto %} — min {{ c.minuto }}{% endif %}
+      {% if c.minuto %} — {{ c.minuto }}{% endif %}
       <form method="post" action="{{ url_for('eliminar_cambio', cambio_id=c.id) }}" style="display:inline; margin:0;">
         <button type="submit" class="btn-del" style="padding:2px 8px; font-size:0.75rem;">Eliminar</button>
       </form>
