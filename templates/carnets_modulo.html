@@ -13,8 +13,15 @@
       <label>Equipo</label>
       <select name="equipo_id" onchange="this.form.submit()">
         <option value="">-- Selecciona un equipo --</option>
+        {% set cat_actual = namespace(nombre=None) %}
         {% for e in equipos %}
+          {% if e.categoria != cat_actual.nombre %}
+            {% if not loop.first %}</optgroup>{% endif %}
+            <optgroup label="{{ e.categoria }}">
+            {% set cat_actual.nombre = e.categoria %}
+          {% endif %}
           <option value="{{ e.id }}" {% if equipo_actual and equipo_actual.id == e.id %}selected{% endif %}>{{ e.nombre }}</option>
+          {% if loop.last %}</optgroup>{% endif %}
         {% endfor %}
       </select>
     </div>

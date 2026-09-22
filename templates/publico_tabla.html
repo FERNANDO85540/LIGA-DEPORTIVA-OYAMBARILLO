@@ -5,6 +5,15 @@
 
 <div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
   <h1 style="margin:0; font-size:1.4rem;">🏆 Tabla de posiciones</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">Categoría {{ categoria }}</p>
+</div>
+
+<div class="card" style="text-align:center;">
+  {% for c in categorias_liga %}
+    <a href="{{ url_for('publico_tabla', categoria=c) }}">
+      <button type="button" style="{% if c != categoria %}background:transparent; color:var(--verde-osc); border:1px solid var(--verde-osc);{% endif %}">{{ c }}</button>
+    </a>
+  {% endfor %}
 </div>
 
 <div class="card">

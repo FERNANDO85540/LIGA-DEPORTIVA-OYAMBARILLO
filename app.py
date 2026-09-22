@@ -116,7 +116,12 @@ def fotos_jugadores(filename):
 CUPO_MAXIMO_EQUIPO = 35
 CUPO_MAXIMO_JUVENIL = 3
 CATEGORIA_ACTIVA = "Sub 45"
+CATEGORIAS_LIGA = ["Sub 45", "Senior"]
 SUBCATEGORIAS = ["Sub 45", "Juvenil"]
+
+
+def _categoria_valida(categoria):
+    return categoria if categoria in CATEGORIAS_LIGA else CATEGORIA_ACTIVA
 
 EQUIPOS_INICIALES = [
     "San Juan", "El Progreso", "La Union", "Santa Rosa",
@@ -232,6 +237,8 @@ def init_db():
         db.execute("ALTER TABLE equipos ADD COLUMN usuario TEXT")
     if "clave" not in cols:
         db.execute("ALTER TABLE equipos ADD COLUMN clave TEXT")
+    if "categoria" not in cols:
+        db.execute("ALTER TABLE equipos ADD COLUMN categoria TEXT NOT NULL DEFAULT 'Sub 45'")
 
     count_row = db.execute("SELECT COUNT(*) c FROM equipos").fetchone()
     count = count_row["c"]
@@ -243,9 +250,13 @@ def init_db():
         CREATE TABLE IF NOT EXISTS jornadas (
             id {tipo_id},
             numero INTEGER NOT NULL,
-            fecha TEXT
+            fecha TEXT,
+            categoria TEXT NOT NULL DEFAULT 'Sub 45'
         )
     """)
+    if "categoria" not in _columnas_existentes(db, "jornadas"):
+        db.execute("ALTER TABLE jornadas ADD COLUMN categoria TEXT NOT NULL DEFAULT 'Sub 45'")
+
     db.execute(f"""
         CREATE TABLE IF NOT EXISTS partidos (
             id {tipo_id},
@@ -494,15 +505,16 @@ def index():
 def agregar_equipo():
     db = get_db()
     nombre = request.form.get("nombre", "").strip()
+    categoria = _categoria_valida(request.form.get("categoria", CATEGORIA_ACTIVA))
     if nombre:
         try:
-            db.execute("INSERT INTO equipos (nombre) VALUES (?)", (nombre,))
+            db.execute("INSERT INTO equipos (nombre, categoria) VALUES (?, ?)", (nombre, categoria))
             db.commit()
             flash(f"Equipo '{nombre}' agregado.", "ok")
         except IntegrityError:
             db.rollback()
             flash(f"Ya existe un equipo llamado '{nombre}'.")
-    return redirect(url_for("inscripcion"))
+    return redirect(url_for("inscripcion", categoria=categoria))
 
 
 @app.route("/equipos/<int:equipo_id>/renombrar", methods=["POST"])
@@ -613,14 +625,16 @@ def detalle_equipo(equipo_id):
 
     jugadores = db.execute(
         "SELECT * FROM jugadores WHERE equipo = ? AND categoria = ? ORDER BY apellidos",
-        (equipo["nombre"], CATEGORIA_ACTIVA),
+        (equipo["nombre"], equipo["categoria"]),
     ).fetchall()
 
     saldo = equipo["valor_inscripcion"] - equipo["abono"]
     juveniles_count = _contar_juveniles(db, equipo["nombre"])
 
     partidos_equipo = []
-    for jr in db.execute("SELECT * FROM jornadas ORDER BY numero, id").fetchall():
+    for jr in db.execute(
+        "SELECT * FROM jornadas WHERE categoria = ? ORDER BY numero, id", (equipo["categoria"],)
+    ).fetchall():
         partido = db.execute(
             "SELECT * FROM partidos WHERE jornada_id = ? AND (equipo_local = ? OR equipo_visitante = ?)",
             (jr["id"], equipo["nombre"], equipo["nombre"]),
@@ -644,7 +658,7 @@ def detalle_equipo(equipo_id):
         jugadores=jugadores,
         saldo=saldo,
         cupo_maximo=CUPO_MAXIMO_EQUIPO,
-        categoria=CATEGORIA_ACTIVA,
+        categoria=equipo["categoria"],
         juveniles_count=juveniles_count,
         cupo_maximo_juvenil=CUPO_MAXIMO_JUVENIL,
         partidos_equipo=partidos_equipo,
@@ -697,7 +711,7 @@ def exportar_equipo(equipo_id):
 
     jugadores = db.execute(
         "SELECT * FROM jugadores WHERE equipo = ? AND categoria = ? ORDER BY apellidos",
-        (equipo["nombre"], CATEGORIA_ACTIVA),
+        (equipo["nombre"], equipo["categoria"]),
     ).fetchall()
     nombre_archivo = f"jugadores_{equipo['nombre'].replace(' ', '_')}.xlsx"
     return _exportar_jugadores_excel(jugadores, nombre_archivo)
@@ -710,12 +724,17 @@ def jugadores_liga():
     equipos, visible tanto para el admin como para los delegados -- para
     que cualquiera pueda revisar quién está inscrito y en qué equipo."""
     db = get_db()
+    categoria = _categoria_valida(request.args.get("categoria", CATEGORIA_ACTIVA))
     jugadores = db.execute(
-        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos", (CATEGORIA_ACTIVA,)
+        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos", (categoria,)
     ).fetchall()
     equipos_distintos = sorted(set(j["equipo"] for j in jugadores))
     return render_template(
-        "jugadores_liga.html", jugadores=jugadores, categoria=CATEGORIA_ACTIVA, total_equipos=len(equipos_distintos)
+        "jugadores_liga.html",
+        jugadores=jugadores,
+        categoria=categoria,
+        categorias_liga=CATEGORIAS_LIGA,
+        total_equipos=len(equipos_distintos),
     )
 
 
@@ -730,9 +749,9 @@ def documentos_recientes():
 
     query = """
         SELECT * FROM jugadores
-        WHERE categoria = ? AND documentos_fecha IS NOT NULL
+        WHERE documentos_fecha IS NOT NULL
     """
-    params = [CATEGORIA_ACTIVA]
+    params = []
     if fecha_filtro:
         query += " AND documentos_fecha LIKE ?"
         params.append(f"{fecha_filtro}%")
@@ -746,10 +765,12 @@ def documentos_recientes():
 @admin_required
 def exportar_general():
     db = get_db()
+    categoria = _categoria_valida(request.args.get("categoria", CATEGORIA_ACTIVA))
     jugadores = db.execute(
-        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos", (CATEGORIA_ACTIVA,)
+        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos", (categoria,)
     ).fetchall()
-    return _exportar_jugadores_excel(jugadores, "jugadores_liga_oyambarillo.xlsx", incluir_equipo=True)
+    nombre_archivo = f"jugadores_liga_oyambarillo_{categoria.replace(' ', '_')}.xlsx"
+    return _exportar_jugadores_excel(jugadores, nombre_archivo, incluir_equipo=True)
 
 
 FORMAS_PAGO_VALIDAS = {"Efectivo", "Depósito", "Transferencia"}
@@ -791,14 +812,17 @@ def _guardar_imagen_subida(archivo):
     return nuevo_nombre
 
 
-def _subcategoria_por_nacimiento(fecha_nacimiento):
+def _subcategoria_por_nacimiento(fecha_nacimiento, categoria=CATEGORIA_ACTIVA):
+    if categoria == "Senior":
+        return "Senior"
     return "Juvenil" if (fecha_nacimiento or "").strip().startswith("1982") else "Sub 45"
 
 
-def _jugador_califica(fecha_nacimiento):
-    """Solo califica quien nace en 1982 (Juvenil, cupo aparte) o cumple 45
-    años en el año actual de la temporada (Sub 45). Nacer despues de 1982
-    y no cumplir 45 este año no corresponde a ninguna categoria."""
+def _jugador_califica(fecha_nacimiento, categoria=CATEGORIA_ACTIVA):
+    """Sub 45: solo califica quien nace en 1982 (Juvenil, cupo aparte) o cumple
+    45 años en el año actual de la temporada. Senior no tiene restricción de edad."""
+    if categoria == "Senior":
+        return True
     fecha_nacimiento = (fecha_nacimiento or "").strip()
     if fecha_nacimiento.startswith("1982"):
         return True
@@ -809,20 +833,21 @@ def _jugador_califica(fecha_nacimiento):
     return (date.today().year - anio_nacimiento) >= 45
 
 
-def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacimiento, subcategoria,
+def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacimiento, categoria,
                        numero_camiseta="", foto=None, cedula_frontal=None, cedula_reverso=None):
-    subcategoria = _subcategoria_por_nacimiento(fecha_nacimiento)
+    categoria = _categoria_valida(categoria)
+    subcategoria = _subcategoria_por_nacimiento(fecha_nacimiento, categoria)
 
     if not (cedula and nombres and apellidos):
         return None, "Cédula, nombres y apellidos son obligatorios."
 
-    if not _jugador_califica(fecha_nacimiento):
+    if not _jugador_califica(fecha_nacimiento, categoria):
         return None, ("Cédula no califica: según la fecha de nacimiento, no cumple 45 años este año "
                        "ni nació en 1982 (Juvenil). No corresponde a ninguna categoría de esta liga.")
 
     count = db.execute(
         "SELECT COUNT(*) c FROM jugadores WHERE equipo = ? AND categoria = ?",
-        (equipo_nombre, CATEGORIA_ACTIVA),
+        (equipo_nombre, categoria),
     ).fetchone()["c"]
     if count >= CUPO_MAXIMO_EQUIPO:
         return None, f"El equipo {equipo_nombre} ya alcanzó el cupo máximo de {CUPO_MAXIMO_EQUIPO} jugadores."
@@ -840,7 +865,7 @@ def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacim
                (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, numero_camiseta,
                 foto, cedula_frontal, cedula_reverso, foto_token, fecha_registro, documentos_fecha)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?){returning}""",
-            (cedula, nombres, apellidos, fecha_nacimiento, equipo_nombre, CATEGORIA_ACTIVA,
+            (cedula, nombres, apellidos, fecha_nacimiento, equipo_nombre, categoria,
              subcategoria, numero_camiseta, foto, cedula_frontal, cedula_reverso,
              uuid.uuid4().hex, ahora, documentos_fecha),
         )
@@ -899,7 +924,7 @@ def agregar_jugador_equipo(equipo_id):
         request.form.get("nombres", "").strip(),
         request.form.get("apellidos", "").strip(),
         request.form.get("fecha_nacimiento", "").strip(),
-        request.form.get("subcategoria", "Sub 45").strip(),
+        equipo["categoria"],
         request.form.get("numero_camiseta", "").strip(),
         foto=foto,
         cedula_frontal=cedula_frontal,
@@ -918,14 +943,17 @@ def agregar_jugador_equipo(equipo_id):
 @admin_required
 def inscripcion():
     db = get_db()
+    categoria = _categoria_valida(request.args.get("categoria", CATEGORIA_ACTIVA))
 
-    equipos_rows = db.execute("SELECT * FROM equipos ORDER BY nombre").fetchall()
+    equipos_rows = db.execute(
+        "SELECT * FROM equipos WHERE categoria = ? ORDER BY nombre", (categoria,)
+    ).fetchall()
 
     cupos = {}
     for equipo in equipos_rows:
         c = db.execute(
             "SELECT COUNT(*) c FROM jugadores WHERE equipo = ? AND categoria = ?",
-            (equipo["nombre"], CATEGORIA_ACTIVA),
+            (equipo["nombre"], categoria),
         ).fetchone()["c"]
         cupos[equipo["nombre"]] = c
 
@@ -934,7 +962,8 @@ def inscripcion():
         equipos=equipos_rows,
         cupos=cupos,
         cupo_maximo=CUPO_MAXIMO_EQUIPO,
-        categoria=CATEGORIA_ACTIVA,
+        categoria=categoria,
+        categorias_liga=CATEGORIAS_LIGA,
         subcategorias=SUBCATEGORIAS,
     )
 
@@ -987,9 +1016,9 @@ def actualizar_jugador(jugador_id):
     apellidos = request.form.get("apellidos", "").strip() or jugador["apellidos"]
     fecha_nacimiento = request.form.get("fecha_nacimiento", "").strip() or jugador["fecha_nacimiento"]
     numero_camiseta = request.form.get("numero_camiseta", "").strip()
-    subcategoria = _subcategoria_por_nacimiento(fecha_nacimiento)
+    subcategoria = _subcategoria_por_nacimiento(fecha_nacimiento, jugador["categoria"])
 
-    if not _jugador_califica(fecha_nacimiento):
+    if not _jugador_califica(fecha_nacimiento, jugador["categoria"]):
         flash("Cédula no califica: según la fecha de nacimiento, no cumple 45 años este año ni nació en 1982 (Juvenil).")
         return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
@@ -1291,7 +1320,7 @@ def _armar_paginas_carnets(jugadores, dpi=CARNET_PDF_DPI):
 @imprenta_required
 def carnets_modulo():
     db = get_db()
-    equipos = db.execute("SELECT * FROM equipos ORDER BY nombre").fetchall()
+    equipos = db.execute("SELECT * FROM equipos ORDER BY categoria, nombre").fetchall()
     equipo_id = request.args.get("equipo_id", "").strip()
     jugadores = []
     equipo_actual = None
@@ -1372,8 +1401,10 @@ def carnets_pdf():
     return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=nombre_archivo)
 
 
-def _fixture_completo(db):
-    jornadas_rows = db.execute("SELECT * FROM jornadas ORDER BY numero, id").fetchall()
+def _fixture_completo(db, categoria=CATEGORIA_ACTIVA):
+    jornadas_rows = db.execute(
+        "SELECT * FROM jornadas WHERE categoria = ? ORDER BY numero, id", (categoria,)
+    ).fetchall()
     jornadas = []
     for jr in jornadas_rows:
         partidos = db.execute(
@@ -1390,14 +1421,17 @@ def _fixture_completo(db):
 @calificacion_required
 def comision_modulo():
     db = get_db()
+    categoria = _categoria_valida(request.args.get("categoria", CATEGORIA_ACTIVA))
     jugadores = db.execute(
         "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos, nombres",
-        (CATEGORIA_ACTIVA,),
+        (categoria,),
     ).fetchall()
 
     return render_template(
         "comision_modulo.html",
         jugadores=jugadores,
+        categoria=categoria,
+        categorias_liga=CATEGORIAS_LIGA,
     )
 
 
@@ -1405,11 +1439,12 @@ def comision_modulo():
 @tecnica_required
 def agregar_jornada():
     db = get_db()
+    categoria = _categoria_valida(request.form.get("categoria", CATEGORIA_ACTIVA))
     numero = request.form.get("numero", "").strip()
     fecha = request.form.get("fecha", "").strip()
     if not numero.isdigit():
         flash("Ingresa un número de jornada válido.")
-        return redirect(url_for("comision_modulo"))
+        return redirect(url_for("tecnica_modulo", categoria=categoria))
 
     locales = request.form.getlist("equipo_local")
     visitantes = request.form.getlist("equipo_visitante")
@@ -1425,10 +1460,10 @@ def agregar_jornada():
             continue
         if local == visitante:
             flash("Un equipo no puede jugar contra sí mismo.")
-            return redirect(url_for("comision_modulo"))
+            return redirect(url_for("tecnica_modulo", categoria=categoria))
         if local in equipos_usados or visitante in equipos_usados:
             flash("Hay un equipo asignado a más de un partido en la misma jornada.")
-            return redirect(url_for("comision_modulo"))
+            return redirect(url_for("tecnica_modulo", categoria=categoria))
         equipos_usados.add(local)
         equipos_usados.add(visitante)
         partidos_validos.append((local, visitante, hora, fecha_partido))
@@ -1436,14 +1471,17 @@ def agregar_jornada():
     for equipo in descansos:
         if equipo in equipos_usados:
             flash(f"'{equipo}' no puede descansar y jugar en la misma jornada.")
-            return redirect(url_for("comision_modulo"))
+            return redirect(url_for("tecnica_modulo", categoria=categoria))
 
     if not partidos_validos and not descansos:
         flash("Agrega al menos un partido o un equipo que descansa.")
-        return redirect(url_for("comision_modulo"))
+        return redirect(url_for("tecnica_modulo", categoria=categoria))
 
     returning = " RETURNING id" if USANDO_POSTGRES else ""
-    cur = db.execute(f"INSERT INTO jornadas (numero, fecha) VALUES (?, ?){returning}", (int(numero), fecha or None))
+    cur = db.execute(
+        f"INSERT INTO jornadas (numero, fecha, categoria) VALUES (?, ?, ?){returning}",
+        (int(numero), fecha or None, categoria),
+    )
     jornada_id = cur.fetchone()["id"] if USANDO_POSTGRES else cur.lastrowid
     for local, visitante, hora, fecha_partido in partidos_validos:
         db.execute(
@@ -1454,19 +1492,21 @@ def agregar_jornada():
         db.execute("INSERT INTO descansos (jornada_id, equipo) VALUES (?, ?)", (jornada_id, equipo))
     db.commit()
     flash(f"Jornada {numero} agregada.", "ok")
-    return redirect(url_for("comision_modulo"))
+    return redirect(url_for("tecnica_modulo", categoria=categoria))
 
 
 @app.route("/tecnica/jornada/<int:jornada_id>/eliminar", methods=["POST"])
 @tecnica_required
 def eliminar_jornada(jornada_id):
     db = get_db()
+    jornada = db.execute("SELECT * FROM jornadas WHERE id = ?", (jornada_id,)).fetchone()
+    categoria = jornada["categoria"] if jornada else CATEGORIA_ACTIVA
     db.execute("DELETE FROM partidos WHERE jornada_id = ?", (jornada_id,))
     db.execute("DELETE FROM descansos WHERE jornada_id = ?", (jornada_id,))
     db.execute("DELETE FROM jornadas WHERE id = ?", (jornada_id,))
     db.commit()
     flash("Jornada eliminada.", "ok")
-    return redirect(url_for("comision_modulo"))
+    return redirect(url_for("tecnica_modulo", categoria=categoria))
 
 
 @app.route("/sanciones")
@@ -1474,10 +1514,9 @@ def eliminar_jornada(jornada_id):
 def sanciones_modulo():
     db = get_db()
     jugadores = db.execute(
-        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos, nombres",
-        (CATEGORIA_ACTIVA,),
+        "SELECT * FROM jugadores ORDER BY categoria, equipo, apellidos, nombres"
     ).fetchall()
-    jornadas = db.execute("SELECT * FROM jornadas ORDER BY numero, id").fetchall()
+    jornadas = db.execute("SELECT * FROM jornadas ORDER BY categoria, numero, id").fetchall()
 
     tarjetas = db.execute("""
         SELECT t.*, j.nombres AS j_nombres, j.apellidos AS j_apellidos, j.equipo AS j_equipo,
@@ -1618,15 +1657,18 @@ def marcar_sancion_pagada(sancion_id):
     return redirect(url_for("sanciones_modulo"))
 
 
-def _calcular_tabla_posiciones(db):
-    equipos = db.execute("SELECT nombre FROM equipos ORDER BY nombre").fetchall()
+def _calcular_tabla_posiciones(db, categoria=CATEGORIA_ACTIVA):
+    equipos = db.execute("SELECT nombre FROM equipos WHERE categoria = ? ORDER BY nombre", (categoria,)).fetchall()
     tabla = {
         e["nombre"]: {"equipo": e["nombre"], "pj": 0, "g": 0, "e": 0, "p": 0, "gf": 0, "gc": 0, "pts": 0}
         for e in equipos
     }
 
     partidos = db.execute(
-        "SELECT * FROM partidos WHERE jugado = 1 AND goles_local IS NOT NULL AND goles_visitante IS NOT NULL"
+        """SELECT p.* FROM partidos p JOIN jornadas jo ON jo.id = p.jornada_id
+           WHERE jo.categoria = ? AND p.jugado = 1
+             AND p.goles_local IS NOT NULL AND p.goles_visitante IS NOT NULL""",
+        (categoria,),
     ).fetchall()
     for p in partidos:
         local, visitante = p["equipo_local"], p["equipo_visitante"]
@@ -1660,17 +1702,18 @@ def _calcular_tabla_posiciones(db):
     return filas
 
 
-def _calcular_goleadores(db, limite=15):
+def _calcular_goleadores(db, categoria=CATEGORIA_ACTIVA, limite=15):
     return db.execute(
         """
         SELECT j.id, j.nombres, j.apellidos, j.equipo, SUM(g.cantidad) AS goles
         FROM goles g
         JOIN jugadores j ON j.id = g.jugador_id
+        WHERE j.categoria = ?
         GROUP BY j.id, j.nombres, j.apellidos, j.equipo
         ORDER BY goles DESC
         LIMIT ?
         """,
-        (limite,),
+        (categoria, limite),
     ).fetchall()
 
 
@@ -1678,31 +1721,36 @@ def _calcular_goleadores(db, limite=15):
 @tecnica_required
 def tecnica_modulo():
     db = get_db()
-    equipos = db.execute("SELECT * FROM equipos ORDER BY nombre").fetchall()
-    jornadas = _fixture_completo(db)
-    ultima = db.execute("SELECT MAX(numero) m FROM jornadas").fetchone()["m"]
+    categoria = _categoria_valida(request.args.get("categoria", CATEGORIA_ACTIVA))
+    equipos = db.execute("SELECT * FROM equipos WHERE categoria = ? ORDER BY nombre", (categoria,)).fetchall()
+    jornadas = _fixture_completo(db, categoria)
+    ultima = db.execute("SELECT MAX(numero) m FROM jornadas WHERE categoria = ?", (categoria,)).fetchone()["m"]
     siguiente_numero = (ultima or 0) + 1
     jugadores = db.execute(
         "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos, nombres",
-        (CATEGORIA_ACTIVA,),
+        (categoria,),
     ).fetchall()
     jugadores_js = [
         {"id": j["id"], "label": f"{j['apellidos']} {j['nombres']} ({j['cedula']})", "equipo": j["equipo"]}
         for j in jugadores
     ]
-    tabla = _calcular_tabla_posiciones(db)
-    goleadores = _calcular_goleadores(db)
+    tabla = _calcular_tabla_posiciones(db, categoria)
+    goleadores = _calcular_goleadores(db, categoria)
     goles_registrados = db.execute(
         """
         SELECT g.*, j.nombres AS j_nombres, j.apellidos AS j_apellidos, j.equipo AS j_equipo
         FROM goles g
         JOIN jugadores j ON j.id = g.jugador_id
+        WHERE j.categoria = ?
         ORDER BY g.fecha DESC, g.id DESC
-        """
+        """,
+        (categoria,),
     ).fetchall()
 
     return render_template(
         "tecnica_modulo.html",
+        categoria=categoria,
+        categorias_liga=CATEGORIAS_LIGA,
         equipos=equipos,
         siguiente_numero=siguiente_numero,
         jornadas=jornadas,
@@ -1713,39 +1761,49 @@ def tecnica_modulo():
     )
 
 
+def _categoria_de_partido(db, partido_id):
+    fila = db.execute(
+        "SELECT jo.categoria AS categoria FROM partidos p JOIN jornadas jo ON jo.id = p.jornada_id WHERE p.id = ?",
+        (partido_id,),
+    ).fetchone()
+    return fila["categoria"] if fila else CATEGORIA_ACTIVA
+
+
 @app.route("/tecnica/partido/<int:partido_id>/resultado", methods=["POST"])
 @tecnica_required
 def registrar_resultado(partido_id):
     db = get_db()
     partido = db.execute("SELECT * FROM partidos WHERE id = ?", (partido_id,)).fetchone()
+    categoria = _categoria_de_partido(db, partido_id)
     if not partido:
         flash("Partido no encontrado.")
-        return redirect(url_for("tecnica_modulo"))
+        return redirect(url_for("tecnica_modulo", categoria=categoria))
     gl = request.form.get("goles_local", "").strip()
     gv = request.form.get("goles_visitante", "").strip()
     if not gl.isdigit() or not gv.isdigit():
         flash("Ingresa un marcador válido (números).")
-        return redirect(url_for("tecnica_modulo"))
+        return redirect(url_for("tecnica_modulo", categoria=categoria))
     db.execute(
         "UPDATE partidos SET goles_local = ?, goles_visitante = ?, jugado = 1 WHERE id = ?",
         (int(gl), int(gv), partido_id),
     )
     db.commit()
     flash("Resultado registrado.", "ok")
-    return redirect(url_for("tecnica_modulo"))
+    return redirect(url_for("tecnica_modulo", categoria=categoria))
 
 
 @app.route("/tecnica/partido/<int:partido_id>/quitar_resultado", methods=["POST"])
 @tecnica_required
 def quitar_resultado(partido_id):
     db = get_db()
+    categoria = _categoria_de_partido(db, partido_id)
     db.execute(
         "UPDATE partidos SET goles_local = NULL, goles_visitante = NULL, jugado = 0 WHERE id = ?",
         (partido_id,),
     )
     db.commit()
     flash("Resultado eliminado.", "ok")
-    return redirect(url_for("tecnica_modulo"))
+    return redirect(url_for("tecnica_modulo", categoria=categoria))
 
 
 @app.route("/tecnica/gol/agregar", methods=["POST"])
@@ -1760,23 +1818,31 @@ def agregar_gol():
         flash("Selecciona un jugador y una cantidad de goles válida.")
         return redirect(url_for("tecnica_modulo"))
 
+    jugador = db.execute("SELECT categoria FROM jugadores WHERE id = ?", (int(jugador_id),)).fetchone()
+    categoria = jugador["categoria"] if jugador else CATEGORIA_ACTIVA
+
     db.execute(
         "INSERT INTO goles (jugador_id, partido_id, cantidad, fecha) VALUES (?, ?, ?, ?)",
         (int(jugador_id), partido_id, int(cantidad), datetime.now().strftime("%Y-%m-%d %H:%M")),
     )
     db.commit()
     flash("Gol(es) registrado(s).", "ok")
-    return redirect(url_for("tecnica_modulo"))
+    return redirect(url_for("tecnica_modulo", categoria=categoria))
 
 
 @app.route("/tecnica/gol/<int:gol_id>/eliminar", methods=["POST"])
 @tecnica_required
 def eliminar_gol(gol_id):
     db = get_db()
+    gol = db.execute(
+        "SELECT j.categoria AS categoria FROM goles g JOIN jugadores j ON j.id = g.jugador_id WHERE g.id = ?",
+        (gol_id,),
+    ).fetchone()
+    categoria = gol["categoria"] if gol else CATEGORIA_ACTIVA
     db.execute("DELETE FROM goles WHERE id = ?", (gol_id,))
     db.commit()
     flash("Registro de gol eliminado.", "ok")
-    return redirect(url_for("tecnica_modulo"))
+    return redirect(url_for("tecnica_modulo", categoria=categoria))
 
 
 # ---------- Sección pública: consulta libre, sin necesidad de cuenta ----------
@@ -1789,57 +1855,74 @@ def publico_inicio():
 @app.route("/publico/tabla")
 def publico_tabla():
     db = get_db()
-    tabla = _calcular_tabla_posiciones(db)
-    goleadores = _calcular_goleadores(db)
-    return render_template("publico_tabla.html", tabla=tabla, goleadores=goleadores)
+    categoria = _categoria_valida(request.args.get("categoria", CATEGORIA_ACTIVA))
+    tabla = _calcular_tabla_posiciones(db, categoria)
+    goleadores = _calcular_goleadores(db, categoria)
+    return render_template(
+        "publico_tabla.html", tabla=tabla, goleadores=goleadores, categoria=categoria, categorias_liga=CATEGORIAS_LIGA
+    )
 
 
 @app.route("/publico/calendario")
 def publico_calendario():
     db = get_db()
-    jornadas = _fixture_completo(db)
-    return render_template("publico_calendario.html", jornadas=jornadas)
+    categoria = _categoria_valida(request.args.get("categoria", CATEGORIA_ACTIVA))
+    jornadas = _fixture_completo(db, categoria)
+    return render_template(
+        "publico_calendario.html", jornadas=jornadas, categoria=categoria, categorias_liga=CATEGORIAS_LIGA
+    )
 
 
 @app.route("/publico/equipos")
 def publico_equipos():
     db = get_db()
-    equipos = db.execute("SELECT * FROM equipos ORDER BY nombre").fetchall()
+    categoria = _categoria_valida(request.args.get("categoria", CATEGORIA_ACTIVA))
+    equipos = db.execute("SELECT * FROM equipos WHERE categoria = ? ORDER BY nombre", (categoria,)).fetchall()
     conteos = {}
     for e in equipos:
         conteos[e["nombre"]] = db.execute(
             "SELECT COUNT(*) c FROM jugadores WHERE equipo = ? AND categoria = ?",
-            (e["nombre"], CATEGORIA_ACTIVA),
+            (e["nombre"], categoria),
         ).fetchone()["c"]
-    return render_template("publico_equipos.html", equipos=equipos, conteos=conteos, categoria=CATEGORIA_ACTIVA)
+    return render_template(
+        "publico_equipos.html", equipos=equipos, conteos=conteos, categoria=categoria, categorias_liga=CATEGORIAS_LIGA
+    )
 
 
 @app.route("/publico/jugadores")
 def publico_jugadores():
     db = get_db()
+    categoria = _categoria_valida(request.args.get("categoria", CATEGORIA_ACTIVA))
     # Solo datos que pueden verse públicamente: sin cédula.
     jugadores = db.execute(
         """SELECT nombres, apellidos, equipo, categoria, subcategoria, numero_camiseta, calificado
            FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos, nombres""",
-        (CATEGORIA_ACTIVA,),
+        (categoria,),
     ).fetchall()
-    return render_template("publico_jugadores.html", jugadores=jugadores, categoria=CATEGORIA_ACTIVA)
+    return render_template(
+        "publico_jugadores.html", jugadores=jugadores, categoria=categoria, categorias_liga=CATEGORIAS_LIGA
+    )
 
 
 @app.route("/publico/resultados")
 def publico_resultados():
     db = get_db()
+    categoria = _categoria_valida(request.args.get("categoria", CATEGORIA_ACTIVA))
     partidos = db.execute(
         """
         SELECT p.*, jo.numero AS jornada_numero
         FROM partidos p
         JOIN jornadas jo ON jo.id = p.jornada_id
-        WHERE p.jugado = 1
+        WHERE p.jugado = 1 AND jo.categoria = ?
         ORDER BY jo.numero DESC, p.id DESC
-        """
+        """,
+        (categoria,),
     ).fetchall()
-    goleadores = _calcular_goleadores(db)
-    return render_template("publico_resultados.html", partidos=partidos, goleadores=goleadores)
+    goleadores = _calcular_goleadores(db, categoria)
+    return render_template(
+        "publico_resultados.html", partidos=partidos, goleadores=goleadores, categoria=categoria,
+        categorias_liga=CATEGORIAS_LIGA,
+    )
 
 
 @app.route("/jugador/<int:jugador_id>/eliminar", methods=["POST"])

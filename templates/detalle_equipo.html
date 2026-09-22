@@ -10,7 +10,7 @@
 <div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
   <h1 style="margin:0; font-size:1.5rem;">{{ equipo.nombre }}</h1>
   <p style="margin:6px 0 0; opacity:0.95;">Categoría {{ categoria }} — {{ jugadores|length }}/{{ cupo_maximo }} jugadores
-    &nbsp;·&nbsp; Juvenil {{ juveniles_count }}/{{ cupo_maximo_juvenil }}
+    {% if categoria == 'Sub 45' %}&nbsp;·&nbsp; Juvenil {{ juveniles_count }}/{{ cupo_maximo_juvenil }}{% endif %}
   </p>
 </div>
 
@@ -135,7 +135,11 @@
 
     <label>Fecha de nacimiento</label>
     <input type="date" name="fecha_nacimiento" required>
+    {% if categoria == 'Sub 45' %}
     <p style="font-size:0.8rem; color:#888; margin:2px 0 0;">La categoría (Sub 45 / Juvenil) se calcula automáticamente según el año de nacimiento. Juvenil es exclusivo para nacidos en 1982.</p>
+    {% else %}
+    <p style="font-size:0.8rem; color:#888; margin:2px 0 0;">Categoría Senior: sin restricción de edad.</p>
+    {% endif %}
 
     <label>Número de camiseta (opcional)</label>
     <input type="text" name="numero_camiseta" maxlength="3">

@@ -2,14 +2,22 @@
 {% block content %}
 
 <div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
-  <h1 style="margin:0; font-size:1.6rem;">CAMPEONATO SUB 45</h1>
+  <h1 style="margin:0; font-size:1.6rem;">CAMPEONATO {{ categoria|upper }}</h1>
   <p style="margin:6px 0 0; font-size:1.05rem; opacity:0.95;">LIGA DEPORTIVA OYAMBARILLO</p>
 </div>
 
+<div class="card" style="text-align:center;">
+  {% for c in categorias_liga %}
+    <a href="{{ url_for('inscripcion', categoria=c) }}">
+      <button type="button" style="{% if c != categoria %}background:transparent; color:var(--verde-osc); border:1px solid var(--verde-osc);{% endif %}">{{ c }}</button>
+    </a>
+  {% endfor %}
+</div>
+
 <div class="card">
-  <h2>Equipos participantes</h2>
+  <h2>Equipos participantes — {{ categoria }}</h2>
   <p>
-    <a href="{{ url_for('exportar_general') }}"><button type="button">⬇️ Descargar Excel general (todos los equipos)</button></a>
+    <a href="{{ url_for('exportar_general', categoria=categoria) }}"><button type="button">⬇️ Descargar Excel general ({{ categoria }})</button></a>
     <a href="{{ url_for('carnets_modulo') }}"><button type="button">🪪 Módulo de carnets (imprimir y marcar entregados)</button></a>
     <a href="{{ url_for('comision_modulo') }}"><button type="button">🗓️ Comisión de Calificación (fixture y calificación)</button></a>
     <a href="{{ url_for('sanciones_modulo') }}"><button type="button">🟨🟥 Comisión de Penas y Sanciones</button></a>
@@ -30,12 +38,15 @@
           <button type="submit" class="btn-del" style="padding:4px 8px;">Eliminar</button>
         </form>
       </div>
+    {% else %}
+      <p style="color:#888;">Todavía no hay equipos en la categoría {{ categoria }}.</p>
     {% endfor %}
   </div>
 
   <form method="post" action="{{ url_for('agregar_equipo') }}" style="margin-top:16px; display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+    <input type="hidden" name="categoria" value="{{ categoria }}">
     <div style="flex:1; min-width:200px;">
-      <label>Agregar nuevo equipo</label>
+      <label>Agregar nuevo equipo a {{ categoria }}</label>
       <input type="text" name="nombre" placeholder="Nombre del equipo" required>
     </div>
     <button type="submit">Agregar equipo</button>

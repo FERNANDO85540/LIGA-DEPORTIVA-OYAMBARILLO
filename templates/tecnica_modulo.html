@@ -3,12 +3,21 @@
 
 <div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
   <h1 style="margin:0; font-size:1.4rem;">⚽ Comisión Técnica</h1>
-  <p style="margin:6px 0 0; opacity:0.95;">Encuentros, resultados, goleadores y tabla de posiciones.</p>
+  <p style="margin:6px 0 0; opacity:0.95;">Encuentros, resultados, goleadores y tabla de posiciones — {{ categoria }}.</p>
+</div>
+
+<div class="card" style="text-align:center;">
+  {% for c in categorias_liga %}
+    <a href="{{ url_for('tecnica_modulo', categoria=c) }}">
+      <button type="button" style="{% if c != categoria %}background:transparent; color:var(--verde-osc); border:1px solid var(--verde-osc);{% endif %}">{{ c }}</button>
+    </a>
+  {% endfor %}
 </div>
 
 <div class="card">
-  <h2>Agregar jornada</h2>
+  <h2>Agregar jornada — {{ categoria }}</h2>
   <form method="post" action="{{ url_for('agregar_jornada') }}">
+    <input type="hidden" name="categoria" value="{{ categoria }}">
     <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
       <div>
         <label>Número de jornada</label>
