@@ -810,29 +810,6 @@ def jugadores_liga():
     )
 
 
-@app.route("/documentos")
-@admin_required
-def documentos_recientes():
-    """Jugadores con al menos un documento (foto o cédula) cargado, ordenados
-    por la fecha en que se subió/reemplazó el documento más reciente primero.
-    Permite filtrar por un día puntual con ?fecha=YYYY-MM-DD."""
-    db = get_db()
-    fecha_filtro = request.args.get("fecha", "").strip()
-
-    query = """
-        SELECT * FROM jugadores
-        WHERE documentos_fecha IS NOT NULL
-    """
-    params = []
-    if fecha_filtro:
-        query += " AND documentos_fecha LIKE ?"
-        params.append(f"{fecha_filtro}%")
-    query += " ORDER BY documentos_fecha DESC"
-
-    jugadores = db.execute(query, tuple(params)).fetchall()
-    return render_template("documentos_recientes.html", jugadores=jugadores, fecha_filtro=fecha_filtro)
-
-
 @app.route("/exportar_general")
 @admin_required
 def exportar_general():
