@@ -17,7 +17,7 @@
   <div style="overflow-x:auto;">
   <table class="tabla-responsive" id="tablaPublicoJugadores">
     <thead>
-      <tr><th>Nombres</th><th>Apellidos</th><th>Equipo</th><th>Categoría</th><th>Camiseta</th></tr>
+      <tr><th>Nombres</th><th>Apellidos</th><th>Equipo</th><th>Campeonato</th><th>Camiseta</th></tr>
     </thead>
     <tbody>
       {% for j in jugadores %}
@@ -25,7 +25,7 @@
         <td data-label="Nombres">{{ j.nombres }}</td>
         <td data-label="Apellidos">{{ j.apellidos }}</td>
         <td data-label="Equipo">{{ j.equipo }}</td>
-        <td data-label="Categoría">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
+        <td data-label="Campeonato">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
         <td data-label="Camiseta">{{ j.numero_camiseta or '-' }}</td>
       </tr>
       {% endfor %}

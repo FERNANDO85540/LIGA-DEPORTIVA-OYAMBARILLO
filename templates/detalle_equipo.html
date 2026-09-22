@@ -9,7 +9,7 @@
 
 <div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
   <h1 style="margin:0; font-size:1.5rem;">{{ equipo.nombre }}</h1>
-  <p style="margin:6px 0 0; opacity:0.95;">Categoría {{ categoria }} — {{ jugadores|length }}/{{ cupo_maximo }} jugadores
+  <p style="margin:6px 0 0; opacity:0.95;">Campeonato {{ categoria }}{% if equipo.division %} - {{ equipo.division }}{% endif %} — {{ jugadores|length }}/{{ cupo_maximo }} jugadores
     {% if categoria == 'Sub 45' %}&nbsp;·&nbsp; Juvenil {{ juveniles_count }}/{{ cupo_maximo_juvenil }}{% endif %}
   </p>
 </div>
@@ -138,7 +138,7 @@
     {% if categoria == 'Sub 45' %}
     <p style="font-size:0.8rem; color:#888; margin:2px 0 0;">La categoría (Sub 45 / Juvenil) se calcula automáticamente según el año de nacimiento. Juvenil es exclusivo para nacidos en 1982.</p>
     {% else %}
-    <p style="font-size:0.8rem; color:#888; margin:2px 0 0;">Categoría Senior: sin restricción de edad.</p>
+    <p style="font-size:0.8rem; color:#888; margin:2px 0 0;">Campeonato {{ categoria }}: sin restricción de edad.</p>
     {% endif %}
 
     <label>Número de camiseta (opcional)</label>
@@ -171,7 +171,7 @@
   <table class="tabla-responsive">
     <thead>
       <tr>
-        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Categoría</th><th>Nac.</th><th>Documentos</th><th>Estado</th><th>Registrado</th><th>Acciones</th>
+        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Campeonato</th><th>Nac.</th><th>Documentos</th><th>Estado</th><th>Registrado</th><th>Acciones</th>
       </tr>
     </thead>
     <tbody>
@@ -180,7 +180,7 @@
         <td data-label="Cédula">{{ j.cedula }}</td>
         <td data-label="Nombres">{{ j.nombres }}</td>
         <td data-label="Apellidos">{{ j.apellidos }}</td>
-        <td data-label="Categoría">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
+        <td data-label="Campeonato">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
         <td data-label="Nac.">{{ j.fecha_nacimiento or '-' }}</td>
         <td data-label="Documentos">
           {% set completos = (j.foto and j.cedula_frontal) %}

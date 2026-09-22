@@ -736,7 +736,7 @@ def _exportar_jugadores_excel(jugadores, nombre_archivo, incluir_equipo=False):
     wb = Workbook()
     ws = wb.active
     ws.title = "Jugadores"
-    encabezados = ["Cédula", "Nombres", "Apellidos", "Fecha nacimiento", "Categoría"]
+    encabezados = ["Cédula", "Nombres", "Apellidos", "Fecha nacimiento", "Campeonato"]
     if incluir_equipo:
         encabezados.insert(0, "Equipo")
     encabezados += ["Número camiseta", "Registrado"]
@@ -927,9 +927,9 @@ def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacim
         edad_minima = _edad_minima_categoria(db, categoria)
         if categoria == "Sub 45":
             return None, ("Cédula no califica: según la fecha de nacimiento, no cumple 45 años este año "
-                           "ni nació en 1982 (Juvenil). No corresponde a ninguna categoría de esta liga.")
-        return None, (f"Cédula no califica: la categoría {categoria} exige {edad_minima} años cumplidos "
-                       "este año. No corresponde a esta categoría.")
+                           "ni nació en 1982 (Juvenil). No corresponde a ningún campeonato de esta liga.")
+        return None, (f"Cédula no califica: el campeonato {categoria} exige {edad_minima} años cumplidos "
+                       "este año. No corresponde a este campeonato.")
 
     count = db.execute(
         "SELECT COUNT(*) c FROM jugadores WHERE equipo = ? AND categoria = ?",
@@ -1093,16 +1093,16 @@ def agregar_categoria():
     edad_minima = int(edad_minima_raw) if edad_minima_raw.isdigit() else None
 
     if not nombre:
-        flash("Ingresa un nombre para la categoría.")
+        flash("Ingresa un nombre para el campeonato.")
         return redirect(url_for("categorias_modulo"))
 
     try:
         db.execute("INSERT INTO categorias (nombre, edad_minima) VALUES (?, ?)", (nombre, edad_minima))
         db.commit()
-        flash(f"Categoría '{nombre}' agregada.", "ok")
+        flash(f"Campeonato '{nombre}' agregado.", "ok")
     except IntegrityError:
         db.rollback()
-        flash(f"Ya existe una categoría llamada '{nombre}'.")
+        flash(f"Ya existe un campeonato llamado '{nombre}'.")
     return redirect(url_for("categorias_modulo"))
 
 
@@ -1114,7 +1114,7 @@ def editar_categoria(categoria_id):
     edad_minima = int(edad_minima_raw) if edad_minima_raw.isdigit() else None
     db.execute("UPDATE categorias SET edad_minima = ? WHERE id = ?", (edad_minima, categoria_id))
     db.commit()
-    flash("Categoría actualizada.", "ok")
+    flash("Campeonato actualizado.", "ok")
     return redirect(url_for("categorias_modulo"))
 
 
@@ -1124,7 +1124,7 @@ def eliminar_categoria(categoria_id):
     db = get_db()
     categoria = db.execute("SELECT * FROM categorias WHERE id = ?", (categoria_id,)).fetchone()
     if not categoria:
-        flash("Categoría no encontrada.")
+        flash("Campeonato no encontrado.")
         return redirect(url_for("categorias_modulo"))
 
     equipos_count = db.execute(
@@ -1135,13 +1135,13 @@ def eliminar_categoria(categoria_id):
         return redirect(url_for("categorias_modulo"))
 
     if len(_categorias_liga(db)) <= 1:
-        flash("No se puede eliminar la última categoría de la liga.")
+        flash("No se puede eliminar el último campeonato de la liga.")
         return redirect(url_for("categorias_modulo"))
 
     db.execute("DELETE FROM divisiones WHERE categoria = ?", (categoria["nombre"],))
     db.execute("DELETE FROM categorias WHERE id = ?", (categoria_id,))
     db.commit()
-    flash(f"Categoría '{categoria['nombre']}' eliminada.", "ok")
+    flash(f"Campeonato '{categoria['nombre']}' eliminado.", "ok")
     return redirect(url_for("categorias_modulo"))
 
 
@@ -1151,24 +1151,24 @@ def agregar_division(categoria_id):
     db = get_db()
     categoria = db.execute("SELECT * FROM categorias WHERE id = ?", (categoria_id,)).fetchone()
     if not categoria:
-        flash("Categoría no encontrada.")
+        flash("Campeonato no encontrado.")
         return redirect(url_for("categorias_modulo"))
 
     nombre = request.form.get("nombre", "").strip()
     if not nombre:
-        flash("Ingresa un nombre para la división.")
+        flash("Ingresa un nombre para la categoría.")
         return redirect(url_for("categorias_modulo"))
 
     ya_existe = db.execute(
         "SELECT 1 FROM divisiones WHERE categoria = ? AND nombre = ?", (categoria["nombre"], nombre)
     ).fetchone()
     if ya_existe:
-        flash(f"'{categoria['nombre']}' ya tiene una división llamada '{nombre}'.")
+        flash(f"'{categoria['nombre']}' ya tiene una categoría llamada '{nombre}'.")
         return redirect(url_for("categorias_modulo"))
 
     db.execute("INSERT INTO divisiones (categoria, nombre) VALUES (?, ?)", (categoria["nombre"], nombre))
     db.commit()
-    flash(f"División '{nombre}' agregada a {categoria['nombre']}.", "ok")
+    flash(f"Categoría '{nombre}' agregada a {categoria['nombre']}.", "ok")
     return redirect(url_for("categorias_modulo"))
 
 
@@ -1178,7 +1178,7 @@ def eliminar_division(division_id):
     db = get_db()
     division = db.execute("SELECT * FROM divisiones WHERE id = ?", (division_id,)).fetchone()
     if not division:
-        flash("División no encontrada.")
+        flash("Categoría no encontrada.")
         return redirect(url_for("categorias_modulo"))
 
     equipos_count = db.execute(
@@ -1191,7 +1191,7 @@ def eliminar_division(division_id):
 
     db.execute("DELETE FROM divisiones WHERE id = ?", (division_id,))
     db.commit()
-    flash(f"División '{division['nombre']}' eliminada.", "ok")
+    flash(f"Categoría '{division['nombre']}' eliminada.", "ok")
     return redirect(url_for("categorias_modulo"))
 
 
@@ -1246,7 +1246,7 @@ def actualizar_jugador(jugador_id):
     subcategoria = _subcategoria_por_nacimiento(fecha_nacimiento, jugador["categoria"])
 
     if not _jugador_califica(db, fecha_nacimiento, jugador["categoria"]):
-        flash("Cédula no califica: no cumple con la edad mínima de esta categoría.")
+        flash("Cédula no califica: no cumple con la edad mínima de este campeonato.")
         return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
     if (subcategoria == "Juvenil" and jugador["subcategoria"] != "Juvenil"
@@ -1429,7 +1429,7 @@ def _generar_carnet(jugador):
     f_rlabel = _font(30, bold=True)
     f_rvalor = _font(30)
 
-    rdraw.text((50, 70), "Categoría:", font=f_rlabel, fill="#14532d")
+    rdraw.text((50, 70), "Campeonato:", font=f_rlabel, fill="#14532d")
     rdraw.text((300, 70), (jugador["categoria"] or "") + (f" - {subcat}" if subcat == "Juvenil" else ""), font=f_rvalor, fill="black")
 
     rdraw.text((50, 130), "Edad:", font=f_rlabel, fill="black")

@@ -21,7 +21,7 @@
     <table id="tablaLiga" class="tabla-responsive">
       <thead>
         <tr>
-          <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Equipo</th><th>Categoría</th><th>Estado</th>
+          <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Equipo</th><th>Campeonato</th><th>Estado</th>
         </tr>
       </thead>
       <tbody>
@@ -31,7 +31,7 @@
           <td data-label="Nombres">{{ j.nombres }}</td>
           <td data-label="Apellidos">{{ j.apellidos }}</td>
           <td data-label="Equipo">{{ j.equipo }}</td>
-          <td data-label="Categoría">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
+          <td data-label="Campeonato">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
           <td data-label="Estado">
             {% if j.calificado %}
               <span class="badge badge-ok">✅ Calificado</span>

@@ -52,7 +52,7 @@
   <table class="tabla-responsive">
     <thead>
       <tr>
-        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Categoría</th><th>Carnet impreso</th><th>Valor cobrado</th><th></th>
+        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Campeonato</th><th>Carnet impreso</th><th>Valor cobrado</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -61,7 +61,7 @@
         <td data-label="Cédula">{{ j.cedula }}</td>
         <td data-label="Nombres">{{ j.nombres }}</td>
         <td data-label="Apellidos">{{ j.apellidos }}</td>
-        <td data-label="Categoría">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
+        <td data-label="Campeonato">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
         <td data-label="Carnet impreso">
           <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:400;">
             <input type="checkbox" name="carnet_impreso" form="form-carnet-{{ j.id }}" style="width:auto;" {% if j.carnet_impreso %}checked{% endif %}>
