@@ -204,6 +204,8 @@ def init_db():
         db.execute("ALTER TABLE jugadores ADD COLUMN carnet_valor REAL")
     if "carnet_fecha" not in jcols:
         db.execute("ALTER TABLE jugadores ADD COLUMN carnet_fecha TEXT")
+    if "documentos_fecha" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN documentos_fecha TEXT")
 
     db.execute(f"""
         CREATE TABLE IF NOT EXISTS equipos (
@@ -717,6 +719,29 @@ def jugadores_liga():
     )
 
 
+@app.route("/documentos")
+@admin_required
+def documentos_recientes():
+    """Jugadores con al menos un documento (foto o cédula) cargado, ordenados
+    por la fecha en que se subió/reemplazó el documento más reciente primero.
+    Permite filtrar por un día puntual con ?fecha=YYYY-MM-DD."""
+    db = get_db()
+    fecha_filtro = request.args.get("fecha", "").strip()
+
+    query = """
+        SELECT * FROM jugadores
+        WHERE categoria = ? AND documentos_fecha IS NOT NULL
+    """
+    params = [CATEGORIA_ACTIVA]
+    if fecha_filtro:
+        query += " AND documentos_fecha LIKE ?"
+        params.append(f"{fecha_filtro}%")
+    query += " ORDER BY documentos_fecha DESC"
+
+    jugadores = db.execute(query, tuple(params)).fetchall()
+    return render_template("documentos_recientes.html", jugadores=jugadores, fecha_filtro=fecha_filtro)
+
+
 @app.route("/exportar_general")
 @admin_required
 def exportar_general():
@@ -805,16 +830,19 @@ def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacim
     if subcategoria == "Juvenil" and _contar_juveniles(db, equipo_nombre) >= CUPO_MAXIMO_JUVENIL:
         return None, f"El equipo {equipo_nombre} ya alcanzó el cupo máximo de {CUPO_MAXIMO_JUVENIL} jugadores Juvenil."
 
+    ahora = datetime.now().strftime("%Y-%m-%d %H:%M")
+    documentos_fecha = ahora if (foto or cedula_frontal or cedula_reverso) else None
+
     returning = " RETURNING id" if USANDO_POSTGRES else ""
     try:
         cur = db.execute(
             f"""INSERT INTO jugadores
                (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, subcategoria, numero_camiseta,
-                foto, cedula_frontal, cedula_reverso, foto_token, fecha_registro)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?){returning}""",
+                foto, cedula_frontal, cedula_reverso, foto_token, fecha_registro, documentos_fecha)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?){returning}""",
             (cedula, nombres, apellidos, fecha_nacimiento, equipo_nombre, CATEGORIA_ACTIVA,
              subcategoria, numero_camiseta, foto, cedula_frontal, cedula_reverso,
-             uuid.uuid4().hex, datetime.now().strftime("%Y-%m-%d %H:%M")),
+             uuid.uuid4().hex, ahora, documentos_fecha),
         )
         db.commit()
         if USANDO_POSTGRES:
@@ -970,15 +998,23 @@ def actualizar_jugador(jugador_id):
         flash(f"No se puede cambiar la fecha: el equipo ya alcanzó el cupo máximo de {CUPO_MAXIMO_JUVENIL} jugadores Juvenil.")
         return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
-    foto_nombre = _guardar_imagen_subida(request.files.get("foto")) or jugador["foto"]
-    cedula_frontal = _guardar_imagen_subida(request.files.get("cedula_frontal")) or jugador["cedula_frontal"]
-    cedula_reverso = _guardar_imagen_subida(request.files.get("cedula_reverso")) or jugador["cedula_reverso"]
+    nuevo_foto = _guardar_imagen_subida(request.files.get("foto"))
+    nuevo_cedula_frontal = _guardar_imagen_subida(request.files.get("cedula_frontal"))
+    nuevo_cedula_reverso = _guardar_imagen_subida(request.files.get("cedula_reverso"))
+    foto_nombre = nuevo_foto or jugador["foto"]
+    cedula_frontal = nuevo_cedula_frontal or jugador["cedula_frontal"]
+    cedula_reverso = nuevo_cedula_reverso or jugador["cedula_reverso"]
+    documentos_fecha = (
+        datetime.now().strftime("%Y-%m-%d %H:%M")
+        if (nuevo_foto or nuevo_cedula_frontal or nuevo_cedula_reverso)
+        else jugador["documentos_fecha"]
+    )
 
     db.execute(
         """UPDATE jugadores SET nombres = ?, apellidos = ?, fecha_nacimiento = ?, subcategoria = ?,
-           numero_camiseta = ?, foto = ?, cedula_frontal = ?, cedula_reverso = ? WHERE id = ?""",
+           numero_camiseta = ?, foto = ?, cedula_frontal = ?, cedula_reverso = ?, documentos_fecha = ? WHERE id = ?""",
         (nombres, apellidos, fecha_nacimiento, subcategoria, numero_camiseta, foto_nombre,
-         cedula_frontal, cedula_reverso, jugador_id),
+         cedula_frontal, cedula_reverso, documentos_fecha, jugador_id),
     )
     db.commit()
     flash("Ficha del jugador actualizada.", "ok")
