@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p><a href="{{ url_for('publico_calendario') }}">&larr; Volver al calendario</a></p>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.3rem;">🧩 Alineaciones</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">
+    {{ partido.equipo_local }} vs {{ partido.equipo_visitante }}
+    {% if jornada %} — Jornada {{ jornada.numero }}{% endif %}
+    {% if partido.fecha %} · {{ partido.fecha }}{% endif %}
+  </p>
+</div>
+
+<div class="cupos-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items:start;">
+  {% for datos, nombre_equipo in [(local, partido.equipo_local), (visitante, partido.equipo_visitante)] %}
+  <div class="card">
+    <h2 style="text-align:center; font-size:1.05rem;">{{ nombre_equipo }}</h2>
+    {% if not datos %}
+      <p style="color:#888; text-align:center; padding:24px 0;">Todavía no se publicó la alineación de este equipo.</p>
+    {% else %}
+      <p style="text-align:center; color:#888; font-size:0.8rem; margin-top:-6px;">Formación {{ datos.formacion }}</p>
+      <div style="position:relative; width:100%; max-width:340px; margin:0 auto; aspect-ratio:2/3;
+                  background: repeating-linear-gradient(to bottom, #2f7d3c 0, #2f7d3c 12.5%, #357f42 12.5%, #357f42 25%);
+                  border-radius:14px; border:2px solid #1e5c2c; overflow:hidden;">
+        <div style="position:absolute; top:50%; left:4%; right:4%; height:1px; background:rgba(255,255,255,0.45);"></div>
+        <div style="position:absolute; top:50%; left:50%; width:64px; height:64px; margin:-32px 0 0 -32px; border:1px solid rgba(255,255,255,0.45); border-radius:50%;"></div>
+        <div style="position:absolute; left:22%; right:22%; top:0; height:12%; border:1px solid rgba(255,255,255,0.45); border-top:none;"></div>
+        <div style="position:absolute; left:22%; right:22%; bottom:0; height:12%; border:1px solid rgba(255,255,255,0.45); border-bottom:none;"></div>
+
+        {% for slot in datos.slots %}
+        {% set j = datos.titulares.get(slot.code) %}
+        <div style="position:absolute; top:{{ slot.top }}%; left:{{ slot.left }}%; transform:translate(-50%,-50%); text-align:center; width:72px;">
+          <div style="width:28px; height:28px; margin:0 auto 2px; border-radius:50%; background:white; color:#14532d; font-weight:700; font-size:0.72rem; display:flex; align-items:center; justify-content:center; border:2px solid #14532d;">
+            {{ j.numero_camiseta if j else '' }}
+          </div>
+          <span style="color:white; font-size:0.62rem; text-shadow:0 1px 2px rgba(0,0,0,0.6); display:block; line-height:1.1;">
+            {{ j.apellidos if j else '' }}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+
+      {% if datos.suplentes %}
+      <p style="font-size:0.8rem; color:#555; margin:14px 0 4px;"><strong>Suplentes:</strong></p>
+      <p style="font-size:0.8rem; color:#555; margin:0;">
+        {% for s in datos.suplentes %}{{ s.numero_camiseta }} {{ s.apellidos }}{% if not loop.last %}, {% endif %}{% endfor %}
+      </p>
+      {% endif %}
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+{% endblock %}

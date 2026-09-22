@@ -19,7 +19,7 @@
   <div style="overflow-x:auto;">
   <table class="tabla-responsive">
     <thead>
-      <tr><th>Jornada</th><th>Local</th><th>Marcador</th><th>Visitante</th></tr>
+      <tr><th>Jornada</th><th>Local</th><th>Marcador</th><th>Visitante</th><th></th></tr>
     </thead>
     <tbody>
       {% for p in partidos %}
@@ -28,6 +28,7 @@
         <td data-label="Local">{{ p.equipo_local }}</td>
         <td data-label="Marcador"><strong>{{ p.goles_local }} - {{ p.goles_visitante }}</strong></td>
         <td data-label="Visitante">{{ p.equipo_visitante }}</td>
+        <td data-label=""><a href="{{ url_for('publico_alineaciones', partido_id=p.id) }}">🧩 Alineaciones</a></td>
       </tr>
       {% endfor %}
     </tbody>

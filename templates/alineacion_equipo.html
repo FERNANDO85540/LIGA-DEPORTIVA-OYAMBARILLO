@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p><a href="{{ url_for('detalle_equipo', equipo_id=equipo.id) }}">&larr; Volver a {{ equipo.nombre }}</a></p>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.3rem;">🧩 Alineación — {{ equipo.nombre }}</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">
+    {{ 'Local vs' if partido.equipo_local == equipo.nombre else 'Visitante ante' }} {{ rival }}
+    {% if partido.fecha %} — {{ partido.fecha }}{% endif %}{% if partido.hora %} {{ partido.hora }}{% endif %}
+  </p>
+</div>
+
+<div class="card">
+  <form method="get" action="{{ url_for('alineacion_equipo', equipo_id=equipo.id, partido_id=partido.id) }}" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+    <label style="margin:0;">Formación</label>
+    <select name="formacion" onchange="this.form.submit()">
+      {% for f in formaciones %}
+      <option value="{{ f }}" {% if f == formacion %}selected{% endif %}>{{ f }}</option>
+      {% endfor %}
+    </select>
+  </form>
+  <p style="font-size:0.8rem; color:#888; margin:8px 0 0;">
+    Elige la posición de cada jugador tocando cada punto en la cancha. Lo que guardes aquí se verá en la página pública del partido,
+    y queda registrado para calcular con qué jugadores titulares el equipo rindió mejor.
+  </p>
+</div>
+
+<div class="card">
+  <form method="post" action="{{ url_for('guardar_alineacion', equipo_id=equipo.id, partido_id=partido.id) }}">
+    <input type="hidden" name="formacion" value="{{ formacion }}">
+
+    <div style="position:relative; width:100%; max-width:360px; margin:0 auto; aspect-ratio:2/3;
+                background: repeating-linear-gradient(to bottom, #2f7d3c 0, #2f7d3c 12.5%, #357f42 12.5%, #357f42 25%);
+                border-radius:14px; border:2px solid #1e5c2c; overflow:hidden;">
+      <div style="position:absolute; top:50%; left:4%; right:4%; height:1px; background:rgba(255,255,255,0.45);"></div>
+      <div style="position:absolute; top:50%; left:50%; width:70px; height:70px; margin:-35px 0 0 -35px; border:1px solid rgba(255,255,255,0.45); border-radius:50%;"></div>
+      <div style="position:absolute; left:22%; right:22%; top:0; height:12%; border:1px solid rgba(255,255,255,0.45); border-top:none;"></div>
+      <div style="position:absolute; left:22%; right:22%; bottom:0; height:12%; border:1px solid rgba(255,255,255,0.45); border-bottom:none;"></div>
+
+      {% for slot in slots %}
+      <div style="position:absolute; top:{{ slot.top }}%; left:{{ slot.left }}%; transform:translate(-50%,-50%); text-align:center; width:76px;">
+        <select name="pos_{{ slot.code }}" style="width:100%; font-size:0.68rem; padding:2px 1px; border-radius:6px; border:1px solid #1e5c2c;">
+          <option value="">{{ slot.label }}</option>
+          {% for j in jugadores %}
+          <option value="{{ j.id }}" {% if seleccion.get(slot.code) == j.id %}selected{% endif %}>
+            {{ j.numero_camiseta }} {{ j.apellidos }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endfor %}
+    </div>
+
+    <h3 style="margin-top:22px; margin-bottom:8px; font-size:1rem;">Suplentes (opcional)</h3>
+    <p style="font-size:0.8rem; color:#888; margin:0 0 10px;">
+      Marca a los jugadores que van en la banca. Si un jugador ya está en un puesto de la cancha, no hace falta marcarlo aquí.
+    </p>
+    <div class="cupos-grid" style="grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));">
+      {% for j in jugadores %}
+      <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin:0; border:1px solid var(--borde); border-radius:8px; padding:6px 10px;">
+        <input type="checkbox" name="suplentes" value="{{ j.id }}" style="width:auto;" {% if j.id in suplentes_ids %}checked{% endif %}>
+        {{ j.numero_camiseta or '' }} {{ j.apellidos }} {{ j.nombres }}
+      </label>
+      {% endfor %}
+    </div>
+
+    <button type="submit" style="margin-top:18px;">{{ 'Actualizar alineación' if tiene_alineacion else 'Guardar alineación' }}</button>
+  </form>
+</div>
+
+<p>
+  <a href="{{ url_for('publico_alineaciones', partido_id=partido.id) }}" target="_blank">👁️ Ver cómo se verá en la página pública</a>
+</p>
+
+{% endblock %}

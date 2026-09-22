@@ -23,7 +23,8 @@
       {% for p in partidos_equipo %}
         {% if p.rival %}
           <li><strong>Jornada {{ p.jornada.numero }}</strong>{% if p.fecha %} — {{ p.fecha }}{% endif %}{% if p.hora %} {{ p.hora }}{% endif %}:
-            {{ 'Local vs' if p.local else 'Visitante ante' }} {{ p.rival }}</li>
+            {{ 'Local vs' if p.local else 'Visitante ante' }} {{ p.rival }}
+            &nbsp;·&nbsp;<a href="{{ url_for('alineacion_equipo', equipo_id=equipo.id, partido_id=p.partido_id) }}">🧩 Alineación</a></li>
         {% else %}
           <li><strong>Jornada {{ p.jornada.numero }}</strong>{% if p.jornada.fecha %} ({{ p.jornada.fecha }}){% endif %}: <span style="color:#888;">Descansa</span></li>
         {% endif %}
@@ -223,6 +224,35 @@
     </tbody>
   </table>
   </div>
+</div>
+
+<div class="card">
+  <h2>📊 Rendimiento por jugador titular</h2>
+  <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
+    Se calcula solo con los partidos donde se guardó una alineación (en "🧩 Alineación", arriba) y el resultado ya está registrado —
+    así puedes ver con qué jugadores en cancha el equipo rindió mejor.
+  </p>
+  {% if not rendimiento_titulares %}
+    <p style="color:#888;">Todavía no hay suficientes alineaciones con resultado para calcular esto.</p>
+  {% else %}
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead><tr><th>Jugador</th><th>PJ titular</th><th>V</th><th>E</th><th>D</th><th>% victorias</th></tr></thead>
+    <tbody>
+      {% for r in rendimiento_titulares %}
+      <tr>
+        <td data-label="Jugador"><strong>{{ r.jugador }}</strong></td>
+        <td data-label="PJ titular">{{ r.pj }}</td>
+        <td data-label="V">{{ r.v }}</td>
+        <td data-label="E">{{ r.e }}</td>
+        <td data-label="D">{{ r.d }}</td>
+        <td data-label="% victorias">{{ r.pct }}%</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
 </div>
 
 {% endblock %}
