@@ -1004,10 +1004,26 @@ def publico_alineaciones(partido_id):
             "titulares": datos["titulares"], "suplentes": datos["suplentes"],
         }
 
+    def _tarjetas(equipo_nombre):
+        # Cada equipo juega a lo más un partido por jornada, así que las
+        # tarjetas de esa jornada para jugadores de este equipo son,
+        # necesariamente, las de este encuentro.
+        if not jornada:
+            return []
+        return db.execute(
+            """SELECT t.tipo, j.nombres, j.apellidos, j.numero_camiseta
+               FROM tarjetas t JOIN jugadores j ON j.id = t.jugador_id
+               WHERE t.jornada_id = ? AND j.equipo = ?
+               ORDER BY t.fecha""",
+            (jornada["id"], equipo_nombre),
+        ).fetchall()
+
     return render_template(
         "publico_alineaciones.html",
         partido=partido, jornada=jornada,
         local=_armar(partido["equipo_local"]), visitante=_armar(partido["equipo_visitante"]),
+        tarjetas_local=_tarjetas(partido["equipo_local"]),
+        tarjetas_visitante=_tarjetas(partido["equipo_visitante"]),
     )
 
 

@@ -4,16 +4,32 @@
 <p><a href="{{ url_for('publico_calendario') }}">&larr; Volver al calendario</a></p>
 
 <div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
-  <h1 style="margin:0; font-size:1.3rem;">🧩 Alineaciones</h1>
+  <h1 style="margin:0; font-size:1.3rem;">📋 Detalle del encuentro</h1>
   <p style="margin:6px 0 0; opacity:0.95;">
-    {{ partido.equipo_local }} vs {{ partido.equipo_visitante }}
-    {% if jornada %} — Jornada {{ jornada.numero }}{% endif %}
-    {% if partido.fecha %} · {{ partido.fecha }}{% endif %}
+    {% if jornada %}Jornada {{ jornada.numero }}{% endif %}
+    {% if partido.fecha %} · {{ partido.fecha }}{% endif %}{% if partido.hora %} {{ partido.hora }}{% endif %}
   </p>
 </div>
 
+<div class="card" style="text-align:center;">
+  {% if partido.jugado %}
+  <span class="badge badge-ok" style="margin-bottom:10px;">✅ Finalizado</span>
+  {% else %}
+  <span class="badge" style="background:#eef3ee; color:#555; margin-bottom:10px;">⏳ Todavía no se ha jugado</span>
+  {% endif %}
+  <div style="display:flex; align-items:center; justify-content:center; gap:18px; flex-wrap:wrap; margin-top:6px;">
+    <strong style="font-size:1.15rem;">{{ partido.equipo_local }}</strong>
+    {% if partido.jugado %}
+      <span style="font-size:1.6rem; font-weight:800; color:var(--verde-osc);">{{ partido.goles_local }} - {{ partido.goles_visitante }}</span>
+    {% else %}
+      <span style="font-size:1.1rem; color:#888;">vs</span>
+    {% endif %}
+    <strong style="font-size:1.15rem;">{{ partido.equipo_visitante }}</strong>
+  </div>
+</div>
+
 <div class="cupos-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items:start;">
-  {% for datos, nombre_equipo in [(local, partido.equipo_local), (visitante, partido.equipo_visitante)] %}
+  {% for datos, nombre_equipo, tarjetas in [(local, partido.equipo_local, tarjetas_local), (visitante, partido.equipo_visitante, tarjetas_visitante)] %}
   <div class="card">
     <h2 style="text-align:center; font-size:1.05rem;">{{ nombre_equipo }}</h2>
     {% if not datos %}
@@ -47,6 +63,15 @@
         {% for s in datos.suplentes %}{{ s.numero_camiseta }} {{ s.apellidos }}{% if not loop.last %}, {% endif %}{% endfor %}
       </p>
       {% endif %}
+    {% endif %}
+
+    {% if tarjetas %}
+    <p style="font-size:0.8rem; color:#555; margin:16px 0 4px;"><strong>Tarjetas:</strong></p>
+    <ul style="margin:0; padding-left:20px; font-size:0.85rem;">
+      {% for t in tarjetas %}
+      <li>{{ '🟨' if t.tipo == 'amarilla' else '🟥' }} {{ t.apellidos }} {{ t.nombres }}{% if t.numero_camiseta %} (#{{ t.numero_camiseta }}){% endif %}</li>
+      {% endfor %}
+    </ul>
     {% endif %}
   </div>
   {% endfor %}

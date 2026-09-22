@@ -28,7 +28,7 @@
         <td data-label="Local">{{ p.equipo_local }}</td>
         <td data-label="Marcador"><strong>{{ p.goles_local }} - {{ p.goles_visitante }}</strong></td>
         <td data-label="Visitante">{{ p.equipo_visitante }}</td>
-        <td data-label=""><a href="{{ url_for('publico_alineaciones', partido_id=p.id) }}">🧩 Alineaciones</a></td>
+        <td data-label=""><a href="{{ url_for('publico_alineaciones', partido_id=p.id) }}">📋 Ver detalle</a></td>
       </tr>
       {% endfor %}
     </tbody>

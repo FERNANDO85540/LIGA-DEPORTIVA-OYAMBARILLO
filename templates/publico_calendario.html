@@ -29,7 +29,7 @@
           {% endif %}
           {{ p.equipo_visitante }}
           {% if p.fecha %} — {{ p.fecha }}{% endif %}{% if p.hora %} {{ p.hora }}{% endif %}
-          &nbsp;·&nbsp;<a href="{{ url_for('publico_alineaciones', partido_id=p.id) }}">🧩 Alineaciones</a>
+          &nbsp;·&nbsp;<a href="{{ url_for('publico_alineaciones', partido_id=p.id) }}">📋 Ver detalle del encuentro</a>
         </li>
       {% endfor %}
       {% for d in item.descansos %}
