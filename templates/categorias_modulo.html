@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p><a href="{{ url_for('inscripcion') }}">&larr; Volver al inicio</a></p>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.4rem;">🏷️ Categorías de la liga</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">Crea, ajusta o elimina las categorías del campeonato (ej. Sub 45, Senior, Máxima, Primera).</p>
+</div>
+
+<div class="card">
+  <h2>Agregar categoría</h2>
+  <form method="post" action="{{ url_for('agregar_categoria') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+    <div style="flex:1; min-width:200px;">
+      <label>Nombre de la categoría</label>
+      <input type="text" name="nombre" placeholder="ej. Máxima" required>
+    </div>
+    <div>
+      <label>Edad mínima (opcional)</label>
+      <input type="number" name="edad_minima" min="1" placeholder="ej. 18" style="width:120px;">
+    </div>
+    <button type="submit">Agregar categoría</button>
+  </form>
+  <p style="font-size:0.8rem; color:#888; margin-top:10px;">
+    Si dejas la edad mínima vacía, la categoría queda sin restricción de edad (como Senior).
+    Si pones un número, un jugador solo podrá inscribirse ahí si cumple esa edad este año.
+  </p>
+</div>
+
+<div class="card">
+  <h2>Categorías existentes</h2>
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead>
+      <tr><th>Categoría</th><th>Edad mínima</th><th>Equipos</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for c in categorias %}
+      <tr>
+        <td data-label="Categoría"><strong>{{ c.fila.nombre }}</strong></td>
+        <td data-label="Edad mínima">
+          <form method="post" action="{{ url_for('editar_categoria', categoria_id=c.fila.id) }}" style="display:flex; gap:6px; align-items:center; margin:0;">
+            <input type="number" name="edad_minima" min="1" value="{{ c.fila.edad_minima or '' }}" placeholder="Sin restricción" style="width:130px;">
+            <button type="submit" style="padding:4px 10px; font-size:0.8rem;">Guardar</button>
+          </form>
+        </td>
+        <td data-label="Equipos">{{ c.equipos_count }}</td>
+        <td data-label="" class="table-actions">
+          <form method="post" action="{{ url_for('eliminar_categoria', categoria_id=c.fila.id) }}" onsubmit="return confirm('¿Eliminar la categoría {{ c.fila.nombre }}?');" style="margin:0;">
+            <button type="submit" class="btn-del" {% if c.equipos_count > 0 %}disabled title="Tiene equipos, no se puede eliminar"{% endif %}>Eliminar</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if categorias|length <= 1 %}
+  <p style="font-size:0.8rem; color:#888; margin-top:10px;">Debe existir al menos una categoría.</p>
+  {% endif %}
+</div>
+
+{% endblock %}
