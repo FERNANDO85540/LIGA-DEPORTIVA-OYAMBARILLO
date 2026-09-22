@@ -39,25 +39,40 @@
   </p>
 
   {% if jugadores %}
+  <form id="form-pdf-seleccion" method="get" action="{{ url_for('carnets_pdf') }}">
+    <input type="hidden" name="equipo_id" value="{{ equipo_actual.id }}">
+  </form>
+
   <p>
     <a href="{{ url_for('carnets_pdf', equipo_id=equipo_actual.id) }}">
-      <button type="button">📄 Descargar PDF para imprimir (carnets de {{ equipo_actual.nombre }})</button>
+      <button type="button">📄 Descargar PDF de TODO el equipo ({{ total }})</button>
     </a>
+    <button type="submit" form="form-pdf-seleccion">📄 Descargar PDF de los seleccionados ✔️</button>
   </p>
   <p style="font-size:0.8rem; color:#888; margin-top:-8px;">
     El PDF sale en hojas A4: por cada jugador, el reverso queda a la izquierda y el frente a la derecha, uno al lado del otro con una línea guía para cortar, listos para recortar sin tener que buscar el reverso en otra página.
+    Las casillas ✔️ ya vienen marcadas en los jugadores con carnet "Pendiente" — así, si acabas de subir jugadores nuevos, puedes descargar solo esos sin repetir los que ya se imprimieron.
+  </p>
+  <p style="margin-top:-6px;">
+    <button type="button" style="padding:4px 10px; font-size:0.8rem;" onclick="document.querySelectorAll('.chk-carnet').forEach(c => c.checked = true)">Marcar todos</button>
+    <button type="button" style="padding:4px 10px; font-size:0.8rem;" onclick="document.querySelectorAll('.chk-carnet').forEach(c => c.checked = false)">Desmarcar todos</button>
+    <button type="button" style="padding:4px 10px; font-size:0.8rem;" onclick="document.querySelectorAll('.chk-carnet').forEach(c => c.checked = c.dataset.pendiente === '1')">Marcar solo pendientes</button>
   </p>
 
   <div style="overflow-x:auto;">
   <table class="tabla-responsive">
     <thead>
       <tr>
-        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Campeonato</th><th>Carnet impreso</th><th>Valor cobrado</th><th></th>
+        <th></th><th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Campeonato</th><th>Carnet impreso</th><th>Valor cobrado</th><th></th>
       </tr>
     </thead>
     <tbody>
       {% for j in jugadores %}
       <tr>
+        <td data-label="">
+          <input type="checkbox" class="chk-carnet" name="jugador_id" value="{{ j.id }}" form="form-pdf-seleccion"
+                 data-pendiente="{{ '1' if not j.carnet_impreso else '0' }}" {% if not j.carnet_impreso %}checked{% endif %} style="width:auto;">
+        </td>
         <td data-label="Cédula">{{ j.cedula }}</td>
         <td data-label="Nombres">{{ j.nombres }}</td>
         <td data-label="Apellidos">{{ j.apellidos }}</td>

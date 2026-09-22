@@ -1610,12 +1610,22 @@ def carnets_pdf():
         flash("Selecciona un equipo para generar los carnets.")
         return redirect(url_for("carnets_modulo"))
 
-    jugadores = db.execute(
-        "SELECT * FROM jugadores WHERE equipo = ? ORDER BY apellidos, nombres",
-        (equipo["nombre"],),
-    ).fetchall()
+    jugador_ids = [int(x) for x in request.args.getlist("jugador_id") if x.isdigit()]
+    if jugador_ids:
+        placeholders = ",".join("?" * len(jugador_ids))
+        jugadores = db.execute(
+            f"SELECT * FROM jugadores WHERE equipo = ? AND id IN ({placeholders}) ORDER BY apellidos, nombres",
+            (equipo["nombre"], *jugador_ids),
+        ).fetchall()
+    else:
+        jugadores = db.execute(
+            "SELECT * FROM jugadores WHERE equipo = ? ORDER BY apellidos, nombres",
+            (equipo["nombre"],),
+        ).fetchall()
+
     if not jugadores:
-        flash("Ese equipo todavía no tiene jugadores inscritos.")
+        flash("No se encontró ningún jugador seleccionado de ese equipo." if jugador_ids
+              else "Ese equipo todavía no tiene jugadores inscritos.")
         return redirect(url_for("carnets_modulo", equipo_id=equipo_id))
 
     paginas = _armar_paginas_carnets(jugadores)
@@ -1624,7 +1634,8 @@ def carnets_pdf():
         buf, format="PDF", save_all=True, append_images=paginas[1:], resolution=CARNET_PDF_DPI
     )
     buf.seek(0)
-    nombre_archivo = f"carnets_{equipo['nombre'].replace(' ', '_')}.pdf"
+    sufijo = "seleccionados" if jugador_ids else "todos"
+    nombre_archivo = f"carnets_{equipo['nombre'].replace(' ', '_')}_{sufijo}.pdf"
     return send_file(buf, mimetype="application/pdf", as_attachment=True, download_name=nombre_archivo)
 
 
