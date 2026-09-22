@@ -2193,29 +2193,6 @@ def sanciones_modulo():
     )
 
 
-@app.route("/sanciones/tarjeta/agregar", methods=["POST"])
-@sanciones_required
-def agregar_tarjeta():
-    db = get_db()
-    jugador_id = request.form.get("jugador_id", "").strip()
-    tipo = request.form.get("tipo", "").strip()
-    jornada_id = request.form.get("jornada_id", "").strip() or None
-    valor_multa = _to_float(request.form.get("valor_multa", "0"))
-    observacion = request.form.get("observacion", "").strip()
-
-    if not jugador_id.isdigit() or tipo not in ("amarilla", "roja"):
-        flash("Selecciona un jugador y el tipo de tarjeta.")
-        return redirect(url_for("sanciones_modulo"))
-
-    db.execute(
-        "INSERT INTO tarjetas (jugador_id, jornada_id, tipo, valor_multa, observacion, fecha) VALUES (?, ?, ?, ?, ?, ?)",
-        (int(jugador_id), jornada_id, tipo, valor_multa, observacion or None, datetime.now().strftime("%Y-%m-%d %H:%M")),
-    )
-    db.commit()
-    flash("Tarjeta registrada.", "ok")
-    return redirect(url_for("sanciones_modulo"))
-
-
 @app.route("/sanciones/tarjeta/<int:tarjeta_id>/eliminar", methods=["POST"])
 @sanciones_required
 def eliminar_tarjeta(tarjeta_id):
