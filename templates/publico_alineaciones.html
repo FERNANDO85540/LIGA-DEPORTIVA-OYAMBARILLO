@@ -120,4 +120,18 @@
 </div>
 {% endif %}
 
+{% if partido.informe_arbitro %}
+<div class="card">
+  <h2 style="font-size:1rem;">🧑‍⚖️ Informe del árbitro</h2>
+  <p style="font-size:0.85rem; white-space:pre-line; margin:0;">{{ partido.informe_arbitro }}</p>
+</div>
+{% endif %}
+
+{% if partido.informe_vocalia %}
+<div class="card">
+  <h2 style="font-size:1rem;">🗳️ Informe de Vocalía</h2>
+  <p style="font-size:0.85rem; white-space:pre-line; margin:0;">{{ partido.informe_vocalia }}</p>
+</div>
+{% endif %}
+
 {% endblock %}

@@ -489,6 +489,10 @@ def init_db():
         db.execute("ALTER TABLE partidos ADD COLUMN en_vivo INTEGER NOT NULL DEFAULT 0")
     if "arbitro" not in pcols:
         db.execute("ALTER TABLE partidos ADD COLUMN arbitro TEXT")
+    if "informe_arbitro" not in pcols:
+        db.execute("ALTER TABLE partidos ADD COLUMN informe_arbitro TEXT")
+    if "informe_vocalia" not in pcols:
+        db.execute("ALTER TABLE partidos ADD COLUMN informe_vocalia TEXT")
 
     db.execute(f"""
         CREATE TABLE IF NOT EXISTS goles (
@@ -2578,8 +2582,13 @@ def vocalia_hoja(partido_id):
     tarjetas_rows = db.execute(
         "SELECT jugador_id, tipo FROM tarjetas WHERE partido_id = ?", (partido_id,)
     ).fetchall()
-    amarillas_ids = {r["jugador_id"] for r in tarjetas_rows if r["tipo"] == "amarilla"}
-    rojas_ids = {r["jugador_id"] for r in tarjetas_rows if r["tipo"] == "roja"}
+    amarillas_count = {}
+    rojas_ids = set()
+    for r in tarjetas_rows:
+        if r["tipo"] == "amarilla":
+            amarillas_count[r["jugador_id"]] = amarillas_count.get(r["jugador_id"], 0) + 1
+        else:
+            rojas_ids.add(r["jugador_id"])
 
     goles_rows = db.execute(
         "SELECT jugador_id, SUM(cantidad) AS total FROM goles WHERE partido_id = ? GROUP BY jugador_id", (partido_id,)
@@ -2614,7 +2623,7 @@ def vocalia_hoja(partido_id):
         "vocalia_hoja.html",
         partido=partido, jornada=jornada,
         jugadores_local=jugadores_local, jugadores_visitante=jugadores_visitante,
-        asistencia=asistencia, amarillas_ids=amarillas_ids, rojas_ids=rojas_ids,
+        asistencia=asistencia, amarillas_count=amarillas_count, rojas_ids=rojas_ids,
         suspendidos_ids=suspendidos_ids,
         goles_por_jugador=goles_por_jugador, incidentes=incidentes, cambios=cambios,
         jugadores_js=jugadores_js,
@@ -2626,9 +2635,24 @@ def vocalia_hoja(partido_id):
 def guardar_arbitro(partido_id):
     db = get_db()
     arbitro = request.form.get("arbitro", "").strip()
-    db.execute("UPDATE partidos SET arbitro = ? WHERE id = ?", (arbitro or None, partido_id))
+    informe_arbitro = request.form.get("informe_arbitro", "").strip()
+    db.execute(
+        "UPDATE partidos SET arbitro = ?, informe_arbitro = ? WHERE id = ?",
+        (arbitro or None, informe_arbitro or None, partido_id),
+    )
     db.commit()
     flash("Árbitro guardado.", "ok")
+    return redirect(url_for("vocalia_hoja", partido_id=partido_id))
+
+
+@app.route("/vocalia/partido/<int:partido_id>/informe_vocalia/guardar", methods=["POST"])
+@vocalia_required
+def guardar_informe_vocalia(partido_id):
+    db = get_db()
+    informe_vocalia = request.form.get("informe_vocalia", "").strip()
+    db.execute("UPDATE partidos SET informe_vocalia = ? WHERE id = ?", (informe_vocalia or None, partido_id))
+    db.commit()
+    flash("Informe de vocalía guardado.", "ok")
     return redirect(url_for("vocalia_hoja", partido_id=partido_id))
 
 
@@ -2651,7 +2675,6 @@ def guardar_hoja_equipo(partido_id):
     }
     todos_ids = [int(x) for x in request.form.getlist("todos_ids") if x.isdigit() and int(x) in ids_validos]
     marcados_participo = {int(x) for x in request.form.getlist("participo") if x.isdigit()}
-    marcados_amarilla = {int(x) for x in request.form.getlist("amarilla") if x.isdigit()}
     marcados_roja = {int(x) for x in request.form.getlist("roja") if x.isdigit()}
 
     ahora = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -2664,15 +2687,20 @@ def guardar_hoja_equipo(partido_id):
         )
 
         db.execute("DELETE FROM tarjetas WHERE partido_id = ? AND jugador_id = ?", (partido_id, jugador_id))
-        if jugador_id in marcados_amarilla:
+        raw_am = request.form.get(f"amarillas_{jugador_id}", "0").strip()
+        cantidad_amarillas = int(raw_am) if raw_am.isdigit() else 0
+        cantidad_amarillas = max(0, min(cantidad_amarillas, 2))
+        for _ in range(cantidad_amarillas):
             db.execute(
                 "INSERT INTO tarjetas (jugador_id, jornada_id, partido_id, tipo, fecha) VALUES (?, ?, ?, 'amarilla', ?)",
                 (jugador_id, partido["jornada_id"], partido_id, ahora),
             )
-        if jugador_id in marcados_roja:
+        # Doble amarilla = expulsión automática, aunque no se haya marcado roja directa.
+        if jugador_id in marcados_roja or cantidad_amarillas >= 2:
+            observacion = "Expulsión por doble amarilla" if cantidad_amarillas >= 2 and jugador_id not in marcados_roja else None
             db.execute(
-                "INSERT INTO tarjetas (jugador_id, jornada_id, partido_id, tipo, fecha) VALUES (?, ?, ?, 'roja', ?)",
-                (jugador_id, partido["jornada_id"], partido_id, ahora),
+                "INSERT INTO tarjetas (jugador_id, jornada_id, partido_id, tipo, observacion, fecha) VALUES (?, ?, ?, 'roja', ?, ?)",
+                (jugador_id, partido["jornada_id"], partido_id, observacion, ahora),
             )
 
         db.execute("DELETE FROM goles WHERE partido_id = ? AND jugador_id = ?", (partido_id, jugador_id))

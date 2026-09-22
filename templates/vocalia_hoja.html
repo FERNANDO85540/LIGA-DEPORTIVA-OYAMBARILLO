@@ -51,12 +51,27 @@
 
 <div class="card">
   <h2>Árbitro</h2>
-  <form method="post" action="{{ url_for('guardar_arbitro', partido_id=partido.id) }}" style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
-    <div style="flex:1; min-width:220px;">
-      <label>Nombre del árbitro</label>
-      <input type="text" name="arbitro" value="{{ partido.arbitro or '' }}" placeholder="ej. Juan Pérez">
+  <form method="post" action="{{ url_for('guardar_arbitro', partido_id=partido.id) }}">
+    <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+      <div style="flex:1; min-width:220px;">
+        <label>Nombre del árbitro</label>
+        <input type="text" name="arbitro" value="{{ partido.arbitro or '' }}" placeholder="ej. Juan Pérez">
+      </div>
     </div>
-    <button type="submit" style="padding:6px 12px; font-size:0.85rem;">Guardar</button>
+    <div style="margin-top:12px;">
+      <label>Informe del árbitro (opcional)</label>
+      <textarea name="informe_arbitro" rows="4" placeholder="Observaciones o reporte oficial del árbitro sobre el encuentro...">{{ partido.informe_arbitro or '' }}</textarea>
+    </div>
+    <button type="submit" style="margin-top:10px; padding:6px 12px; font-size:0.85rem;">Guardar</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Informe de Vocalía</h2>
+  <form method="post" action="{{ url_for('guardar_informe_vocalia', partido_id=partido.id) }}">
+    <label>Observaciones de vocalía sobre el desarrollo del encuentro</label>
+    <textarea name="informe_vocalia" rows="4" placeholder="Resumen general, conducta de delegados/público, condiciones de la cancha, etc.">{{ partido.informe_vocalia or '' }}</textarea>
+    <button type="submit" style="margin-top:10px; padding:6px 12px; font-size:0.85rem;">Guardar</button>
   </form>
 </div>
 
@@ -65,13 +80,14 @@
   <h2 style="font-size:1.05rem;">{{ equipo_nombre }}</h2>
   <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
     Marca quién participó, sus tarjetas y sus goles en este encuentro. "Participó" queda como el registro oficial de asistencia.
+    Si un jugador recibe 2 amarillas en el mismo partido, marca "2" en su fila — la expulsión (🟥) se registra sola.
   </p>
   <form method="post" action="{{ url_for('guardar_hoja_equipo', partido_id=partido.id) }}">
     <input type="hidden" name="equipo_nombre" value="{{ equipo_nombre }}">
     <div style="overflow-x:auto;">
     <table class="tabla-responsive">
       <thead>
-        <tr><th>#</th><th>Jugador</th><th>Participó</th><th>🟨</th><th>🟥</th><th>Goles</th></tr>
+        <tr><th>#</th><th>Jugador</th><th>Participó</th><th>🟨 (0-2)</th><th>🟥</th><th>Goles</th></tr>
       </thead>
       <tbody>
         {% for j in jugadores %}
@@ -98,7 +114,13 @@
             </div>
           </td>
           <td data-label="Participó"><input type="checkbox" name="participo" value="{{ j.id }}" style="width:auto;" {% if asistencia.get(j.id) %}checked{% endif %}></td>
-          <td data-label="🟨"><input type="checkbox" name="amarilla" value="{{ j.id }}" style="width:auto;" {% if j.id in amarillas_ids %}checked{% endif %}></td>
+          <td data-label="🟨 (0-2)">
+            <select name="amarillas_{{ j.id }}" style="width:64px; padding:4px;">
+              {% for n in (0, 1, 2) %}
+              <option value="{{ n }}" {% if amarillas_count.get(j.id, 0) == n %}selected{% endif %}>{{ n }}</option>
+              {% endfor %}
+            </select>
+          </td>
           <td data-label="🟥"><input type="checkbox" name="roja" value="{{ j.id }}" style="width:auto;" {% if j.id in rojas_ids %}checked{% endif %}></td>
           <td data-label="Goles"><input type="number" name="goles_{{ j.id }}" min="0" value="{{ goles_por_jugador.get(j.id, 0) }}" style="width:60px;"></td>
         </tr>
