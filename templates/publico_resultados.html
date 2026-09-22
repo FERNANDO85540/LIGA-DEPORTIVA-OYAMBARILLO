@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p><a href="{{ url_for('publico_inicio') }}">&larr; Volver</a></p>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.4rem;">📋 Resultados</h1>
+</div>
+
+<div class="card">
+  <h2>Partidos jugados</h2>
+  {% if not partidos %}
+    <p style="color:#888;">Todavía no hay resultados registrados.</p>
+  {% else %}
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead>
+      <tr><th>Jornada</th><th>Local</th><th>Marcador</th><th>Visitante</th></tr>
+    </thead>
+    <tbody>
+      {% for p in partidos %}
+      <tr>
+        <td data-label="Jornada">Jornada {{ p.jornada_numero }}</td>
+        <td data-label="Local">{{ p.equipo_local }}</td>
+        <td data-label="Marcador"><strong>{{ p.goles_local }} - {{ p.goles_visitante }}</strong></td>
+        <td data-label="Visitante">{{ p.equipo_visitante }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>⚽ Goleadores</h2>
+  {% if not goleadores %}
+    <p style="color:#888;">Todavía no hay goles registrados.</p>
+  {% else %}
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead>
+      <tr><th>#</th><th>Jugador</th><th>Equipo</th><th>Goles</th></tr>
+    </thead>
+    <tbody>
+      {% for g in goleadores %}
+      <tr>
+        <td data-label="#">{{ loop.index }}</td>
+        <td data-label="Jugador">{{ g.apellidos }} {{ g.nombres }}</td>
+        <td data-label="Equipo">{{ g.equipo }}</td>
+        <td data-label="Goles"><strong>{{ g.goles }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

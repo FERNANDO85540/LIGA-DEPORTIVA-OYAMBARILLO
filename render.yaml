@@ -28,3 +28,7 @@ services:
         value: sanciones
       - key: SANCIONES_PASS
         sync: false
+      - key: TECNICA_USER
+        value: tecnica
+      - key: TECNICA_PASS
+        sync: false

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p><a href="{{ url_for('publico_inicio') }}">&larr; Volver</a></p>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.4rem;">🏆 Tabla de posiciones</h1>
+</div>
+
+<div class="card">
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead>
+      <tr><th>#</th><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>DG</th><th>Pts</th></tr>
+    </thead>
+    <tbody>
+      {% for f in tabla %}
+      <tr>
+        <td data-label="#">{{ loop.index }}</td>
+        <td data-label="Equipo"><strong>{{ f.equipo }}</strong></td>
+        <td data-label="PJ">{{ f.pj }}</td>
+        <td data-label="G">{{ f.g }}</td>
+        <td data-label="E">{{ f.e }}</td>
+        <td data-label="P">{{ f.p }}</td>
+        <td data-label="GF">{{ f.gf }}</td>
+        <td data-label="GC">{{ f.gc }}</td>
+        <td data-label="DG">{{ f.dg }}</td>
+        <td data-label="Pts"><strong>{{ f.pts }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>⚽ Goleadores</h2>
+  {% if not goleadores %}
+    <p style="color:#888;">Todavía no hay goles registrados.</p>
+  {% else %}
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead>
+      <tr><th>#</th><th>Jugador</th><th>Equipo</th><th>Goles</th></tr>
+    </thead>
+    <tbody>
+      {% for g in goleadores %}
+      <tr>
+        <td data-label="#">{{ loop.index }}</td>
+        <td data-label="Jugador">{{ g.apellidos }} {{ g.nombres }}</td>
+        <td data-label="Equipo">{{ g.equipo }}</td>
+        <td data-label="Goles"><strong>{{ g.goles }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

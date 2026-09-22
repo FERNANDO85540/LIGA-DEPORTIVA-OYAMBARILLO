@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p><a href="{{ url_for('publico_inicio') }}">&larr; Volver</a></p>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.4rem;">🛡️ Equipos</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">Categoría {{ categoria }}</p>
+</div>
+
+<div class="card">
+  <div class="cupos-grid">
+    {% for e in equipos %}
+    <div class="cupo-item">
+      <strong style="display:block; font-size:1rem; margin-bottom:2px;">{{ e.nombre }}</strong>
+      <span style="color:#888; font-size:0.85rem;">{{ conteos[e.nombre] }} jugador(es)</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+{% endblock %}

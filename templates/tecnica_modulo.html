@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.4rem;">⚽ Comisión Técnica</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">Resultados, goleadores y tabla de posiciones.</p>
+</div>
+
+<div class="card">
+  <h2>Resultados por jornada</h2>
+  {% if not jornadas %}
+    <p style="color:#888;">Todavía no hay jornadas creadas (eso lo arma la Comisión de Calificación).</p>
+  {% endif %}
+  {% for item in jornadas %}
+  <div style="border:1px solid var(--borde); border-radius:8px; padding:12px 16px; margin-bottom:12px;">
+    <strong>Jornada {{ item.jornada.numero }}{% if item.jornada.fecha %} — {{ item.jornada.fecha }}{% endif %}</strong>
+    {% if not item.partidos %}
+      <p style="color:#888; font-size:0.85rem; margin:8px 0 0;">Sin partidos en esta jornada.</p>
+    {% endif %}
+    {% for p in item.partidos %}
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:10px; padding-top:10px; border-top:1px solid var(--fondo);">
+      <form method="post" action="{{ url_for('registrar_resultado', partido_id=p.id) }}" style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:0;">
+        <span style="min-width:140px;">{{ p.equipo_local }}</span>
+        <input type="number" name="goles_local" min="0" value="{{ p.goles_local if p.goles_local is not none else '' }}" style="width:60px;">
+        <span>—</span>
+        <input type="number" name="goles_visitante" min="0" value="{{ p.goles_visitante if p.goles_visitante is not none else '' }}" style="width:60px;">
+        <span style="min-width:140px;">{{ p.equipo_visitante }}</span>
+        <button type="submit" style="padding:6px 12px; font-size:0.85rem;">Guardar resultado</button>
+      </form>
+      {% if p.jugado %}
+        <span class="badge badge-ok">✅ Jugado</span>
+        <form method="post" action="{{ url_for('quitar_resultado', partido_id=p.id) }}" onsubmit="return confirm('¿Quitar el resultado de este partido?');" style="margin:0;">
+          <button type="submit" class="btn-del">Quitar resultado</button>
+        </form>
+      {% else %}
+        <span class="badge" style="background:#eef3ee; color:#555;">Pendiente</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card">
+  <h2>Tabla de posiciones</h2>
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead>
+      <tr><th>#</th><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>DG</th><th>Pts</th></tr>
+    </thead>
+    <tbody>
+      {% for f in tabla %}
+      <tr>
+        <td data-label="#">{{ loop.index }}</td>
+        <td data-label="Equipo"><strong>{{ f.equipo }}</strong></td>
+        <td data-label="PJ">{{ f.pj }}</td>
+        <td data-label="G">{{ f.g }}</td>
+        <td data-label="E">{{ f.e }}</td>
+        <td data-label="P">{{ f.p }}</td>
+        <td data-label="GF">{{ f.gf }}</td>
+        <td data-label="GC">{{ f.gc }}</td>
+        <td data-label="DG">{{ f.dg }}</td>
+        <td data-label="Pts"><strong>{{ f.pts }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p style="font-size:0.8rem; color:#888; margin-top:8px;">Se calcula sola a partir de los resultados guardados arriba (3 puntos por ganar, 1 por empate).</p>
+</div>
+
+<div class="card">
+  <h2>Registrar gol</h2>
+  <form method="post" action="{{ url_for('agregar_gol') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+    <div style="flex:1; min-width:220px;">
+      <label>Jugador</label>
+      <div class="buscador-jugador" id="buscadorGolJugador">
+        <input type="text" class="buscador-input" placeholder="Escribe nombre, apellido o cédula..." autocomplete="off" required>
+        <input type="hidden" class="buscador-valor" name="jugador_id">
+        <div class="buscador-lista" style="display:none;"></div>
+      </div>
+    </div>
+    <div>
+      <label>Cantidad de goles</label>
+      <input type="number" name="cantidad" min="1" value="1" required style="width:100px;">
+    </div>
+    <div>
+      <label>Partido (opcional)</label>
+      <select name="partido_id">
+        <option value="">-- Sin partido específico --</option>
+        {% for item in jornadas %}
+          {% for p in item.partidos %}
+            <option value="{{ p.id }}">J{{ item.jornada.numero }}: {{ p.equipo_local }} vs {{ p.equipo_visitante }}</option>
+          {% endfor %}
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit">Registrar gol</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Goleadores</h2>
+  {% if not goleadores %}
+    <p style="color:#888;">Todavía no hay goles registrados.</p>
+  {% else %}
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead>
+      <tr><th>#</th><th>Jugador</th><th>Equipo</th><th>Goles</th></tr>
+    </thead>
+    <tbody>
+      {% for g in goleadores %}
+      <tr>
+        <td data-label="#">{{ loop.index }}</td>
+        <td data-label="Jugador">{{ g.apellidos }} {{ g.nombres }}</td>
+        <td data-label="Equipo">{{ g.equipo }}</td>
+        <td data-label="Goles"><strong>{{ g.goles }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Historial de goles registrados</h2>
+  {% if not goles_registrados %}
+    <p style="color:#888;">No hay registros.</p>
+  {% else %}
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead>
+      <tr><th>Jugador</th><th>Equipo</th><th>Cantidad</th><th>Fecha</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for g in goles_registrados %}
+      <tr>
+        <td data-label="Jugador">{{ g.j_apellidos }} {{ g.j_nombres }}</td>
+        <td data-label="Equipo">{{ g.j_equipo }}</td>
+        <td data-label="Cantidad">{{ g.cantidad }}</td>
+        <td data-label="Fecha">{{ g.fecha }}</td>
+        <td data-label="" class="table-actions">
+          <form method="post" action="{{ url_for('eliminar_gol', gol_id=g.id) }}" onsubmit="return confirm('¿Eliminar este registro?');" style="margin:0;">
+            <button type="submit" class="btn-del">Eliminar</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const JUGADORES = {{ jugadores_js|tojson }};
+  const raiz = document.getElementById('buscadorGolJugador');
+  if (raiz) window.initBuscadorJugador(raiz, JUGADORES);
+})();
+</script>
+{% endblock %}

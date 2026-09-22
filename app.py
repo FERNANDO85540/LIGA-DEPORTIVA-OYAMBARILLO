@@ -105,6 +105,8 @@ CALIFICACION_USER = os.environ.get("CALIFICACION_USER", "comision")
 CALIFICACION_PASS = os.environ.get("CALIFICACION_PASS", "")
 SANCIONES_USER = os.environ.get("SANCIONES_USER", "sanciones")
 SANCIONES_PASS = os.environ.get("SANCIONES_PASS", "")
+TECNICA_USER = os.environ.get("TECNICA_USER", "tecnica")
+TECNICA_PASS = os.environ.get("TECNICA_PASS", "")
 
 
 @app.route("/fotos_jugadores/<path:filename>")
@@ -286,6 +288,24 @@ def init_db():
             fecha TEXT NOT NULL
         )
     """)
+
+    pcols = _columnas_existentes(db, "partidos")
+    if "goles_local" not in pcols:
+        db.execute("ALTER TABLE partidos ADD COLUMN goles_local INTEGER")
+    if "goles_visitante" not in pcols:
+        db.execute("ALTER TABLE partidos ADD COLUMN goles_visitante INTEGER")
+    if "jugado" not in pcols:
+        db.execute("ALTER TABLE partidos ADD COLUMN jugado INTEGER NOT NULL DEFAULT 0")
+
+    db.execute(f"""
+        CREATE TABLE IF NOT EXISTS goles (
+            id {tipo_id},
+            jugador_id INTEGER NOT NULL,
+            partido_id INTEGER,
+            cantidad INTEGER NOT NULL DEFAULT 1,
+            fecha TEXT NOT NULL
+        )
+    """)
     db.commit()
     db.close()
 
@@ -361,6 +381,18 @@ def sanciones_required(f):
     return wrapper
 
 
+def tecnica_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("logged_in"):
+            return redirect(url_for("login"))
+        if session.get("rol") not in ("admin", "tecnica"):
+            flash("Esta acción requiere acceso al módulo de la Comisión Técnica.")
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return wrapper
+
+
 def equipo_permitido(equipo_id):
     if session.get("rol") == "admin":
         return True
@@ -404,6 +436,12 @@ def login():
             session["rol"] = "sanciones"
             return redirect(url_for("sanciones_modulo"))
 
+        if TECNICA_PASS and user == TECNICA_USER and pw == TECNICA_PASS:
+            session.clear()
+            session["logged_in"] = True
+            session["rol"] = "tecnica"
+            return redirect(url_for("tecnica_modulo"))
+
         db = get_db()
         equipo = db.execute(
             "SELECT * FROM equipos WHERE usuario = ? AND clave = ?", (user, pw)
@@ -444,6 +482,8 @@ def index():
         return redirect(url_for("comision_modulo"))
     if session.get("rol") == "sanciones":
         return redirect(url_for("sanciones_modulo"))
+    if session.get("rol") == "tecnica":
+        return redirect(url_for("tecnica_modulo"))
     return redirect(url_for("inscripcion"))
 
 
@@ -1547,6 +1587,225 @@ def marcar_sancion_pagada(sancion_id):
     db.commit()
     flash("Estado de pago actualizado.", "ok")
     return redirect(url_for("sanciones_modulo"))
+
+
+def _calcular_tabla_posiciones(db):
+    equipos = db.execute("SELECT nombre FROM equipos ORDER BY nombre").fetchall()
+    tabla = {
+        e["nombre"]: {"equipo": e["nombre"], "pj": 0, "g": 0, "e": 0, "p": 0, "gf": 0, "gc": 0, "pts": 0}
+        for e in equipos
+    }
+
+    partidos = db.execute(
+        "SELECT * FROM partidos WHERE jugado = 1 AND goles_local IS NOT NULL AND goles_visitante IS NOT NULL"
+    ).fetchall()
+    for p in partidos:
+        local, visitante = p["equipo_local"], p["equipo_visitante"]
+        gl, gv = p["goles_local"], p["goles_visitante"]
+        if local not in tabla or visitante not in tabla:
+            continue
+        tabla[local]["pj"] += 1
+        tabla[visitante]["pj"] += 1
+        tabla[local]["gf"] += gl
+        tabla[local]["gc"] += gv
+        tabla[visitante]["gf"] += gv
+        tabla[visitante]["gc"] += gl
+        if gl > gv:
+            tabla[local]["g"] += 1
+            tabla[local]["pts"] += 3
+            tabla[visitante]["p"] += 1
+        elif gl < gv:
+            tabla[visitante]["g"] += 1
+            tabla[visitante]["pts"] += 3
+            tabla[local]["p"] += 1
+        else:
+            tabla[local]["e"] += 1
+            tabla[visitante]["e"] += 1
+            tabla[local]["pts"] += 1
+            tabla[visitante]["pts"] += 1
+
+    filas = list(tabla.values())
+    for f in filas:
+        f["dg"] = f["gf"] - f["gc"]
+    filas.sort(key=lambda f: (-f["pts"], -f["dg"], -f["gf"]))
+    return filas
+
+
+def _calcular_goleadores(db, limite=15):
+    return db.execute(
+        """
+        SELECT j.id, j.nombres, j.apellidos, j.equipo, SUM(g.cantidad) AS goles
+        FROM goles g
+        JOIN jugadores j ON j.id = g.jugador_id
+        GROUP BY j.id, j.nombres, j.apellidos, j.equipo
+        ORDER BY goles DESC
+        LIMIT ?
+        """,
+        (limite,),
+    ).fetchall()
+
+
+@app.route("/tecnica")
+@tecnica_required
+def tecnica_modulo():
+    db = get_db()
+    jornadas = _fixture_completo(db)
+    jugadores = db.execute(
+        "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos, nombres",
+        (CATEGORIA_ACTIVA,),
+    ).fetchall()
+    jugadores_js = [
+        {"id": j["id"], "label": f"{j['apellidos']} {j['nombres']} ({j['cedula']})", "equipo": j["equipo"]}
+        for j in jugadores
+    ]
+    tabla = _calcular_tabla_posiciones(db)
+    goleadores = _calcular_goleadores(db)
+    goles_registrados = db.execute(
+        """
+        SELECT g.*, j.nombres AS j_nombres, j.apellidos AS j_apellidos, j.equipo AS j_equipo
+        FROM goles g
+        JOIN jugadores j ON j.id = g.jugador_id
+        ORDER BY g.fecha DESC, g.id DESC
+        """
+    ).fetchall()
+
+    return render_template(
+        "tecnica_modulo.html",
+        jornadas=jornadas,
+        jugadores_js=jugadores_js,
+        tabla=tabla,
+        goleadores=goleadores,
+        goles_registrados=goles_registrados,
+    )
+
+
+@app.route("/tecnica/partido/<int:partido_id>/resultado", methods=["POST"])
+@tecnica_required
+def registrar_resultado(partido_id):
+    db = get_db()
+    partido = db.execute("SELECT * FROM partidos WHERE id = ?", (partido_id,)).fetchone()
+    if not partido:
+        flash("Partido no encontrado.")
+        return redirect(url_for("tecnica_modulo"))
+    gl = request.form.get("goles_local", "").strip()
+    gv = request.form.get("goles_visitante", "").strip()
+    if not gl.isdigit() or not gv.isdigit():
+        flash("Ingresa un marcador válido (números).")
+        return redirect(url_for("tecnica_modulo"))
+    db.execute(
+        "UPDATE partidos SET goles_local = ?, goles_visitante = ?, jugado = 1 WHERE id = ?",
+        (int(gl), int(gv), partido_id),
+    )
+    db.commit()
+    flash("Resultado registrado.", "ok")
+    return redirect(url_for("tecnica_modulo"))
+
+
+@app.route("/tecnica/partido/<int:partido_id>/quitar_resultado", methods=["POST"])
+@tecnica_required
+def quitar_resultado(partido_id):
+    db = get_db()
+    db.execute(
+        "UPDATE partidos SET goles_local = NULL, goles_visitante = NULL, jugado = 0 WHERE id = ?",
+        (partido_id,),
+    )
+    db.commit()
+    flash("Resultado eliminado.", "ok")
+    return redirect(url_for("tecnica_modulo"))
+
+
+@app.route("/tecnica/gol/agregar", methods=["POST"])
+@tecnica_required
+def agregar_gol():
+    db = get_db()
+    jugador_id = request.form.get("jugador_id", "").strip()
+    partido_id = request.form.get("partido_id", "").strip() or None
+    cantidad = request.form.get("cantidad", "1").strip()
+
+    if not jugador_id.isdigit() or not cantidad.isdigit() or int(cantidad) < 1:
+        flash("Selecciona un jugador y una cantidad de goles válida.")
+        return redirect(url_for("tecnica_modulo"))
+
+    db.execute(
+        "INSERT INTO goles (jugador_id, partido_id, cantidad, fecha) VALUES (?, ?, ?, ?)",
+        (int(jugador_id), partido_id, int(cantidad), datetime.now().strftime("%Y-%m-%d %H:%M")),
+    )
+    db.commit()
+    flash("Gol(es) registrado(s).", "ok")
+    return redirect(url_for("tecnica_modulo"))
+
+
+@app.route("/tecnica/gol/<int:gol_id>/eliminar", methods=["POST"])
+@tecnica_required
+def eliminar_gol(gol_id):
+    db = get_db()
+    db.execute("DELETE FROM goles WHERE id = ?", (gol_id,))
+    db.commit()
+    flash("Registro de gol eliminado.", "ok")
+    return redirect(url_for("tecnica_modulo"))
+
+
+# ---------- Sección pública: consulta libre, sin necesidad de cuenta ----------
+
+@app.route("/publico")
+def publico_inicio():
+    return render_template("publico_inicio.html")
+
+
+@app.route("/publico/tabla")
+def publico_tabla():
+    db = get_db()
+    tabla = _calcular_tabla_posiciones(db)
+    goleadores = _calcular_goleadores(db)
+    return render_template("publico_tabla.html", tabla=tabla, goleadores=goleadores)
+
+
+@app.route("/publico/calendario")
+def publico_calendario():
+    db = get_db()
+    jornadas = _fixture_completo(db)
+    return render_template("publico_calendario.html", jornadas=jornadas)
+
+
+@app.route("/publico/equipos")
+def publico_equipos():
+    db = get_db()
+    equipos = db.execute("SELECT * FROM equipos ORDER BY nombre").fetchall()
+    conteos = {}
+    for e in equipos:
+        conteos[e["nombre"]] = db.execute(
+            "SELECT COUNT(*) c FROM jugadores WHERE equipo = ? AND categoria = ?",
+            (e["nombre"], CATEGORIA_ACTIVA),
+        ).fetchone()["c"]
+    return render_template("publico_equipos.html", equipos=equipos, conteos=conteos, categoria=CATEGORIA_ACTIVA)
+
+
+@app.route("/publico/jugadores")
+def publico_jugadores():
+    db = get_db()
+    # Solo datos que pueden verse públicamente: sin cédula.
+    jugadores = db.execute(
+        """SELECT nombres, apellidos, equipo, categoria, subcategoria, numero_camiseta, calificado
+           FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos, nombres""",
+        (CATEGORIA_ACTIVA,),
+    ).fetchall()
+    return render_template("publico_jugadores.html", jugadores=jugadores, categoria=CATEGORIA_ACTIVA)
+
+
+@app.route("/publico/resultados")
+def publico_resultados():
+    db = get_db()
+    partidos = db.execute(
+        """
+        SELECT p.*, jo.numero AS jornada_numero
+        FROM partidos p
+        JOIN jornadas jo ON jo.id = p.jornada_id
+        WHERE p.jugado = 1
+        ORDER BY jo.numero DESC, p.id DESC
+        """
+    ).fetchall()
+    goleadores = _calcular_goleadores(db)
+    return render_template("publico_resultados.html", partidos=partidos, goleadores=goleadores)
 
 
 @app.route("/jugador/<int:jugador_id>/eliminar", methods=["POST"])

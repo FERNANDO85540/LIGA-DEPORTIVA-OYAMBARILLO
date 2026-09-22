@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p><a href="{{ url_for('publico_inicio') }}">&larr; Volver</a></p>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.4rem;">👤 Jugadores</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">Categoría {{ categoria }} — {{ jugadores|length }} jugador(es)</p>
+</div>
+
+<div class="card">
+  <input type="text" id="buscadorPublicoJugadores" placeholder="Buscar por nombre, apellido o equipo...">
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive" id="tablaPublicoJugadores">
+    <thead>
+      <tr><th>Nombres</th><th>Apellidos</th><th>Equipo</th><th>Categoría</th><th>Camiseta</th></tr>
+    </thead>
+    <tbody>
+      {% for j in jugadores %}
+      <tr>
+        <td data-label="Nombres">{{ j.nombres }}</td>
+        <td data-label="Apellidos">{{ j.apellidos }}</td>
+        <td data-label="Equipo">{{ j.equipo }}</td>
+        <td data-label="Categoría">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
+        <td data-label="Camiseta">{{ j.numero_camiseta or '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p id="sinResultadosPublicoJugadores" style="display:none; color:#888; text-align:center; padding:16px 0;">
+    No se encontró ningún jugador con esa búsqueda.
+  </p>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  const buscador = document.getElementById('buscadorPublicoJugadores');
+  const filas = Array.from(document.querySelectorAll('#tablaPublicoJugadores tbody tr'));
+  const sinResultados = document.getElementById('sinResultadosPublicoJugadores');
+
+  buscador.addEventListener('input', function () {
+    const q = buscador.value.trim().toLowerCase();
+    let visibles = 0;
+    filas.forEach(function (fila) {
+      const coincide = fila.textContent.toLowerCase().includes(q);
+      fila.style.display = coincide ? '' : 'none';
+      if (coincide) visibles++;
+    });
+    sinResultados.style.display = (q && visibles === 0) ? 'block' : 'none';
+  });
+})();
+</script>
+{% endblock %}

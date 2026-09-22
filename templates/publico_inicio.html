@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.5rem;">⚽ Liga Deportiva Oyambarillo</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">Consulta pública — sin necesidad de cuenta.</p>
+</div>
+
+<div class="cupos-grid" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));">
+  <a href="{{ url_for('publico_tabla') }}" style="text-decoration:none; color:inherit;">
+    <div class="card" style="text-align:center; margin-bottom:0; height:100%;">
+      <div style="font-size:2rem;">🏆</div>
+      <h3 style="margin:8px 0 4px;">Tabla de posiciones</h3>
+      <p style="font-size:0.85rem; color:#888; margin:0;">Clasificación y goleadores</p>
+    </div>
+  </a>
+  <a href="{{ url_for('publico_calendario') }}" style="text-decoration:none; color:inherit;">
+    <div class="card" style="text-align:center; margin-bottom:0; height:100%;">
+      <div style="font-size:2rem;">🗓️</div>
+      <h3 style="margin:8px 0 4px;">Calendario</h3>
+      <p style="font-size:0.85rem; color:#888; margin:0;">Encuentros y descansos por jornada</p>
+    </div>
+  </a>
+  <a href="{{ url_for('publico_equipos') }}" style="text-decoration:none; color:inherit;">
+    <div class="card" style="text-align:center; margin-bottom:0; height:100%;">
+      <div style="font-size:2rem;">🛡️</div>
+      <h3 style="margin:8px 0 4px;">Equipos</h3>
+      <p style="font-size:0.85rem; color:#888; margin:0;">Todos los equipos participantes</p>
+    </div>
+  </a>
+  <a href="{{ url_for('publico_jugadores') }}" style="text-decoration:none; color:inherit;">
+    <div class="card" style="text-align:center; margin-bottom:0; height:100%;">
+      <div style="font-size:2rem;">👤</div>
+      <h3 style="margin:8px 0 4px;">Jugadores</h3>
+      <p style="font-size:0.85rem; color:#888; margin:0;">Busca a un jugador por nombre</p>
+    </div>
+  </a>
+  <a href="{{ url_for('publico_resultados') }}" style="text-decoration:none; color:inherit;">
+    <div class="card" style="text-align:center; margin-bottom:0; height:100%;">
+      <div style="font-size:2rem;">📋</div>
+      <h3 style="margin:8px 0 4px;">Resultados</h3>
+      <p style="font-size:0.85rem; color:#888; margin:0;">Marcadores de partidos jugados</p>
+    </div>
+  </a>
+</div>
+
+<div class="card" style="text-align:center;">
+  <a href="{{ url_for('login') }}">🔑 Acceso para equipos y comisiones</a>
+</div>
+
+{% endblock %}
