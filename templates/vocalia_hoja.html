@@ -60,116 +60,94 @@
   </form>
 </div>
 
+{% macro tabla_equipo(equipo_nombre, jugadores) %}
 <div class="card">
-  <h2>Asistencia — quiénes participaron</h2>
+  <h2 style="font-size:1.05rem;">{{ equipo_nombre }}</h2>
   <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
-    Marca a todos los jugadores inscritos que efectivamente estuvieron presentes/participaron en este encuentro
-    (jugaron o estuvieron en la banca). Esto queda como el registro oficial, distinto de la alineación que arma el delegado.
+    Marca quién participó, sus tarjetas y sus goles en este encuentro. "Participó" queda como el registro oficial de asistencia.
   </p>
-  <form method="post" action="{{ url_for('guardar_asistencia_vocalia', partido_id=partido.id) }}">
-    <div class="cupos-grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));">
-      <div>
-        <h3 style="font-size:0.95rem; margin-bottom:8px;">{{ partido.equipo_local }}</h3>
-        {% for j in jugadores_local %}
-        <input type="hidden" name="todos_ids" value="{{ j.id }}">
-        <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin:0 0 6px; border:1px solid var(--borde); border-radius:8px; padding:6px 10px;">
-          <input type="checkbox" name="participo" value="{{ j.id }}" style="width:auto;" {% if asistencia.get(j.id) %}checked{% endif %}>
-          {{ j.numero_camiseta or '' }} {{ j.apellidos }} {{ j.nombres }}
-        </label>
+  <form method="post" action="{{ url_for('guardar_hoja_equipo', partido_id=partido.id) }}">
+    <input type="hidden" name="equipo_nombre" value="{{ equipo_nombre }}">
+    <div style="overflow-x:auto;">
+    <table class="tabla-responsive">
+      <thead>
+        <tr><th>#</th><th>Jugador</th><th>Participó</th><th>🟨</th><th>🟥</th><th>Goles</th></tr>
+      </thead>
+      <tbody>
+        {% for j in jugadores %}
+        <tr>
+          <td data-label="#">
+            <input type="hidden" name="todos_ids" value="{{ j.id }}">
+            {{ j.numero_camiseta or loop.index }}
+          </td>
+          <td data-label="Jugador"><strong>{{ j.apellidos }} {{ j.nombres }}</strong></td>
+          <td data-label="Participó"><input type="checkbox" name="participo" value="{{ j.id }}" style="width:auto;" {% if asistencia.get(j.id) %}checked{% endif %}></td>
+          <td data-label="🟨"><input type="checkbox" name="amarilla" value="{{ j.id }}" style="width:auto;" {% if j.id in amarillas_ids %}checked{% endif %}></td>
+          <td data-label="🟥"><input type="checkbox" name="roja" value="{{ j.id }}" style="width:auto;" {% if j.id in rojas_ids %}checked{% endif %}></td>
+          <td data-label="Goles"><input type="number" name="goles_{{ j.id }}" min="0" value="{{ goles_por_jugador.get(j.id, 0) }}" style="width:60px;"></td>
+        </tr>
         {% else %}
-        <p style="color:#888; font-size:0.85rem;">Sin jugadores inscritos.</p>
+        <tr><td colspan="6">Sin jugadores inscritos.</td></tr>
         {% endfor %}
-      </div>
-      <div>
-        <h3 style="font-size:0.95rem; margin-bottom:8px;">{{ partido.equipo_visitante }}</h3>
-        {% for j in jugadores_visitante %}
-        <input type="hidden" name="todos_ids" value="{{ j.id }}">
-        <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin:0 0 6px; border:1px solid var(--borde); border-radius:8px; padding:6px 10px;">
-          <input type="checkbox" name="participo" value="{{ j.id }}" style="width:auto;" {% if asistencia.get(j.id) %}checked{% endif %}>
-          {{ j.numero_camiseta or '' }} {{ j.apellidos }} {{ j.nombres }}
-        </label>
-        {% else %}
-        <p style="color:#888; font-size:0.85rem;">Sin jugadores inscritos.</p>
-        {% endfor %}
-      </div>
+      </tbody>
+    </table>
     </div>
-    <button type="submit" style="margin-top:14px;">Guardar asistencia</button>
+    <button type="submit" style="margin-top:14px;">Guardar hoja de {{ equipo_nombre }}</button>
   </form>
 </div>
+{% endmacro %}
+
+{{ tabla_equipo(partido.equipo_local, jugadores_local) }}
+{{ tabla_equipo(partido.equipo_visitante, jugadores_visitante) }}
 
 <div class="card">
-  <h2>Tarjetas</h2>
-  <form method="post" action="{{ url_for('agregar_tarjeta_vocalia', partido_id=partido.id) }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
-    <div style="flex:1; min-width:220px;">
-      <label>Jugador</label>
-      <div class="buscador-jugador" id="buscadorVocaliaTarjeta">
-        <input type="text" class="buscador-input" placeholder="Escribe nombre, apellido o número..." autocomplete="off" required>
-        <input type="hidden" class="buscador-valor" name="jugador_id">
-        <div class="buscador-lista" style="display:none;"></div>
-      </div>
-    </div>
+  <h2>🔄 Cambios</h2>
+  <form method="post" action="{{ url_for('agregar_cambio', partido_id=partido.id) }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
     <div>
-      <label>Tipo</label>
-      <select name="tipo" required>
-        <option value="amarilla">🟨 Amarilla</option>
-        <option value="roja">🟥 Roja</option>
+      <label>Equipo</label>
+      <select name="equipo" required>
+        <option value="{{ partido.equipo_local }}">{{ partido.equipo_local }}</option>
+        <option value="{{ partido.equipo_visitante }}">{{ partido.equipo_visitante }}</option>
       </select>
     </div>
     <div style="flex:1; min-width:200px;">
-      <label>Observación (opcional)</label>
-      <input type="text" name="observacion" placeholder="ej. minuto 34, doble amarilla...">
+      <label>Sale</label>
+      <div class="buscador-jugador" id="buscadorCambioSale">
+        <input type="text" class="buscador-input" placeholder="Jugador que sale..." autocomplete="off" required>
+        <input type="hidden" class="buscador-valor" name="jugador_sale_id">
+        <div class="buscador-lista" style="display:none;"></div>
+      </div>
     </div>
-    <button type="submit">Registrar tarjeta</button>
-  </form>
-
-  {% if tarjetas %}
-  <ul style="margin:16px 0 0; padding-left:20px;">
-    {% for t in tarjetas %}
-    <li>
-      {{ '🟨' if t.tipo == 'amarilla' else '🟥' }} {{ t.apellidos }} {{ t.nombres }} ({{ t.equipo }})
-      {% if t.observacion %} — {{ t.observacion }}{% endif %}
-      <form method="post" action="{{ url_for('eliminar_tarjeta_vocalia', tarjeta_id=t.id) }}" style="display:inline; margin:0;">
-        <button type="submit" class="btn-del" style="padding:2px 8px; font-size:0.75rem;">Eliminar</button>
-      </form>
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p style="color:#888; margin-top:12px;">Sin tarjetas registradas en este partido.</p>
-  {% endif %}
-</div>
-
-<div class="card">
-  <h2>Goles</h2>
-  <form method="post" action="{{ url_for('agregar_gol_vocalia', partido_id=partido.id) }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
-    <div style="flex:1; min-width:220px;">
-      <label>Jugador</label>
-      <div class="buscador-jugador" id="buscadorVocaliaGol">
-        <input type="text" class="buscador-input" placeholder="Escribe nombre, apellido o número..." autocomplete="off" required>
-        <input type="hidden" class="buscador-valor" name="jugador_id">
+    <div style="flex:1; min-width:200px;">
+      <label>Entra</label>
+      <div class="buscador-jugador" id="buscadorCambioEntra">
+        <input type="text" class="buscador-input" placeholder="Jugador que entra..." autocomplete="off" required>
+        <input type="hidden" class="buscador-valor" name="jugador_entra_id">
         <div class="buscador-lista" style="display:none;"></div>
       </div>
     </div>
     <div>
-      <label>Cantidad</label>
-      <input type="number" name="cantidad" min="1" value="1" required style="width:90px;">
+      <label>Minuto (opcional)</label>
+      <input type="text" name="minuto" placeholder="ej. 65" style="width:90px;">
     </div>
-    <button type="submit">Registrar gol</button>
+    <button type="submit">Registrar cambio</button>
   </form>
 
-  {% if goles %}
+  {% if cambios %}
   <ul style="margin:16px 0 0; padding-left:20px;">
-    {% for g in goles %}
+    {% for c in cambios %}
     <li>
-      ⚽ {{ g.apellidos }} {{ g.nombres }} ({{ g.equipo }}) — {{ g.cantidad }}
-      <form method="post" action="{{ url_for('eliminar_gol_vocalia', gol_id=g.id) }}" style="display:inline; margin:0;">
+      {{ c.equipo }} — Sale: {{ c.sale_apellidos }} {{ c.sale_nombres }} ({{ c.sale_numero }}) &rarr;
+      Entra: {{ c.entra_apellidos }} {{ c.entra_nombres }} ({{ c.entra_numero }})
+      {% if c.minuto %} — min {{ c.minuto }}{% endif %}
+      <form method="post" action="{{ url_for('eliminar_cambio', cambio_id=c.id) }}" style="display:inline; margin:0;">
         <button type="submit" class="btn-del" style="padding:2px 8px; font-size:0.75rem;">Eliminar</button>
       </form>
     </li>
     {% endfor %}
   </ul>
   {% else %}
-  <p style="color:#888; margin-top:12px;">Sin goles registrados en este partido.</p>
+  <p style="color:#888; margin-top:12px;">Sin cambios registrados.</p>
   {% endif %}
 </div>
 
@@ -210,7 +188,7 @@
 <script>
 (function () {
   const JUGADORES = {{ jugadores_js|tojson }};
-  ['buscadorVocaliaTarjeta', 'buscadorVocaliaGol'].forEach(function (id) {
+  ['buscadorCambioSale', 'buscadorCambioEntra'].forEach(function (id) {
     const raiz = document.getElementById(id);
     if (raiz) window.initBuscadorJugador(raiz, JUGADORES);
   });

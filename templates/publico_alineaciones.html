@@ -98,6 +98,17 @@
   {% endfor %}
 </div>
 
+{% if cambios %}
+<div class="card">
+  <h2 style="font-size:1rem;">🔄 Cambios</h2>
+  <ul style="margin:0; padding-left:20px; font-size:0.85rem;">
+    {% for c in cambios %}
+    <li>{{ c.equipo }} — Sale: {{ c.sale_apellidos }} {{ c.sale_nombres }} &rarr; Entra: {{ c.entra_apellidos }} {{ c.entra_nombres }}{% if c.minuto %} (min {{ c.minuto }}){% endif %}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
 {% if incidentes %}
 <div class="card">
   <h2 style="font-size:1rem;">📝 Incidentes del encuentro</h2>
