@@ -8,13 +8,8 @@
   <p style="margin:6px 0 0; opacity:0.95;">Categoría {{ categoria }} — {{ jugadores|length }} jugador(es) en {{ total_equipos }} equipo(s)</p>
 </div>
 
-<div class="card" style="text-align:center;">
-  {% for c in categorias_liga %}
-    <a href="{{ url_for('jugadores_liga', categoria=c) }}">
-      <button type="button" style="{% if c != categoria %}background:transparent; color:var(--verde-osc); border:1px solid var(--verde-osc);{% endif %}">{{ c }}</button>
-    </a>
-  {% endfor %}
-</div>
+{% set categoria_endpoint = 'jugadores_liga' %}
+{% include "_categoria_cards.html" %}
 
 <div class="card">
   <input type="text" id="buscadorLiga" placeholder="Buscar por cédula, nombre, apellido o equipo...">

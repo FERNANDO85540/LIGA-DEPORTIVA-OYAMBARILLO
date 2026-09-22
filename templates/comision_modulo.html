@@ -6,13 +6,8 @@
   <p style="margin:6px 0 0; opacity:0.95;">Calificación de jugadores.</p>
 </div>
 
-<div class="card" style="text-align:center;">
-  {% for c in categorias_liga %}
-    <a href="{{ url_for('comision_modulo', categoria=c) }}">
-      <button type="button" style="{% if c != categoria %}background:transparent; color:var(--verde-osc); border:1px solid var(--verde-osc);{% endif %}">{{ c }}</button>
-    </a>
-  {% endfor %}
-</div>
+{% set categoria_endpoint = 'comision_modulo' %}
+{% include "_categoria_cards.html" %}
 
 <div class="card">
   <h2>Lista de calificación — {{ categoria }} ({{ jugadores|length }} jugadores)</h2>
