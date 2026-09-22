@@ -1354,26 +1354,19 @@ def _fixture_completo(db):
 @calificacion_required
 def comision_modulo():
     db = get_db()
-    equipos = db.execute("SELECT * FROM equipos ORDER BY nombre").fetchall()
-    jornadas = _fixture_completo(db)
     jugadores = db.execute(
         "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos, nombres",
         (CATEGORIA_ACTIVA,),
     ).fetchall()
-    ultima = db.execute("SELECT MAX(numero) m FROM jornadas").fetchone()["m"]
-    siguiente_numero = (ultima or 0) + 1
 
     return render_template(
         "comision_modulo.html",
-        equipos=equipos,
-        jornadas=jornadas,
         jugadores=jugadores,
-        siguiente_numero=siguiente_numero,
     )
 
 
-@app.route("/comision/jornada/agregar", methods=["POST"])
-@calificacion_required
+@app.route("/tecnica/jornada/agregar", methods=["POST"])
+@tecnica_required
 def agregar_jornada():
     db = get_db()
     numero = request.form.get("numero", "").strip()
@@ -1428,8 +1421,8 @@ def agregar_jornada():
     return redirect(url_for("comision_modulo"))
 
 
-@app.route("/comision/jornada/<int:jornada_id>/eliminar", methods=["POST"])
-@calificacion_required
+@app.route("/tecnica/jornada/<int:jornada_id>/eliminar", methods=["POST"])
+@tecnica_required
 def eliminar_jornada(jornada_id):
     db = get_db()
     db.execute("DELETE FROM partidos WHERE jornada_id = ?", (jornada_id,))
@@ -1649,7 +1642,10 @@ def _calcular_goleadores(db, limite=15):
 @tecnica_required
 def tecnica_modulo():
     db = get_db()
+    equipos = db.execute("SELECT * FROM equipos ORDER BY nombre").fetchall()
     jornadas = _fixture_completo(db)
+    ultima = db.execute("SELECT MAX(numero) m FROM jornadas").fetchone()["m"]
+    siguiente_numero = (ultima or 0) + 1
     jugadores = db.execute(
         "SELECT * FROM jugadores WHERE categoria = ? ORDER BY equipo, apellidos, nombres",
         (CATEGORIA_ACTIVA,),
@@ -1671,6 +1667,8 @@ def tecnica_modulo():
 
     return render_template(
         "tecnica_modulo.html",
+        equipos=equipos,
+        siguiente_numero=siguiente_numero,
         jornadas=jornadas,
         jugadores_js=jugadores_js,
         tabla=tabla,
