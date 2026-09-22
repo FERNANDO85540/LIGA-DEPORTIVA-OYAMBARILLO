@@ -2514,6 +2514,29 @@ def _partidos_en_vivo(db):
 
 # ---------- Vocalía: hoja oficial del encuentro (asistencia, tarjetas, goles, incidentes, árbitro) ----------
 
+def _jugador_suspendido(db, jugador_id, jornada_actual):
+    """True si el jugador tiene una sanción de la Comisión de Penas y Sanciones
+    que todavía lo deja suspendido en esta jornada (mismo campeonato/categoría/división)."""
+    if not jornada_actual:
+        return False
+    sanciones_rows = db.execute(
+        "SELECT jornadas_sancionado, jornada_desde_id FROM sanciones "
+        "WHERE jugador_id = ? AND jornada_desde_id IS NOT NULL",
+        (jugador_id,),
+    ).fetchall()
+    for s in sanciones_rows:
+        desde = db.execute("SELECT * FROM jornadas WHERE id = ?", (s["jornada_desde_id"],)).fetchone()
+        if not desde:
+            continue
+        if desde["categoria"] != jornada_actual["categoria"] or desde["division"] != jornada_actual["division"]:
+            continue
+        inicio = desde["numero"]
+        fin = inicio + s["jornadas_sancionado"] - 1
+        if inicio <= jornada_actual["numero"] <= fin:
+            return True
+    return False
+
+
 @app.route("/vocalia")
 @vocalia_required
 def vocalia_modulo():
@@ -2582,11 +2605,17 @@ def vocalia_hoja(partido_id):
         for j in list(jugadores_local) + list(jugadores_visitante)
     ]
 
+    suspendidos_ids = {
+        j["id"] for j in list(jugadores_local) + list(jugadores_visitante)
+        if _jugador_suspendido(db, j["id"], jornada)
+    }
+
     return render_template(
         "vocalia_hoja.html",
         partido=partido, jornada=jornada,
         jugadores_local=jugadores_local, jugadores_visitante=jugadores_visitante,
         asistencia=asistencia, amarillas_ids=amarillas_ids, rojas_ids=rojas_ids,
+        suspendidos_ids=suspendidos_ids,
         goles_por_jugador=goles_por_jugador, incidentes=incidentes, cambios=cambios,
         jugadores_js=jugadores_js,
     )

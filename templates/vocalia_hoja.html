@@ -89,7 +89,12 @@
                 <span style="font-size:1rem; color:#b7c2ba;">👤</span>
                 {% endif %}
               </div>
-              <strong>{{ j.apellidos }} {{ j.nombres }}</strong>
+              <div>
+                <strong>{{ j.apellidos }} {{ j.nombres }}</strong>
+                {% if j.id in suspendidos_ids %}
+                <span style="display:block; color:#c0392b; font-size:0.7rem; font-weight:600;">[Suspendido. Consulte la mesa de supervisión]</span>
+                {% endif %}
+              </div>
             </div>
           </td>
           <td data-label="Participó"><input type="checkbox" name="participo" value="{{ j.id }}" style="width:auto;" {% if asistencia.get(j.id) %}checked{% endif %}></td>
