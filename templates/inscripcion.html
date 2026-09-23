@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white; padding: 15px; border-radius: 8px;">
   <h1 style="margin:0; font-size:1.6rem;">LIGA DEPORTIVA OYAMBARILLO</h1>
-  <p style="margin:6px 0 0; font-size:1.05rem; opacity:0.95;">Panel de administración</p>
+  <p style="margin:6px 0 0; font-size:1.05rem; opacity:0.95;">Panel de Inscripciones y Equipos</p>
 </div>
 
 {% set categoria_endpoint = 'inscripcion' %}
@@ -11,58 +11,66 @@
 {% include "_division_cards.html" %}
 
 <div class="card">
-  <h2>Equipos participantes — {{ categoria }}{% if division %} - {{ division }}{% endif %}</h2>
-  <p>
-    <a href="{{ url_for('exportar_general', categoria=categoria) }}"><button type="button">⬇️ Descargar Excel general ({{ categoria }})</button></a>
-    <a href="{{ url_for('carnets_modulo') }}"><button type="button">🪪 Módulo de carnets (imprimir y marcar entregados)</button></a>
-    <a href="{{ url_for('comision_modulo') }}"><button type="button">🗓️ Comisión de Calificación (calificación de equipos y jugadores)</button></a>
-    <a href="{{ url_for('sanciones_modulo') }}"><button type="button">🟨🟥 Comisión de Penas y Sanciones</button></a>
-    <a href="{{ url_for('tecnica_modulo') }}"><button type="button">⚽ Comisión Técnica (fixture, resultados y tabla)</button></a>
-    <a href="{{ url_for('vocalia_modulo') }}"><button type="button">🗳️ Vocalía (hoja del encuentro)</button></a>
-    <a href="{{ url_for('categorias_modulo') }}"><button type="button">🏷️ Gestionar campeonatos</button></a>
-  </p>
+  <!-- Encabezado con título y botón de Excel alineados -->
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 20px; gap: 15px;">
+    <h2 style="margin: 0;">Equipos participantes — {{ categoria }}{% if division %} - {{ division }}{% endif %}</h2>
+    
+    <a href="{{ url_for('exportar_general', categoria=categoria) }}" style="text-decoration: none;">
+      <button type="button" style="margin: 0; display: flex; align-items: center; gap: 8px; font-weight: bold; padding: 8px 16px;">
+        ⬇️ Descargar Excel ({{ categoria }})
+      </button>
+    </a>
+  </div>
+
   <div class="cupos-grid">
     {% for e in equipos %}
       <div class="cupo-item">
-        <a href="{{ url_for('detalle_equipo', equipo_id=e.id) }}" style="display:block; margin-bottom:6px; font-weight:600; color: var(--verde-osc); text-decoration:none;">
+        <a href="{{ url_for('detalle_equipo', equipo_id=e.id) }}" style="display:block; margin-bottom:10px; font-weight:600; color: var(--verde-osc); text-decoration:none; font-size: 0.95rem;">
           🔎 Ver equipo ({{ cupos[e.nombre] }}/{{ cupo_maximo }})
         </a>
         <form method="post" action="{{ url_for('renombrar_equipo', equipo_id=e.id) }}" style="display:flex; gap:6px; align-items:center;">
-          <input type="text" name="nombre" value="{{ e.nombre }}" style="padding:4px 6px; font-size:0.85rem;">
-          <button type="submit" class="btn-del" style="color: var(--verde-osc); border-color: var(--verde-osc); padding:4px 8px;">Guardar</button>
+          <input type="text" name="nombre" value="{{ e.nombre }}" style="padding:6px; font-size:0.85rem; flex: 1;">
+          <button type="submit" class="btn-del" style="color: var(--verde-osc); border-color: var(--verde-osc); padding:6px 10px;">Guardar</button>
         </form>
-        <form method="post" action="{{ url_for('eliminar_equipo', equipo_id=e.id) }}" onsubmit="return confirm('¿Eliminar el equipo {{ e.nombre }}?');" style="margin-top:6px;">
-          <button type="submit" class="btn-del" style="padding:4px 8px;">Eliminar</button>
+        <form method="post" action="{{ url_for('eliminar_equipo', equipo_id=e.id) }}" onsubmit="return confirm('¿Eliminar el equipo {{ e.nombre }}?');" style="margin-top:8px;">
+          <button type="submit" class="btn-del" style="padding:6px 10px; width: 100%;">🗑️ Eliminar</button>
         </form>
       </div>
     {% else %}
-      <p style="color:#888;">Todavía no hay equipos en {{ categoria }}{% if division %} - {{ division }}{% endif %}.</p>
+      <p style="color:#888; font-style: italic;">Todavía no hay equipos registrados en {{ categoria }}{% if division %} - {{ division }}{% endif %}.</p>
     {% endfor %}
   </div>
 
-  <form method="post" action="{{ url_for('agregar_equipo') }}" style="margin-top:16px; display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+  <hr style="border: none; border-top: 1px solid #eee; margin: 25px 0 15px 0;">
+
+  <!-- Agregar nuevo equipo -->
+  <form method="post" action="{{ url_for('agregar_equipo') }}" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
     <input type="hidden" name="categoria" value="{{ categoria }}">
     <input type="hidden" name="division" value="{{ division }}">
-    <div style="flex:1; min-width:200px;">
-      <label>Agregar nuevo equipo a {{ categoria }}{% if division %} - {{ division }}{% endif %}</label>
-      <input type="text" name="nombre" placeholder="Nombre del equipo" required>
+    
+    <div style="flex:1; min-width:220px;">
+      <label style="margin-top: 0;">Agregar nuevo equipo a {{ categoria }}{% if division %} - {{ division }}{% endif %}</label>
+      <input type="text" name="nombre" placeholder="Nombre del nuevo equipo" required>
     </div>
-    <button type="submit">Agregar equipo</button>
+    <button type="submit" style="margin-top: 0; padding: 10px 20px; font-weight: bold;">+ Agregar equipo</button>
   </form>
 </div>
 
 <div class="card">
-  <h2>Cupos por equipo</h2>
+  <h2>Estado de Cupos por Equipo</h2>
   <div class="cupos-grid">
     {% for e in equipos %}
-      <div class="cupo-item">
-        <strong>{{ e.nombre }}</strong>
-        {{ cupos[e.nombre] }} / {{ cupo_maximo }}
-        {% if cupos[e.nombre] >= cupo_maximo %}
-          <span class="badge badge-full">Cupo lleno</span>
-        {% else %}
-          <span class="badge badge-ok">Disponible</span>
-        {% endif %}
+      <div class="cupo-item" style="display: flex; flex-direction: column; gap: 5px;">
+        <strong style="color: #333;">{{ e.nombre }}</strong>
+        <span style="font-size: 1rem;">{{ cupos[e.nombre] }} / {{ cupo_maximo }} registrados</span>
+        
+        <div style="margin-top: 4px;">
+          {% if cupos[e.nombre] >= cupo_maximo %}
+            <span class="badge badge-full">Cupo lleno</span>
+          {% else %}
+            <span class="badge badge-ok">Cupos disponibles</span>
+          {% endif %}
+        </div>
       </div>
     {% endfor %}
   </div>

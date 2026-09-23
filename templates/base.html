@@ -17,24 +17,26 @@
     font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
     background: var(--fondo);
     color: #1c1c1c;
+    overflow-x: hidden; /* Evita scroll horizontal con el menú lateral */
   }
   header {
     background: linear-gradient(135deg, var(--verde), var(--verde-osc));
     color: white;
-    padding: 18px 24px;
+    padding: 15px 24px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    position: sticky;
+    top: 0;
+    z-index: 50;
   }
-  header h1 { margin: 0; font-size: 1.3rem; }
   header h1 {
-  margin: 0;
-  font-size: 1.3rem;
-  display: flex;
-  align-items: center;
-  gap: 10px;
+    margin: 0;
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
   header h1 img {
     height: 36px;
@@ -46,8 +48,96 @@
     object-fit: contain;
     box-shadow: 0 1px 3px rgba(0,0,0,0.25);
   }
-  header a { color: white; text-decoration: none; font-size: 0.9rem; opacity: 0.9; }
-  header a:hover { opacity: 1; text-decoration: underline; }
+  
+  /* --- ESTILOS DEL MENÚ HAMBURGUESA --- */
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+  .menu-btn {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 1.6rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    margin: 0;
+    border-radius: 6px;
+    transition: background 0.2s;
+  }
+  .menu-btn:hover {
+    background: rgba(255,255,255,0.15);
+  }
+  
+  .sidebar-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 99998;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .sidebar {
+    position: fixed;
+    top: 0; right: -320px;
+    width: 300px;
+    height: 100vh;
+    background: white;
+    z-index: 99999;
+    box-shadow: -4px 0 15px rgba(0,0,0,0.2);
+    transition: right 0.3s ease;
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-header {
+    background: linear-gradient(135deg, var(--verde), var(--verde-osc));
+    color: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .sidebar-header h2 { margin: 0; font-size: 1.2rem; }
+  .close-btn { 
+    background: none; border: none; color: white; font-size: 1.8rem; 
+    cursor: pointer; margin: 0; padding: 0; line-height: 1;
+  }
+  .sidebar-menu {
+    padding: 10px 0;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .sidebar-menu a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    color: #333;
+    text-decoration: none;
+    font-size: 0.95rem;
+    border-bottom: 1px solid #f1f5f9;
+    transition: all 0.2s;
+  }
+  .sidebar-menu a:hover {
+    background: #f8fafc;
+    color: var(--verde-osc);
+    font-weight: 600;
+    padding-left: 24px; /* Pequeño efecto de deslizamiento */
+  }
+  .sidebar-menu a.logout-link {
+    color: #a13a2f;
+    margin-top: 15px;
+    border-top: 3px solid #f1f5f9;
+    font-weight: 600;
+  }
+  .sidebar-menu a.logout-link:hover {
+    background: #fdecea;
+    color: #8c2b22;
+  }
+  /* ------------------------------------ */
+
   main { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
   .card {
     background: white;
@@ -55,6 +145,7 @@
     border-radius: 10px;
     padding: 20px;
     margin-bottom: 20px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
   }
   #toast-container {
     position: fixed;
@@ -184,6 +275,7 @@
 {% block extra_head %}{% endblock %}
 </head>
 <body>
+
 <header>
   <a href="/" style="text-decoration:none; color:inherit;">
     <h1>
@@ -191,10 +283,53 @@
       Liga Oyambarillo
     </h1>
   </a>
-  {% if session.get('logged_in') %}
-    <a href="{{ url_for('logout') }}">Cerrar sesión</a>
-  {% endif %}
+  <div class="header-actions">
+    {% if session.get('logged_in') %}
+      <button class="menu-btn" onclick="toggleSidebar()">&#9776;</button>
+    {% endif %}
+  </div>
 </header>
+
+{% if session.get('logged_in') %}
+<!-- Menú Lateral -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+<div class="sidebar" id="sidebarMenu">
+  <div class="sidebar-header">
+    <h2>⚙️ Panel de Administración</h2>
+    <button class="close-btn" onclick="toggleSidebar()">&times;</button>
+  </div>
+  <div class="sidebar-menu">
+    <a href="{{ url_for('inscripcion') }}">👥 Inscripciones y Equipos</a>
+    <a href="{{ url_for('carnets_modulo') }}">🪪 Módulo de Carnets</a>
+    <a href="{{ url_for('comision_modulo') }}">🗓️ Comisión de Calificación</a>
+    <a href="{{ url_for('sanciones_modulo') }}">🟨🟥 Penas y Sanciones</a>
+    <a href="{{ url_for('tecnica_modulo') }}">⚽ Comisión Técnica</a>
+    <a href="{{ url_for('vocalia_modulo') }}">🗳️ Vocalía de Encuentros</a>
+    <a href="{{ url_for('categorias_modulo') }}">🏷️ Gestionar Campeonatos</a>
+    <a href="{{ url_for('logout') }}" class="logout-link">🚪 Cerrar sesión</a>
+  </div>
+</div>
+
+<script>
+  function toggleSidebar() {
+    const sidebar = document.getElementById('sidebarMenu');
+    const overlay = document.getElementById('sidebarOverlay');
+    if (sidebar.style.right === '0px') {
+      sidebar.style.right = '-320px';
+      overlay.style.opacity = '0';
+      setTimeout(() => overlay.style.display = 'none', 300);
+    } else {
+      overlay.style.display = 'block';
+      // Pequeño retraso para que la transición CSS funcione correctamente
+      setTimeout(() => {
+        sidebar.style.right = '0px';
+        overlay.style.opacity = '1';
+      }, 10);
+    }
+  }
+</script>
+{% endif %}
+
 <main>
   {% block content %}{% endblock %}
 </main>
