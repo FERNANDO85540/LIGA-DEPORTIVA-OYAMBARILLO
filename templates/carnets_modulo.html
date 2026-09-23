@@ -1,105 +1,325 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
-  <h1 style="margin:0; font-size:1.4rem;">🪪 Módulo de carnets</h1>
-  <p style="margin:6px 0 0; opacity:0.95;">Selecciona un equipo para generar el PDF de impresión y marcar los carnets entregados.</p>
+<link href="https://cdn.jsdelivr.net/npm/tabulator-tables@6/dist/css/tabulator.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6/dist/js/tabulator.min.js"></script>
+
+<style>
+  /* --- ESTILOS DE BOTONES MINIMALISTAS --- */
+  .btn-action {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+  }
+  .btn-light {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+  }
+  .btn-light:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+  }
+  .btn-warning {
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    color: #92400e;
+  }
+  .btn-warning:hover {
+    background: #fde68a;
+  }
+  .btn-save {
+    background: #1e7d32;
+    color: white;
+    box-shadow: 0 1px 3px rgba(30, 125, 50, 0.3);
+  }
+  .btn-save:hover {
+    background: #155e24;
+    box-shadow: 0 2px 4px rgba(30, 125, 50, 0.4);
+  }
+  .btn-print {
+    background: #14532d;
+    color: white;
+    box-shadow: 0 1px 3px rgba(20, 83, 45, 0.3);
+  }
+  .btn-print:hover {
+    background: #0d3b1e;
+    box-shadow: 0 2px 4px rgba(20, 83, 45, 0.4);
+  }
+
+  /* --- ESTILOS DE TABLA (TABULATOR) --- */
+  
+  /* Contenedor principal de la tabla */
+  #grid-carnets {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+    font-family: inherit;
+    background-color: white;
+  }
+
+  /* Encabezados de las columnas (quitamos el gris oscuro) */
+  .tabulator-header {
+    background-color: #f8fafc !important; /* Fondo casi blanco / gris ultra claro */
+    border-bottom: 2px solid #e2e8f0 !important;
+    color: #334155;
+    font-weight: 600;
+  }
+  
+  .tabulator-col {
+    background-color: transparent !important;
+  }
+  
+  /* Cajas de texto de los filtros en los encabezados */
+  .tabulator-header-filter input {
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 4px;
+    padding: 4px;
+  }
+
+  /* Filas normales */
+  .tabulator-row {
+    border-bottom: 1px solid #f1f5f9 !important;
+  }
+  
+  /* Filas al pasar el mouse (hover) */
+  .tabulator-row.tabulator-selectable:hover {
+    background-color: #f8fafc !important; 
+  }
+
+  /* Color de fondo para las filas seleccionadas (verde suave) */
+  .tabulator-row.tabulator-selected {
+    background-color: #e8f5e9 !important; 
+  }
+  .tabulator-row.tabulator-selected:hover {
+    background-color: #c8e6c9 !important; 
+  }
+
+  /* Pie de página (paginación) */
+  .tabulator-footer {
+    background-color: #f8fafc !important;
+    border-top: 1px solid #e2e8f0 !important;
+    color: #475569;
+  }
+  
+  /* Botones de paginación */
+  .tabulator-page {
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 4px !important;
+    color: #334155 !important;
+    background: white !important;
+  }
+  
+  /* Botón de página actual activa */
+  .tabulator-page.active {
+    background-color: #1e7d32 !important;
+    border-color: #1e7d32 !important;
+    color: white !important;
+  }
+</style>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white; margin-bottom: 20px; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+  <h1 style="margin:0; font-size:1.5rem;">🪪 Módulo de Carnets</h1>
+  <p style="margin:8px 0 0; opacity:0.95; font-size: 0.95rem;">
+    Filtra en los encabezados. Selecciona las casillas para guardar cambios o imprimir.
+  </p>
 </div>
 
-<div class="card">
-  <h2>Elegir equipo</h2>
-  <form method="get" action="{{ url_for('carnets_modulo') }}" style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
-    <div style="flex:1; min-width:220px;">
-      <label>Equipo</label>
-      <select name="equipo_id" onchange="this.form.submit()">
-        <option value="">-- Selecciona un equipo --</option>
-        {% set grupo_actual = namespace(clave=None) %}
-        {% for e in equipos %}
-          {% set clave = e.categoria + '|' + e.division %}
-          {% if clave != grupo_actual.clave %}
-            {% if not loop.first %}</optgroup>{% endif %}
-            <optgroup label="{{ e.categoria }}{% if e.division %} - {{ e.division }}{% endif %}">
-            {% set grupo_actual.clave = clave %}
-          {% endif %}
-          <option value="{{ e.id }}" {% if equipo_actual and equipo_actual.id == e.id %}selected{% endif %}>{{ e.nombre }}</option>
-          {% if loop.last %}</optgroup>{% endif %}
-        {% endfor %}
-      </select>
-    </div>
-    <button type="submit">Ver equipo</button>
-  </form>
-</div>
+<div class="card" style="padding: 20px; border-radius: 8px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
 
-{% if equipo_actual %}
-<div class="card">
-  <h2>{{ equipo_actual.nombre }} — {{ total }} jugador(es)</h2>
-  <p style="font-size:0.9rem; color:#555;">
-    ✅ Carnets impresos: <strong>{{ impresos }}/{{ total }}</strong>
-    &nbsp;·&nbsp; 💵 Recaudado: <strong>${{ '%.2f' % recaudado }}</strong>
-  </p>
-
-  {% if jugadores %}
-  <form id="form-pdf-seleccion" method="get" action="{{ url_for('carnets_pdf') }}">
-    <input type="hidden" name="equipo_id" value="{{ equipo_actual.id }}">
-  </form>
-
-  <p>
-    <a href="{{ url_for('carnets_pdf', equipo_id=equipo_actual.id) }}">
-      <button type="button">📄 Descargar PDF de TODO el equipo ({{ total }})</button>
-    </a>
-    <button type="submit" form="form-pdf-seleccion">📄 Descargar PDF de los seleccionados ✔️</button>
-  </p>
-  <p style="font-size:0.8rem; color:#888; margin-top:-8px;">
-    El PDF sale en hojas A4: por cada jugador, el reverso queda a la izquierda y el frente a la derecha, uno al lado del otro con una línea guía para cortar, listos para recortar sin tener que buscar el reverso en otra página.
-    Las casillas ✔️ ya vienen marcadas en los jugadores con carnet "Pendiente" — así, si acabas de subir jugadores nuevos, puedes descargar solo esos sin repetir los que ya se imprimieron.
-  </p>
-  <p style="margin-top:-6px;">
-    <button type="button" style="padding:4px 10px; font-size:0.8rem;" onclick="document.querySelectorAll('.chk-carnet').forEach(c => c.checked = true)">Marcar todos</button>
-    <button type="button" style="padding:4px 10px; font-size:0.8rem;" onclick="document.querySelectorAll('.chk-carnet').forEach(c => c.checked = false)">Desmarcar todos</button>
-    <button type="button" style="padding:4px 10px; font-size:0.8rem;" onclick="document.querySelectorAll('.chk-carnet').forEach(c => c.checked = c.dataset.pendiente === '1')">Marcar solo pendientes</button>
-  </p>
-
-  <div style="overflow-x:auto;">
-  <table class="tabla-responsive">
-    <thead>
-      <tr>
-        <th></th><th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Campeonato</th><th>Carnet impreso</th><th>Valor cobrado</th><th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for j in jugadores %}
-      <tr>
-        <td data-label="">
-          <input type="checkbox" class="chk-carnet" name="jugador_id" value="{{ j.id }}" form="form-pdf-seleccion"
-                 data-pendiente="{{ '1' if not j.carnet_impreso else '0' }}" {% if not j.carnet_impreso %}checked{% endif %} style="width:auto;">
-        </td>
-        <td data-label="Cédula">{{ j.cedula }}</td>
-        <td data-label="Nombres">{{ j.nombres }}</td>
-        <td data-label="Apellidos">{{ j.apellidos }}</td>
-        <td data-label="Campeonato">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
-        <td data-label="Carnet impreso">
-          <label style="display:flex; align-items:center; gap:6px; margin:0; font-weight:400;">
-            <input type="checkbox" name="carnet_impreso" form="form-carnet-{{ j.id }}" style="width:auto;" {% if j.carnet_impreso %}checked{% endif %}>
-            {% if j.carnet_impreso %}<span class="badge badge-ok">✅ Impreso</span>{% else %}<span class="badge" style="background:#eef3ee; color:#555;">Pendiente</span>{% endif %}
-          </label>
-        </td>
-        <td data-label="Valor cobrado">
-          <input type="number" step="0.01" min="0" name="carnet_valor" form="form-carnet-{{ j.id }}" value="{{ j.carnet_valor or '' }}" placeholder="$0.00" style="width:110px;">
-        </td>
-        <td data-label="" class="table-actions">
-          <form id="form-carnet-{{ j.id }}" method="post" action="{{ url_for('carnets_estado', jugador_id=j.id) }}" style="margin:0;">
-            <button type="submit" style="padding:4px 10px; font-size:0.8rem;">Guardar</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <!-- Panel de Estadísticas -->
+  <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:0.95rem; color:#4b5563; margin-bottom:15px;">
+    <span>👥 Total: <strong>{{ total }}</strong></span>
+    <span>✅ Impresos: <strong style="color: #1e7d32;">{{ impresos }}</strong></span>
+    <span>⏳ Pendientes: <strong style="color: #b45309;">{{ total - impresos }}</strong></span>
+    <span>💵 Recaudado: <strong>${{ '%.2f' % recaudado }}</strong></span>
+    <span style="margin-left:auto; background: #f8fafc; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; border: 1px solid #e2e8f0;">
+      🔎 Visibles: <strong id="stat-visibles" style="color:#1e7d32;">0</strong> | ✔️ Seleccionados: <strong id="stat-seleccionados" style="color:#1e7d32;">0</strong>
+    </span>
   </div>
-  {% else %}
-  <p style="color:#888;">Este equipo todavía no tiene jugadores inscritos.</p>
-  {% endif %}
-</div>
-{% endif %}
 
+  <!-- Panel de Botones Minimalistas -->
+  <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:15px; padding:12px; background:#f8fafc; border-radius:8px; border: 1px solid #f1f5f9;">
+    
+    <button type="button" class="btn-action" onclick="seleccionarPendientesVisibles()" title="Selecciona a los que aún no tienen carnet impreso">
+      ⏳ Seleccionar pendientes
+    </button>
+    
+    <button type="button" class="btn-action" onclick="table.clearHeaderFilter()">
+      🧹 Limpiar filtros
+    </button>
+    
+    
+    <button type="button" class="btn-action btn-save" onclick="submitGuardar()">
+      💾 Guardar cambios
+    </button>
+    
+    <button type="button" class="btn-action btn-print" onclick="submitImprimir()">
+      🖨️ Imprimir
+    </button>
+  </div>
+
+  <!-- Formularios ocultos -->
+  <form id="form-guardar" method="post" action="{{ url_for('carnets_estado_bulk') }}" style="display:none;"></form>
+  <form id="form-imprimir" method="get" action="{{ url_for('carnets_pdf') }}" style="display:none;"></form>
+
+  <script id="data-jugadores" type="application/json">{{ jugadores | tojson }}</script>
+
+  <!-- Contenedor de la tabla (sin altura fija) -->
+  <div id="grid-carnets"></div>
+</div>
+
+<script>
+const datosJugadores = JSON.parse(document.getElementById('data-jugadores').textContent);
+
+const table = new Tabulator("#grid-carnets", {
+  data: datosJugadores,
+  index: "id",
+  layout: "fitColumns",
+  responsiveLayout: "collapse", // Responsivo para celulares
+  
+  // MAGIA PARA QUITAR EL BLOQUE GRIS:
+  maxHeight: "70vh", // Crece como máximo hasta el 70% de la pantalla, luego pone scroll
+  minHeight: 150,    // Un mínimo decente por si hay 0 o 1 registro
+  
+  placeholder: "No se encontraron jugadores.",
+  pagination: true,
+  paginationSize: 25,
+  paginationSizeSelector: [10, 25, 50, 100, true],
+  movableColumns: true,
+  columns: [
+    { 
+      // Formatter para el checkbox de cada fila
+      formatter: "rowSelection", 
+      
+      // Formatter personalizado para el checkbox del ENCABEZADO
+      titleFormatter: function(cell, formatterParams, onRendered) {
+        let checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.style.cursor = "pointer";
+
+        const updateHeaderCheckbox = () => {
+           let activeRows = table.getRows("active");
+           if (activeRows.length === 0) {
+               checkbox.checked = false;
+               checkbox.indeterminate = false;
+               return;
+           }
+           let selectedCount = activeRows.filter(row => row.isSelected()).length;
+           if (selectedCount === 0) {
+               checkbox.checked = false;
+               checkbox.indeterminate = false;
+           } else if (selectedCount === activeRows.length) {
+               checkbox.checked = true;
+               checkbox.indeterminate = false;
+           } else {
+               checkbox.checked = false;
+               checkbox.indeterminate = true;
+           }
+        };
+
+        table.on("rowSelectionChanged", updateHeaderCheckbox);
+        table.on("dataFiltered", updateHeaderCheckbox);
+
+        checkbox.addEventListener("change", (e) => {
+           let activeRows = table.getRows("active");
+           if (checkbox.checked) {
+               table.selectRow(activeRows);
+           } else {
+               table.deselectRow(activeRows);
+           }
+        });
+
+        return checkbox;
+      }, 
+      hozAlign: "center",
+      headerSort: false, 
+      width: 50, 
+      cellClick: (e, cell) => cell.getRow().toggleSelect() 
+    },
+    { title: "Equipo", field: "equipo", headerFilter: "list",
+      headerFilterParams: { valuesLookup: true, clearable: true }, headerFilterLiveFilter: true },
+    { title: "Categoría", field: "categoria", headerFilter: "list",
+      headerFilterParams: { valuesLookup: true, clearable: true } },
+    { title: "Cédula", field: "cedula", headerFilter: "input", width: 120 },
+    { title: "Nombres", field: "nombres", headerFilter: "input" },
+    { title: "Apellidos", field: "apellidos", headerFilter: "input" },
+    { title: "Carnet impreso", field: "carnet_impreso", hozAlign: "center", width: 140,
+      formatter: "tickCross", editor: "tickCross",
+      headerFilter: "tickCross", headerFilterParams: { tristate: true },
+      cellEdited: actualizarStats },
+    { title: "Valor cobrado", field: "carnet_valor", hozAlign: "right", width: 130,
+      formatter: (cell) => { const v = cell.getValue(); return v ? "$" + parseFloat(v).toFixed(2) : ""; },
+      editor: "number", editorParams: { min: 0, step: 0.01 },
+      headerFilter: "number", cellEdited: actualizarStats },
+  ],
+});
+
+table.on("tableBuilt", actualizarStats);
+table.on("dataFiltered", actualizarStats);
+table.on("rowSelectionChanged", actualizarStats);
+table.on("pageLoaded", actualizarStats);
+
+function actualizarStats() {
+  document.getElementById('stat-visibles').textContent = table.getRows("active").length;
+  document.getElementById('stat-seleccionados').textContent = table.getSelectedRows().length;
+}
+
+// Función minimizada: Solo selecciona los pendientes del filtro actual
+function seleccionarPendientesVisibles() {
+  const filas = table.getRows("active").filter(r => !r.getData().carnet_impreso);
+  table.deselectRow(); // Limpiamos la selección actual
+  table.selectRow(filas);
+}
+
+function limpiarFormulario(form) { form.innerHTML = ""; }
+function addHidden(form, name, value) {
+  const i = document.createElement('input');
+  i.type = 'hidden'; i.name = name; i.value = value;
+  form.appendChild(i);
+}
+
+function submitImprimir() {
+  const seleccionados = table.getSelectedData();
+  if (!seleccionados.length) { alert('Selecciona al menos un jugador para imprimir.'); return; }
+  const form = document.getElementById('form-imprimir');
+  limpiarFormulario(form);
+  seleccionados.forEach(j => addHidden(form, 'jugador_id', j.id));
+  form.submit();
+}
+
+// Guarda en lote el estado "carnet impreso" y "valor cobrado" de las filas que fueron EDITADAS
+function submitGuardar() {
+  // Obtenemos todas las celdas que han sido editadas
+  const celdasEditadas = table.getEditedCells();
+  
+  if (celdasEditadas.length === 0) { 
+    alert('No has realizado ningún cambio para guardar.'); 
+    return; 
+  }
+
+  // Obtenemos los componentes de fila (Row) únicos a partir de las celdas editadas
+  const filasEditadas = [...new Set(celdasEditadas.map(celda => celda.getRow()))];
+  
+  const form = document.getElementById('form-guardar');
+  limpiarFormulario(form);
+  
+  // Agregamos al formulario solo los datos de las filas que sufrieron modificaciones
+  filasEditadas.forEach(row => {
+    const j = row.getData();
+    addHidden(form, 'jugador_id', j.id);
+    addHidden(form, 'carnet_impreso_' + j.id, j.carnet_impreso ? '1' : '0');
+    addHidden(form, 'carnet_valor_' + j.id, j.carnet_valor ?? '');
+  });
+  
+  form.submit();
+}
+</script>
 {% endblock %}
