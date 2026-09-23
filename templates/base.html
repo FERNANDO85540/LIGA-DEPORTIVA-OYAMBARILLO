@@ -29,6 +29,23 @@
     gap: 8px;
   }
   header h1 { margin: 0; font-size: 1.3rem; }
+  header h1 {
+  margin: 0;
+  font-size: 1.3rem;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  }
+  header h1 img {
+    height: 36px;
+    width: 36px;
+    display: block;
+    background: #fff;
+    border-radius: 50%;
+    padding: 3px;
+    object-fit: contain;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  }
   header a { color: white; text-decoration: none; font-size: 0.9rem; opacity: 0.9; }
   header a:hover { opacity: 1; text-decoration: underline; }
   main { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
@@ -168,7 +185,12 @@
 </head>
 <body>
 <header>
-  <h1>⚽ Liga Deportiva Oyambarillo</h1>
+  <a href="/" style="text-decoration:none; color:inherit;">
+    <h1>
+      <img src="{{ url_for('static', filename='logo_ldbo.png') }}" alt="Liga Oyambarillo">
+      Liga Oyambarillo
+    </h1>
+  </a>
   {% if session.get('logged_in') %}
     <a href="{{ url_for('logout') }}">Cerrar sesión</a>
   {% endif %}
