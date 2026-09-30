@@ -1,74 +1,243 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+<link href="https://cdn.jsdelivr.net/npm/tabulator-tables@6/dist/css/tabulator.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tabulator-tables@6/dist/js/tabulator.min.js"></script>
+
+<style>
+  .btn-action {
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+  }
+  .btn-light {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #475569;
+  }
+  .btn-light:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+  }
+  .btn-warning {
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    color: #92400e;
+  }
+  .btn-warning:hover {
+    background: #fde68a;
+  }
+  .btn-save {
+    background: #1e7d32;
+    color: white;
+    box-shadow: 0 1px 3px rgba(30, 125, 50, 0.3);
+  }
+  .btn-save:hover {
+    background: #155e24;
+    box-shadow: 0 2px 4px rgba(30, 125, 50, 0.4);
+  }
+
+  #grid-comision {
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    overflow: hidden;
+    font-family: inherit;
+    background-color: white;
+  }
+  .tabulator-header {
+    background-color: #f8fafc !important;
+    border-bottom: 2px solid #e2e8f0 !important;
+    color: #334155;
+    font-weight: 600;
+  }
+  .tabulator-col {
+    background-color: transparent !important;
+  }
+  .tabulator-header-filter input {
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 4px;
+    padding: 4px;
+  }
+  .tabulator-row {
+    border-bottom: 1px solid #f1f5f9 !important;
+  }
+  .tabulator-row.tabulator-selectable:hover {
+    background-color: #f8fafc !important;
+  }
+  .tabulator-row.tabulator-selected {
+    background-color: #e8f5e9 !important;
+  }
+  .tabulator-row.tabulator-selected:hover {
+    background-color: #c8e6c9 !important;
+  }
+  .tabulator-footer {
+    background-color: #f8fafc !important;
+    border-top: 1px solid #e2e8f0 !important;
+    color: #475569;
+  }
+  .tabulator-page {
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 4px !important;
+    color: #334155 !important;
+    background: white !important;
+  }
+  .tabulator-page.active {
+    background-color: #1e7d32 !important;
+    border-color: #1e7d32 !important;
+    color: white !important;
+  }
+</style>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white; margin-bottom: 20px; padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
   <h1 style="margin:0; font-size:1.4rem;">🗓️ Comisión de Calificación</h1>
-  <p style="margin:6px 0 0; opacity:0.95;">Calificación de jugadores.</p>
-</div>
-
-{% set categoria_endpoint = 'comision_modulo' %}
-{% include "_categoria_cards.html" %}
-{% include "_division_cards.html" %}
-
-<div class="card">
-  <h2>Lista de calificación — {{ categoria }}{% if division %} - {{ division }}{% endif %} ({{ jugadores|length }} jugadores)</h2>
-  <input type="text" id="buscadorComision" placeholder="Buscar por nombre, apellido, cédula o equipo...">
-  <div style="overflow-x:auto;">
-  <table class="tabla-responsive" id="tablaComision">
-    <thead>
-      <tr>
-        <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Equipo</th><th>Campeonato</th><th>Estado</th><th></th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for j in jugadores %}
-      <tr>
-        <td data-label="Cédula">{{ j.cedula }}</td>
-        <td data-label="Nombres">{{ j.nombres }}</td>
-        <td data-label="Apellidos">{{ j.apellidos }}</td>
-        <td data-label="Equipo">{{ j.equipo }}</td>
-        <td data-label="Campeonato">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
-        <td data-label="Estado">
-          {% if j.calificado %}
-            <span class="badge badge-ok">✅ Calificado</span>
-          {% else %}
-            <span class="badge" style="background:#eef3ee; color:#555;">Sin calificar</span>
-          {% endif %}
-        </td>
-        <td data-label="" class="table-actions">
-          <form method="post" action="{{ url_for('calificar_jugador', jugador_id=j.id) }}" style="margin:0;">
-            <button type="submit" style="padding:4px 10px; font-size:0.8rem;">{{ 'Quitar calificación' if j.calificado else '✅ Calificar' }}</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  <p id="sinResultadosComision" style="display:none; color:#888; text-align:center; padding:16px 0;">
-    No se encontró ningún jugador con esa búsqueda.
+  <p style="margin:8px 0 0; opacity:0.95; font-size: 0.95rem;">
+    Filtra en los encabezados. Selecciona las casillas y usa los botones para calificar en lote.
   </p>
 </div>
 
-{% endblock %}
+<div class="card" style="padding: 20px; border-radius: 8px; background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
 
-{% block extra_scripts %}
+  <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:0.95rem; color:#4b5563; margin-bottom:15px;">
+    <span>👥 Total: <strong>{{ total }}</strong></span>
+    <span>✅ Calificados: <strong style="color: #1e7d32;">{{ calificados }}</strong></span>
+    <span>⏳ Sin calificar: <strong style="color: #b45309;">{{ total - calificados }}</strong></span>
+    <span style="margin-left:auto; background: #f8fafc; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; border: 1px solid #e2e8f0;">
+      🔎 Visibles: <strong id="stat-visibles" style="color:#1e7d32;">0</strong> | ✔️ Seleccionados: <strong id="stat-seleccionados" style="color:#1e7d32;">0</strong>
+    </span>
+  </div>
+
+  <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:15px; padding:12px; background:#f8fafc; border-radius:8px; border: 1px solid #f1f5f9;">
+    <button type="button" class="btn-action btn-light" onclick="table.clearHeaderFilter()">
+      🧹 Limpiar filtros
+    </button>
+    <button type="button" class="btn-action btn-save" onclick="submitLote('calificar')">
+      ✅ Calificar seleccionados
+    </button>
+    <button type="button" class="btn-action btn-warning" onclick="submitLote('quitar')">
+      ↩️ Quitar calificación a seleccionados
+    </button>
+  </div>
+
+  <form id="form-lote" method="post" action="{{ url_for('calificar_lote') }}" style="display:none;"></form>
+
+  <script id="data-jugadores" type="application/json">{{ jugadores | tojson }}</script>
+
+  <div id="grid-comision"></div>
+</div>
+
 <script>
-(function () {
-  const buscador = document.getElementById('buscadorComision');
-  const filas = Array.from(document.querySelectorAll('#tablaComision tbody tr'));
-  const sinResultados = document.getElementById('sinResultadosComision');
+const BASE_URL_FICHA = "https://liga-deportiva-oyambarillo.onrender.com/jugador/";
+const datosJugadores = JSON.parse(document.getElementById('data-jugadores').textContent);
 
-  buscador.addEventListener('input', function () {
-    const q = buscador.value.trim().toLowerCase();
-    let visibles = 0;
-    filas.forEach(function (fila) {
-      const coincide = fila.textContent.toLowerCase().includes(q);
-      fila.style.display = coincide ? '' : 'none';
-      if (coincide) visibles++;
-    });
-    sinResultados.style.display = (q && visibles === 0) ? 'block' : 'none';
-  });
-})();
+const table = new Tabulator("#grid-comision", {
+  data: datosJugadores,
+  index: "id",
+  layout: "fitColumns",
+  responsiveLayout: "collapse",
+  maxHeight: "70vh",
+  minHeight: 150,
+  placeholder: "No se encontraron jugadores.",
+  pagination: true,
+  paginationSize: 25,
+  paginationSizeSelector: [10, 25, 50, 100, true],
+  movableColumns: true,
+  columns: [
+    {
+      formatter: "rowSelection",
+      titleFormatter: function (cell, formatterParams, onRendered) {
+        let checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.style.cursor = "pointer";
+
+        const updateHeaderCheckbox = () => {
+          let activeRows = table.getRows("active");
+          if (activeRows.length === 0) {
+            checkbox.checked = false;
+            checkbox.indeterminate = false;
+            return;
+          }
+          let selectedCount = activeRows.filter(row => row.isSelected()).length;
+          if (selectedCount === 0) {
+            checkbox.checked = false;
+            checkbox.indeterminate = false;
+          } else if (selectedCount === activeRows.length) {
+            checkbox.checked = true;
+            checkbox.indeterminate = false;
+          } else {
+            checkbox.checked = false;
+            checkbox.indeterminate = true;
+          }
+        };
+
+        table.on("rowSelectionChanged", updateHeaderCheckbox);
+        table.on("dataFiltered", updateHeaderCheckbox);
+
+        checkbox.addEventListener("change", (e) => {
+          let activeRows = table.getRows("active");
+          if (checkbox.checked) {
+            table.selectRow(activeRows);
+          } else {
+            table.deselectRow(activeRows);
+          }
+        });
+
+        return checkbox;
+      },
+      hozAlign: "center",
+      headerSort: false,
+      width: 50,
+      cellClick: (e, cell) => cell.getRow().toggleSelect()
+    },
+    { title: "Equipo", field: "equipo", headerFilter: "list",
+      headerFilterParams: { valuesLookup: true, clearable: true }, headerFilterLiveFilter: true },
+    { title: "Campeonato", field: "campeonato", headerFilter: "list",
+      headerFilterParams: { valuesLookup: true, clearable: true } },
+    { title: "Cédula", field: "cedula", headerFilter: "input", width: 120 },
+    { title: "Nombres", field: "nombres", headerFilter: "input" },
+    { title: "Apellidos", field: "apellidos", headerFilter: "input" },
+    { title: "Estado", field: "calificado", hozAlign: "center", width: 130,
+      formatter: "tickCross",
+      headerFilter: "tickCross", headerFilterParams: { tristate: true } },
+    { title: "Ficha", field: "id", hozAlign: "center", width: 90, headerSort: false,
+      formatter: (cell) => {
+        const id = cell.getValue();
+        return `<a href="${BASE_URL_FICHA}${id}" target="_blank" rel="noopener">🔎 Ver</a>`;
+      } },
+  ],
+});
+
+table.on("tableBuilt", actualizarStats);
+table.on("dataFiltered", actualizarStats);
+table.on("rowSelectionChanged", actualizarStats);
+table.on("pageLoaded", actualizarStats);
+
+function actualizarStats() {
+  document.getElementById('stat-visibles').textContent = table.getRows("active").length;
+  document.getElementById('stat-seleccionados').textContent = table.getSelectedRows().length;
+}
+
+function limpiarFormulario(form) { form.innerHTML = ""; }
+function addHidden(form, name, value) {
+  const i = document.createElement('input');
+  i.type = 'hidden'; i.name = name; i.value = value;
+  form.appendChild(i);
+}
+
+function submitLote(accion) {
+  const seleccionados = table.getSelectedData();
+  if (!seleccionados.length) { alert('Selecciona al menos un jugador.'); return; }
+  const form = document.getElementById('form-lote');
+  limpiarFormulario(form);
+  addHidden(form, 'accion', accion);
+  seleccionados.forEach(j => addHidden(form, 'jugador_id', j.id));
+  form.submit();
+}
 </script>
 {% endblock %}
