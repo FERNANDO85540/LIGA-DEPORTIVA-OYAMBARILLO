@@ -87,11 +87,15 @@
     <div style="overflow-x:auto;">
     <table class="tabla-responsive">
       <thead>
-        <tr><th>#</th><th>Jugador</th><th>Participó</th><th>🟨 (0-2)</th><th>🟥</th><th>Goles</th></tr>
+        <tr>
+          <th class="th-sortable" data-sort="numero">#</th>
+          <th class="th-sortable" data-sort="nombre">Jugador</th>
+          <th>Participó</th><th>🟨 (0-2)</th><th>🟥</th><th>Goles</th>
+        </tr>
       </thead>
       <tbody>
         {% for j in jugadores %}
-        <tr>
+        <tr data-numero="{{ j.numero_camiseta or 9999 }}" data-nombre="{{ (j.apellidos or '') ~ ' ' ~ (j.nombres or '') }}">
           <td data-label="#">
             <input type="hidden" name="todos_ids" value="{{ j.id }}">
             {{ j.numero_camiseta or loop.index }}
@@ -138,6 +142,7 @@
 {{ tabla_equipo(partido.equipo_local, jugadores_local) }}
 {{ tabla_equipo(partido.equipo_visitante, jugadores_visitante) }}
 
+{% if false %}
 <div class="card">
   <h2>🔄 Cambios</h2>
   <form method="post" action="{{ url_for('agregar_cambio', partido_id=partido.id) }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
@@ -185,6 +190,7 @@
   <p style="color:#888; margin-top:12px;">Sin cambios registrados.</p>
   {% endif %}
 </div>
+{% endif %}
 
 <div class="card">
   <h2>Incidentes</h2>
@@ -226,6 +232,42 @@
   ['buscadorCambioSale', 'buscadorCambioEntra'].forEach(function (id) {
     const raiz = document.getElementById(id);
     if (raiz) window.initBuscadorJugador(raiz, JUGADORES);
+  });
+})();
+
+(function () {
+  document.querySelectorAll('th.th-sortable').forEach(function (th) {
+    th.style.cursor = 'pointer';
+    th.dataset.label = th.textContent;
+    th.addEventListener('click', function () {
+      const table = th.closest('table');
+      const tbody = table.querySelector('tbody');
+      const key = th.dataset.sort;
+      const asc = th.dataset.dir !== 'asc';
+
+      table.querySelectorAll('th.th-sortable').forEach(function (other) {
+        other.dataset.dir = '';
+        other.textContent = other.dataset.label;
+      });
+      th.dataset.dir = asc ? 'asc' : 'desc';
+      th.textContent = th.dataset.label + (asc ? ' ▲' : ' ▼');
+
+      const filas = Array.from(tbody.querySelectorAll('tr[data-' + key + ']'));
+      filas.sort(function (a, b) {
+        let va = a.dataset[key], vb = b.dataset[key];
+        if (key === 'numero') {
+          va = parseFloat(va) || 0;
+          vb = parseFloat(vb) || 0;
+        } else {
+          va = va.toLowerCase();
+          vb = vb.toLowerCase();
+        }
+        if (va < vb) return asc ? -1 : 1;
+        if (va > vb) return asc ? 1 : -1;
+        return 0;
+      });
+      filas.forEach(function (fila) { tbody.appendChild(fila); });
+    });
   });
 })();
 </script>
