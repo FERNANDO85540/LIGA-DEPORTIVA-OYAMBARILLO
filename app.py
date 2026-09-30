@@ -2135,8 +2135,10 @@ def comision_modulo():
         campeonato = j.get("categoria", "")
         if j.get("subcategoria") == "Juvenil":
             campeonato += " - Juvenil"
+        numero = (j.get("numero_camiseta") or "").strip()
         jugadores.append({
             "id": j.get("id"), "equipo": j.get("equipo"), "campeonato": campeonato,
+            "numero_camiseta": int(numero) if numero.isdigit() else None,
             "cedula": j.get("cedula"), "nombres": j.get("nombres"), "apellidos": j.get("apellidos"),
             "calificado": bool(j.get("calificado")),
         })

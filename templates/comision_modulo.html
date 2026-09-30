@@ -148,6 +148,10 @@ const table = new Tabulator("#grid-comision", {
   paginationSize: 25,
   paginationSizeSelector: [10, 25, 50, 100, true],
   movableColumns: true,
+  initialSort: [
+    { column: "equipo", dir: "asc" },
+    { column: "numero_camiseta", dir: "asc" },
+  ],
   columns: [
     {
       formatter: "rowSelection",
@@ -195,6 +199,8 @@ const table = new Tabulator("#grid-comision", {
       width: 50,
       cellClick: (e, cell) => cell.getRow().toggleSelect()
     },
+    { title: "#", field: "numero_camiseta", hozAlign: "center", width: 70,
+      sorter: "number", headerFilter: "number" },
     { title: "Equipo", field: "equipo", headerFilter: "list",
       headerFilterParams: { valuesLookup: true, clearable: true }, headerFilterLiveFilter: true },
     { title: "Campeonato", field: "campeonato", headerFilter: "list",
