@@ -2745,6 +2745,16 @@ def _generar_sanciones_por_acumulacion(db):
             )
 
 
+def _ordenar_por_numero_camiseta(jugadores):
+    """Ordena por # de camiseta (ascendente, sin camiseta al final) para que
+    la hoja de Vocalía coincida con el orden físico de los carnets."""
+    def clave(j):
+        numero = (j["numero_camiseta"] or "").strip()
+        valor = int(numero) if numero.isdigit() else 9999
+        return (valor, j["apellidos"] or "", j["nombres"] or "")
+    return sorted(jugadores, key=clave)
+
+
 @app.route("/vocalia")
 @vocalia_required
 def vocalia_modulo():
@@ -2771,12 +2781,12 @@ def vocalia_hoja(partido_id):
         return redirect(url_for("vocalia_modulo"))
     jornada = db.execute("SELECT * FROM jornadas WHERE id = ?", (partido["jornada_id"],)).fetchone()
 
-    jugadores_local = db.execute(
+    jugadores_local = _ordenar_por_numero_camiseta(db.execute(
         "SELECT * FROM jugadores WHERE equipo = ? ORDER BY apellidos, nombres", (partido["equipo_local"],)
-    ).fetchall()
-    jugadores_visitante = db.execute(
+    ).fetchall())
+    jugadores_visitante = _ordenar_por_numero_camiseta(db.execute(
         "SELECT * FROM jugadores WHERE equipo = ? ORDER BY apellidos, nombres", (partido["equipo_visitante"],)
-    ).fetchall()
+    ).fetchall())
 
     asistencia_rows = db.execute(
         "SELECT jugador_id, participo FROM vocalia_asistencia WHERE partido_id = ?", (partido_id,)
