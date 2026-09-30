@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p><a href="{{ url_for('sanciones_modulo') }}">&larr; Volver a Penas y Sanciones</a></p>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.4rem;">📖 Catálogo de sanciones</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">Reglamento 2026 (Arts. 74 al 80). Base para las rojas directas.</p>
+</div>
+
+<div class="card">
+  <h2>Agregar motivo</h2>
+  <form method="post" action="{{ url_for('agregar_catalogo') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+    <div style="min-width:120px;">
+      <label>Artículo</label>
+      <input type="text" name="articulo" placeholder="ej. Art. 76">
+    </div>
+    <div style="flex:1; min-width:260px;">
+      <label>Descripción del motivo</label>
+      <input type="text" name="descripcion_motivo" placeholder="ej. Agresión física a un rival" required>
+    </div>
+    <div style="min-width:140px;">
+      <label>Fechas de suspensión</label>
+      <input type="number" name="cantidad_fechas_suspension" min="1" value="1" required>
+    </div>
+    <div style="min-width:120px;">
+      <label style="display:flex; align-items:center; gap:6px; font-weight:400;">
+        <input type="checkbox" name="aplica_multa" value="1" style="width:auto;" onchange="document.getElementById('valorMultaNuevo').disabled = !this.checked;">
+        Aplica multa
+      </label>
+    </div>
+    <div style="min-width:140px;">
+      <label>Valor multa sugerido</label>
+      <input type="number" step="0.01" min="0" name="valor_multa_sugerido" id="valorMultaNuevo" placeholder="$0.00" disabled>
+    </div>
+    <button type="submit">+ Agregar al catálogo</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Motivos registrados ({{ catalogo|length }})</h2>
+  {% if not catalogo %}
+    <p style="color:#888;">Todavía no hay motivos en el catálogo.</p>
+  {% else %}
+  <div class="cupos-grid" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));">
+    {% for c in catalogo %}
+    <div class="cupo-item">
+      <form method="post" action="{{ url_for('editar_catalogo', catalogo_id=c.id) }}" style="display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; gap:8px;">
+          <input type="text" name="articulo" value="{{ c.articulo or '' }}" placeholder="Artículo" style="width:100px;">
+          <input type="number" name="cantidad_fechas_suspension" min="1" value="{{ c.cantidad_fechas_suspension }}" required style="width:90px;" title="Fechas de suspensión">
+        </div>
+        <input type="text" name="descripcion_motivo" value="{{ c.descripcion_motivo }}" required placeholder="Descripción del motivo">
+        <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin:0;">
+          <input type="checkbox" name="aplica_multa" value="1" style="width:auto;" {% if c.aplica_multa %}checked{% endif %}>
+          Aplica multa
+        </label>
+        <input type="number" step="0.01" min="0" name="valor_multa_sugerido" value="{{ c.valor_multa_sugerido or '' }}" placeholder="Valor multa sugerido">
+        <button type="submit" style="padding:6px 10px; font-size:0.85rem;">Guardar</button>
+      </form>
+      <form method="post" action="{{ url_for('eliminar_catalogo', catalogo_id=c.id) }}" onsubmit="return confirm('¿Eliminar este motivo del catálogo?');" style="margin-top:8px;">
+        <button type="submit" class="btn-del" style="padding:6px 10px; width:100%;">🗑️ Eliminar</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

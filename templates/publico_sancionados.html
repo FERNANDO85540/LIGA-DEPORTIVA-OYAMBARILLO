@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p><a href="{{ url_for('publico_inicio') }}">&larr; Volver</a></p>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.4rem;">🟥 Jugadores sancionados</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">Suspensiones activas por acumulación de tarjetas o roja directa.</p>
+</div>
+
+{% set categoria_endpoint = 'publico_sancionados' %}
+{% include "_categoria_cards.html" %}
+{% include "_division_cards.html" %}
+
+<div class="card">
+  <h2>Sancionados activos — {{ categoria }}{% if division %} - {{ division }}{% endif %}</h2>
+  {% if not sancionados %}
+    <p style="color:#888;">No hay jugadores sancionados actualmente en este campeonato.</p>
+  {% else %}
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead>
+      <tr><th>Jugador</th><th>Equipo</th><th>Motivo</th><th>Jornadas Sancionado</th><th>Sancionado Desde</th><th>Valor Multa</th><th>Estado Pago</th></tr>
+    </thead>
+    <tbody>
+      {% for s in sancionados %}
+      <tr>
+        <td data-label="Jugador">{{ s.j_apellidos }} {{ s.j_nombres }}</td>
+        <td data-label="Equipo">{{ s.j_equipo }}</td>
+        <td data-label="Motivo">{{ s.motivo or '-' }}</td>
+        <td data-label="Jornadas Sancionado">{{ s.jornadas_sancionado }}</td>
+        <td data-label="Sancionado Desde">{{ 'Jornada ' + s.jornada_desde_numero|string if s.jornada_desde_numero else '-' }}</td>
+        <td data-label="Valor Multa">{{ '$%.2f' % s.valor_multa if s.valor_multa else '-' }}</td>
+        <td data-label="Estado Pago">
+          {% if not s.valor_multa %}
+            <span class="badge" style="background:#eef3ee; color:#555;">Sin multa</span>
+          {% elif s.pagada %}
+            <span class="badge badge-ok">✅ Pagada</span>
+          {% else %}
+            <span class="badge" style="background:#fdecea; color:#a13a2f;">⏳ Pendiente</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

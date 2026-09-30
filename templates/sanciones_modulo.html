@@ -6,19 +6,21 @@
   <p style="margin:6px 0 0; opacity:0.95;">Tarjetas, acumulación, sanciones y multas por jugador.</p>
 </div>
 
+<div class="card" style="text-align:right;">
+  <a href="{{ url_for('catalogo_sanciones') }}">📖 Catálogo de sanciones (Reglamento 2026)</a>
+</div>
+
 <div class="card">
   <h2>🔍 Buscar jugador</h2>
   <input type="text" id="buscadorSanciones" placeholder="Buscar por nombre, apellido o equipo...">
-  <p style="font-size:0.8rem; color:#888; margin:6px 0 0;">
-    Filtra a la vez la acumulación de tarjetas, el historial de tarjetas y las sanciones.
-  </p>
 </div>
 
 <div class="card">
   <h2>Acumulación de tarjetas por jugador</h2>
   <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
-    Las tarjetas ya no se registran aquí — las carga Vocalía directamente en la hoja de cada partido y aparecen
-    automáticamente en esta lista y en el historial de abajo.
+    Las tarjetas se cargan 100% desde Vocalía en la hoja de cada partido. Las amarillas que resultaron en
+    expulsión por doble amarilla en el mismo partido NO cuentan aquí (esa falta ya se paga con la roja).
+    Ordenado de mayor a menor cantidad de tarjetas acumuladas.
   </p>
   {% if not acumulado %}
     <p style="color:#888;">Todavía no hay tarjetas registradas.</p>
@@ -26,15 +28,16 @@
   <div style="overflow-x:auto;">
   <table class="tabla-responsive" id="tablaAcumulado">
     <thead>
-      <tr><th>Jugador</th><th>Equipo</th><th>🟨 Amarillas</th><th>🟥 Rojas</th><th>Multas acumuladas</th></tr>
+      <tr><th>Jugador</th><th>Equipo</th><th>🟨 Válidas</th><th>🟥 Rojas</th><th>Total</th><th>Multas acumuladas</th></tr>
     </thead>
     <tbody>
       {% for a in acumulado %}
       <tr>
         <td data-label="Jugador">{{ a.apellidos }} {{ a.nombres }}</td>
         <td data-label="Equipo">{{ a.equipo }}</td>
-        <td data-label="Amarillas">{{ a.amarillas }}</td>
+        <td data-label="Válidas">{{ a.amarillas_validas }}</td>
         <td data-label="Rojas">{{ a.rojas }}</td>
+        <td data-label="Total"><strong>{{ a.total }}</strong></td>
         <td data-label="Multas">${{ '%.2f' % a.multas }}</td>
       </tr>
       {% endfor %}
@@ -45,70 +48,47 @@
 </div>
 
 <div class="card">
-  <h2>Historial de tarjetas ({{ tarjetas|length }})</h2>
-  {% if not tarjetas %}
-    <p style="color:#888;">No hay tarjetas registradas.</p>
+  <h2>Registrar roja directa</h2>
+  <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
+    Único ingreso manual permitido en este módulo. Las jornadas de suspensión y la multa se calculan solas
+    según el motivo elegido del catálogo (Reglamento 2026).
+  </p>
+  {% if not catalogo %}
+    <p style="color:#b45309;">Todavía no hay motivos cargados en el catálogo. Ve a "Catálogo de sanciones" para agregarlos.</p>
   {% else %}
-  <div style="overflow-x:auto;">
-  <table class="tabla-responsive" id="tablaTarjetas">
-    <thead>
-      <tr><th>Jugador</th><th>Equipo</th><th>Tipo</th><th>Jornada</th><th>Valor multa</th><th>Observación</th><th>Fecha</th><th></th></tr>
-    </thead>
-    <tbody>
-      {% for t in tarjetas %}
-      <tr>
-        <td data-label="Jugador">{{ t.j_apellidos }} {{ t.j_nombres }}</td>
-        <td data-label="Equipo">{{ t.j_equipo }}</td>
-        <td data-label="Tipo">{% if t.tipo == 'roja' %}🟥 Roja{% else %}🟨 Amarilla{% endif %}</td>
-        <td data-label="Jornada">{{ 'Jornada ' + t.jornada_numero|string if t.jornada_numero else '-' }}</td>
-        <td data-label="Valor multa">{{ '$%.2f' % t.valor_multa if t.valor_multa else '-' }}</td>
-        <td data-label="Observación">{{ t.observacion or '-' }}</td>
-        <td data-label="Fecha">{{ t.fecha }}</td>
-        <td data-label="" class="table-actions">
-          <form method="post" action="{{ url_for('eliminar_tarjeta', tarjeta_id=t.id) }}" onsubmit="return confirm('¿Eliminar esta tarjeta?');" style="margin:0;">
-            <button type="submit" class="btn-del">Eliminar</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  {% endif %}
-</div>
-
-<div class="card">
-  <h2>Registrar sanción</h2>
-  <form method="post" action="{{ url_for('agregar_sancion') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+  <form method="post" action="{{ url_for('agregar_roja_directa') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
     <div style="flex:1; min-width:220px;">
       <label>Jugador</label>
-      <div class="buscador-jugador" id="buscadorSancionJugador">
+      <div class="buscador-jugador" id="buscadorRojaJugador">
         <input type="text" class="buscador-input" placeholder="Escribe nombre, apellido o cédula..." autocomplete="off" required>
         <input type="hidden" class="buscador-valor" name="jugador_id">
         <div class="buscador-lista" style="display:none;"></div>
       </div>
     </div>
-    <div>
-      <label>Jornadas de sanción</label>
-      <input type="number" name="jornadas_sancionado" min="1" value="1" required style="width:100px;">
-    </div>
-    <div>
-      <label>Sancionado desde (opcional)</label>
-      <select name="jornada_desde_id">
-        <option value="">-- Sin especificar --</option>
-        {% for jo in jornadas %}<option value="{{ jo.id }}">Jornada {{ jo.numero }}</option>{% endfor %}
+    <div style="flex:1; min-width:220px;">
+      <label>Motivo (Art. del reglamento)</label>
+      <select name="catalogo_id" required>
+        <option value="">-- Selecciona un motivo --</option>
+        {% for c in catalogo %}
+        <option value="{{ c.id }}">
+          {% if c.articulo %}Art. {{ c.articulo }} — {% endif %}{{ c.descripcion_motivo }}
+          ({{ c.cantidad_fechas_suspension }} fecha{{ 's' if c.cantidad_fechas_suspension != 1 else '' }}{% if c.aplica_multa %}, con multa{% endif %})
+        </option>
+        {% endfor %}
       </select>
     </div>
-    <div>
-      <label>Valor multa (opcional)</label>
-      <input type="number" step="0.01" min="0" name="valor_multa" placeholder="$0.00" style="width:120px;">
+    <div style="min-width:220px;">
+      <label>Jornada del partido (donde se mostró la roja)</label>
+      <select name="jornada_id" required>
+        <option value="">-- Selecciona la jornada --</option>
+        {% for jo in jornadas %}
+        <option value="{{ jo.id }}">Jornada {{ jo.numero }} — {{ jo.categoria }}{% if jo.division %} / {{ jo.division }}{% endif %}</option>
+        {% endfor %}
+      </select>
     </div>
-    <div style="flex:1; min-width:200px;">
-      <label>Motivo (opcional)</label>
-      <input type="text" name="motivo" placeholder="ej. expulsión por doble amarilla, agresión...">
-    </div>
-    <button type="submit">Registrar sanción</button>
+    <button type="submit">Registrar roja directa</button>
   </form>
+  {% endif %}
 </div>
 
 <div class="card">
@@ -119,7 +99,7 @@
   <div style="overflow-x:auto;">
   <table class="tabla-responsive" id="tablaSanciones">
     <thead>
-      <tr><th>Jugador</th><th>Equipo</th><th>Motivo</th><th>Jornadas sancionado</th><th>Desde</th><th>Valor multa</th><th>Pagada</th><th></th></tr>
+      <tr><th>Jugador</th><th>Equipo</th><th>Motivo</th><th>Origen</th><th>Jornadas sancionado</th><th>Desde</th><th>Estado</th><th>Valor multa</th><th>Pagada</th><th></th></tr>
     </thead>
     <tbody>
       {% for s in sanciones %}
@@ -127,8 +107,16 @@
         <td data-label="Jugador">{{ s.j_apellidos }} {{ s.j_nombres }}</td>
         <td data-label="Equipo">{{ s.j_equipo }}</td>
         <td data-label="Motivo">{{ s.motivo or '-' }}</td>
+        <td data-label="Origen">{{ '⚽ Vocalía (acumulación)' if s.origen == 'acumulacion' else '🟥 Roja directa' }}</td>
         <td data-label="Jornadas sancionado">{{ s.jornadas_sancionado }}</td>
         <td data-label="Desde">{{ 'Jornada ' + s.jornada_desde_numero|string if s.jornada_desde_numero else '-' }}</td>
+        <td data-label="Estado">
+          {% if s.id in sanciones_activas %}
+            <span class="badge" style="background:#fdecea; color:#c0392b;">🔴 Activa</span>
+          {% else %}
+            <span class="badge badge-ok">✅ Cumplida</span>
+          {% endif %}
+        </td>
         <td data-label="Valor multa">{{ '$%.2f' % s.valor_multa if s.valor_multa else '-' }}</td>
         <td data-label="Pagada">
           <form method="post" action="{{ url_for('marcar_sancion_pagada', sancion_id=s.id) }}" style="margin:0;">
@@ -156,14 +144,14 @@
 <script>
 (function () {
   const JUGADORES = {{ jugadores_js|tojson }};
-  const raiz = document.getElementById('buscadorSancionJugador');
+  const raiz = document.getElementById('buscadorRojaJugador');
   if (raiz) window.initBuscadorJugador(raiz, JUGADORES);
 })();
 </script>
 <script>
 (function () {
   const buscador = document.getElementById('buscadorSanciones');
-  const tablas = ['tablaAcumulado', 'tablaTarjetas', 'tablaSanciones']
+  const tablas = ['tablaAcumulado', 'tablaSanciones']
     .map(function (id) { return document.getElementById(id); })
     .filter(Boolean);
   const filas = tablas.flatMap(function (tabla) {

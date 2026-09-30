@@ -112,12 +112,12 @@
               <div>
                 <strong>{{ j.apellidos }} {{ j.nombres }}</strong>
                 {% if j.id in suspendidos_ids %}
-                <span style="display:block; color:#c0392b; font-size:0.7rem; font-weight:600;">[Suspendido. Consulte la mesa de supervisión]</span>
+                <span style="display:block; color:#c0392b; font-size:0.7rem; font-weight:600;">[Suspendido — no puede participar en este partido]</span>
                 {% endif %}
               </div>
             </div>
           </td>
-          <td data-label="Participó"><input type="checkbox" name="participo" value="{{ j.id }}" style="width:auto;" {% if asistencia.get(j.id) %}checked{% endif %}></td>
+          <td data-label="Participó"><input type="checkbox" name="participo" value="{{ j.id }}" style="width:auto;" {% if asistencia.get(j.id) %}checked{% endif %} {% if j.id in suspendidos_ids %}disabled title="Jugador sancionado: no puede marcarse como participante en este partido."{% endif %}></td>
           <td data-label="🟨 (0-2)">
             <select name="amarillas_{{ j.id }}" style="width:64px; padding:4px;">
               {% for n in (0, 1, 2) %}
