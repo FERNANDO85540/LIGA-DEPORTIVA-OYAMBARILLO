@@ -2418,26 +2418,8 @@ def tecnica_modulo():
         "SELECT MAX(numero) m FROM jornadas WHERE categoria = ? AND division = ?", (categoria, division)
     ).fetchone()["m"]
     siguiente_numero = (ultima or 0) + 1
-    jugadores = db.execute(
-        "SELECT * FROM jugadores WHERE categoria = ? AND division = ? ORDER BY equipo, apellidos, nombres",
-        (categoria, division),
-    ).fetchall()
-    jugadores_js = [
-        {"id": j["id"], "label": f"{j['apellidos']} {j['nombres']} ({j['cedula']})", "equipo": j["equipo"]}
-        for j in jugadores
-    ]
     tabla = _calcular_tabla_posiciones(db, categoria, division)
-    goleadores = _calcular_goleadores(db, categoria, division)
-    goles_registrados = db.execute(
-        """
-        SELECT g.*, j.nombres AS j_nombres, j.apellidos AS j_apellidos, j.equipo AS j_equipo
-        FROM goles g
-        JOIN jugadores j ON j.id = g.jugador_id
-        WHERE j.categoria = ? AND j.division = ?
-        ORDER BY g.fecha DESC, g.id DESC
-        """,
-        (categoria, division),
-    ).fetchall()
+    goleadores = _calcular_goleadores(db, categoria, division, limite=1000)
 
     return render_template(
         "tecnica_modulo.html",
@@ -2448,10 +2430,8 @@ def tecnica_modulo():
         equipos=equipos,
         siguiente_numero=siguiente_numero,
         jornadas=jornadas,
-        jugadores_js=jugadores_js,
         tabla=tabla,
         goleadores=goleadores,
-        goles_registrados=goles_registrados,
     )
 
 
@@ -2860,47 +2840,6 @@ def eliminar_incidente(incidente_id):
     if partido_id:
         return redirect(url_for("vocalia_hoja", partido_id=partido_id))
     return redirect(url_for("vocalia_modulo"))
-
-
-@app.route("/tecnica/gol/agregar", methods=["POST"])
-@tecnica_required
-def agregar_gol():
-    db = get_db()
-    jugador_id = request.form.get("jugador_id", "").strip()
-    partido_id = request.form.get("partido_id", "").strip() or None
-    cantidad = request.form.get("cantidad", "1").strip()
-
-    if not jugador_id.isdigit() or not cantidad.isdigit() or int(cantidad) < 1:
-        flash("Selecciona un jugador y una cantidad de goles válida.")
-        return redirect(url_for("tecnica_modulo"))
-
-    jugador = db.execute("SELECT categoria, division FROM jugadores WHERE id = ?", (int(jugador_id),)).fetchone()
-    categoria = jugador["categoria"] if jugador else CATEGORIA_ACTIVA
-    division = jugador["division"] if jugador else ""
-
-    db.execute(
-        "INSERT INTO goles (jugador_id, partido_id, cantidad, fecha) VALUES (?, ?, ?, ?)",
-        (int(jugador_id), partido_id, int(cantidad), datetime.now().strftime("%Y-%m-%d %H:%M")),
-    )
-    db.commit()
-    flash("Gol(es) registrado(s).", "ok")
-    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
-
-
-@app.route("/tecnica/gol/<int:gol_id>/eliminar", methods=["POST"])
-@tecnica_required
-def eliminar_gol(gol_id):
-    db = get_db()
-    gol = db.execute(
-        "SELECT j.categoria AS categoria, j.division AS division FROM goles g JOIN jugadores j ON j.id = g.jugador_id WHERE g.id = ?",
-        (gol_id,),
-    ).fetchone()
-    categoria = gol["categoria"] if gol else CATEGORIA_ACTIVA
-    division = gol["division"] if gol else ""
-    db.execute("DELETE FROM goles WHERE id = ?", (gol_id,))
-    db.commit()
-    flash("Registro de gol eliminado.", "ok")
-    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
 
 
 # ---------- Sección pública: consulta libre, sin necesidad de cuenta ----------

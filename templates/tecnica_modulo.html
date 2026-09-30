@@ -168,42 +168,16 @@
 </div>
 
 <div class="card">
-  <h2>Registrar gol</h2>
-  <form method="post" action="{{ url_for('agregar_gol') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
-    <div style="flex:1; min-width:220px;">
-      <label>Jugador</label>
-      <div class="buscador-jugador" id="buscadorGolJugador">
-        <input type="text" class="buscador-input" placeholder="Escribe nombre, apellido o cédula..." autocomplete="off" required>
-        <input type="hidden" class="buscador-valor" name="jugador_id">
-        <div class="buscador-lista" style="display:none;"></div>
-      </div>
-    </div>
-    <div>
-      <label>Cantidad de goles</label>
-      <input type="number" name="cantidad" min="1" value="1" required style="width:100px;">
-    </div>
-    <div>
-      <label>Partido (opcional)</label>
-      <select name="partido_id">
-        <option value="">-- Sin partido específico --</option>
-        {% for item in jornadas %}
-          {% for p in item.partidos %}
-            <option value="{{ p.id }}">J{{ item.jornada.numero }}: {{ p.equipo_local }} vs {{ p.equipo_visitante }}</option>
-          {% endfor %}
-        {% endfor %}
-      </select>
-    </div>
-    <button type="submit">Registrar gol</button>
-  </form>
-</div>
-
-<div class="card">
   <h2>Goleadores</h2>
+  <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
+    Se calcula solo a partir de los goles registrados en las hojas de Vocalía de cada partido.
+  </p>
+  <input type="text" id="buscadorGoleadores" placeholder="Buscar por jugador o equipo...">
   {% if not goleadores %}
     <p style="color:#888;">Todavía no hay goles registrados.</p>
   {% else %}
   <div style="overflow-x:auto;">
-  <table class="tabla-responsive">
+  <table class="tabla-responsive" id="tablaGoleadores">
     <thead>
       <tr><th>#</th><th>Jugador</th><th>Equipo</th><th>Goles</th></tr>
     </thead>
@@ -219,36 +193,9 @@
     </tbody>
   </table>
   </div>
-  {% endif %}
-</div>
-
-<div class="card">
-  <h2>Historial de goles registrados</h2>
-  {% if not goles_registrados %}
-    <p style="color:#888;">No hay registros.</p>
-  {% else %}
-  <div style="overflow-x:auto;">
-  <table class="tabla-responsive">
-    <thead>
-      <tr><th>Jugador</th><th>Equipo</th><th>Cantidad</th><th>Fecha</th><th></th></tr>
-    </thead>
-    <tbody>
-      {% for g in goles_registrados %}
-      <tr>
-        <td data-label="Jugador">{{ g.j_apellidos }} {{ g.j_nombres }}</td>
-        <td data-label="Equipo">{{ g.j_equipo }}</td>
-        <td data-label="Cantidad">{{ g.cantidad }}</td>
-        <td data-label="Fecha">{{ g.fecha }}</td>
-        <td data-label="" class="table-actions">
-          <form method="post" action="{{ url_for('eliminar_gol', gol_id=g.id) }}" onsubmit="return confirm('¿Eliminar este registro?');" style="margin:0;">
-            <button type="submit" class="btn-del">Eliminar</button>
-          </form>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
+  <p id="sinResultadosGoleadores" style="display:none; color:#888; text-align:center; padding:16px 0;">
+    No se encontró ningún goleador con esa búsqueda.
+  </p>
   {% endif %}
 </div>
 
@@ -257,9 +204,21 @@
 {% block extra_scripts %}
 <script>
 (function () {
-  const JUGADORES = {{ jugadores_js|tojson }};
-  const raiz = document.getElementById('buscadorGolJugador');
-  if (raiz) window.initBuscadorJugador(raiz, JUGADORES);
+  const buscador = document.getElementById('buscadorGoleadores');
+  if (!buscador) return;
+  const filas = Array.from(document.querySelectorAll('#tablaGoleadores tbody tr'));
+  const sinResultados = document.getElementById('sinResultadosGoleadores');
+
+  buscador.addEventListener('input', function () {
+    const q = buscador.value.trim().toLowerCase();
+    let visibles = 0;
+    filas.forEach(function (fila) {
+      const coincide = fila.textContent.toLowerCase().includes(q);
+      fila.style.display = coincide ? '' : 'none';
+      if (coincide) visibles++;
+    });
+    sinResultados.style.display = (q && visibles === 0) ? 'block' : 'none';
+  });
 })();
 </script>
 {% endblock %}
