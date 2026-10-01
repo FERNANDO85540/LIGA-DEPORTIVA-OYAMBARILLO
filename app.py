@@ -536,7 +536,11 @@ def init_db():
     """)
     if db.execute("SELECT COUNT(*) c FROM categorias").fetchone()["c"] == 0:
         db.execute("INSERT INTO categorias (nombre, edad_minima) VALUES (?, ?)", ("Sub 45", 45))
-        db.execute("INSERT INTO categorias (nombre, edad_minima) VALUES (?, ?)", ("Senior", None))
+        db.execute("INSERT INTO categorias (nombre, edad_minima) VALUES (?, ?)", ("Senior", 14))
+    else:
+        # Senior (Máxima y Primera) se juega desde los 14 años; los de 14 a 17
+        # quedan marcados como Juvenil con cupo aparte (ver _subcategoria_por_nacimiento).
+        db.execute("UPDATE categorias SET edad_minima = 14 WHERE nombre = 'Senior' AND edad_minima IS NULL")
 
     db.execute(f"""
         CREATE TABLE IF NOT EXISTS divisiones (
@@ -621,10 +625,10 @@ def _to_float(value):
         return 0.0
 
 
-def _contar_juveniles(db, equipo):
+def _contar_juveniles(db, equipo, categoria=CATEGORIA_ACTIVA):
     return db.execute(
         "SELECT COUNT(*) c FROM jugadores WHERE equipo = ? AND categoria = ? AND subcategoria = 'Juvenil'",
-        (equipo, CATEGORIA_ACTIVA),
+        (equipo, categoria),
     ).fetchone()["c"]
 
 
@@ -957,7 +961,7 @@ def detalle_equipo(equipo_id):
     ).fetchall()
 
     saldo = equipo["valor_inscripcion"] - equipo["abono"]
-    juveniles_count = _contar_juveniles(db, equipo["nombre"])
+    juveniles_count = _contar_juveniles(db, equipo["nombre"], equipo["categoria"])
 
     partidos_equipo = []
     for jr in db.execute(
@@ -1295,11 +1299,20 @@ def _guardar_imagen_subida(archivo):
 
 
 def _subcategoria_por_nacimiento(fecha_nacimiento, categoria=CATEGORIA_ACTIVA):
-    # "Juvenil" es una excepción histórica exclusiva de Sub 45 (nacidos en 1982).
-    # Cualquier otra categoría (Senior o una nueva que arme el admin) no tiene sub-tier.
-    if categoria != "Sub 45":
-        return categoria
-    return "Juvenil" if (fecha_nacimiento or "").strip().startswith("1982") else "Sub 45"
+    # "Juvenil" marca una excepción de edad con cupo aparte dentro de la categoría:
+    # - Sub 45: histórico, exclusivo de nacidos en 1982.
+    # - Senior: menores de edad (14 a 17 años) admitidos con cupo aparte.
+    # Cualquier otra categoría que arme el admin no tiene sub-tier.
+    fecha_nacimiento = (fecha_nacimiento or "").strip()
+    if categoria == "Sub 45":
+        return "Juvenil" if fecha_nacimiento.startswith("1982") else "Sub 45"
+    if categoria == "Senior":
+        try:
+            edad = date.today().year - int(fecha_nacimiento[:4])
+        except (ValueError, IndexError):
+            return categoria
+        return "Juvenil" if 14 <= edad <= 17 else categoria
+    return categoria
 
 
 def _jugador_califica(db, fecha_nacimiento, categoria=CATEGORIA_ACTIVA):
@@ -1344,7 +1357,7 @@ def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacim
     if count >= CUPO_MAXIMO_EQUIPO:
         return None, f"El equipo {equipo_nombre} ya alcanzó el cupo máximo de {CUPO_MAXIMO_EQUIPO} jugadores."
 
-    if subcategoria == "Juvenil" and _contar_juveniles(db, equipo_nombre) >= CUPO_MAXIMO_JUVENIL:
+    if subcategoria == "Juvenil" and _contar_juveniles(db, equipo_nombre, categoria) >= CUPO_MAXIMO_JUVENIL:
         return None, f"El equipo {equipo_nombre} ya alcanzó el cupo máximo de {CUPO_MAXIMO_JUVENIL} jugadores Juvenil."
 
     ahora = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -1656,7 +1669,7 @@ def actualizar_jugador(jugador_id):
         return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
     if (subcategoria == "Juvenil" and jugador["subcategoria"] != "Juvenil"
-            and _contar_juveniles(db, jugador["equipo"]) >= CUPO_MAXIMO_JUVENIL):
+            and _contar_juveniles(db, jugador["equipo"], jugador["categoria"]) >= CUPO_MAXIMO_JUVENIL):
         flash(f"No se puede cambiar la fecha: el equipo ya alcanzó el cupo máximo de {CUPO_MAXIMO_JUVENIL} jugadores Juvenil.")
         return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
