@@ -172,12 +172,11 @@
   <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
     Se calcula solo a partir de los goles registrados en las hojas de Vocalía de cada partido.
   </p>
-  <input type="text" id="buscadorGoleadores" placeholder="Buscar por jugador o equipo...">
   {% if not goleadores %}
     <p style="color:#888;">Todavía no hay goles registrados.</p>
   {% else %}
   <div style="overflow-x:auto;">
-  <table class="tabla-responsive" id="tablaGoleadores">
+  <table class="tabla-responsive" id="tablaGoleadores" data-search-placeholder="Buscar por jugador o equipo...">
     <thead>
       <tr><th>#</th><th>Jugador</th><th>Equipo</th><th>Goles</th></tr>
     </thead>
@@ -193,32 +192,7 @@
     </tbody>
   </table>
   </div>
-  <p id="sinResultadosGoleadores" style="display:none; color:#888; text-align:center; padding:16px 0;">
-    No se encontró ningún goleador con esa búsqueda.
-  </p>
   {% endif %}
 </div>
 
-{% endblock %}
-
-{% block extra_scripts %}
-<script>
-(function () {
-  const buscador = document.getElementById('buscadorGoleadores');
-  if (!buscador) return;
-  const filas = Array.from(document.querySelectorAll('#tablaGoleadores tbody tr'));
-  const sinResultados = document.getElementById('sinResultadosGoleadores');
-
-  buscador.addEventListener('input', function () {
-    const q = buscador.value.trim().toLowerCase();
-    let visibles = 0;
-    filas.forEach(function (fila) {
-      const coincide = fila.textContent.toLowerCase().includes(q);
-      fila.style.display = coincide ? '' : 'none';
-      if (coincide) visibles++;
-    });
-    sinResultados.style.display = (q && visibles === 0) ? 'block' : 'none';
-  });
-})();
-</script>
 {% endblock %}

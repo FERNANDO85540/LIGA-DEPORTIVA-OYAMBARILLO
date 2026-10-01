@@ -271,6 +271,23 @@
     }
     .tabla-responsive td.table-actions::before { display: none; }
   }
+
+  .tabla-responsive thead th.th-ordenable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .tabla-responsive thead th.th-ordenable:hover {
+    color: var(--verde-osc);
+  }
+  .tabla-responsive thead th.th-asc::after { content: " \25B2"; font-size: 0.75em; opacity: 0.8; }
+  .tabla-responsive thead th.th-desc::after { content: " \25BC"; font-size: 0.75em; opacity: 0.8; }
+  .tabla-buscador-auto {
+    display: block;
+    width: 100%;
+    max-width: 420px;
+    margin-bottom: 12px;
+  }
 </style>
 {% block extra_head %}{% endblock %}
 </head>
@@ -1243,6 +1260,101 @@ window.initBuscadorJugador = function (raiz, jugadores) {
   });
   input.addEventListener('blur', cerrar);
 };
+</script>
+<script>
+// Ordenamiento y filtro genéricos para CUALQUIER tabla con class="tabla-responsive"
+// (incluidas las que se agreguen a futuro: no requiere JS por página). Para
+// desactivar en una tabla puntual: data-sort="off" y/o data-search="off" en el <table>.
+// Para cambiar el texto del buscador: data-search-placeholder="...".
+(function () {
+  function textoCelda(celda) {
+    return (celda.textContent || '').trim().replace(/\s+/g, ' ');
+  }
+
+  function valorOrdenable(celda) {
+    const texto = textoCelda(celda);
+    const soloNumero = texto.replace(/[^0-9.,-]/g, '').replace(',', '.');
+    if (soloNumero && /^-?[0-9]+(\.[0-9]+)?$/.test(soloNumero) && soloNumero.length >= texto.replace(/[^0-9.,-]/g, '').length - 1) {
+      return { esNumero: true, valor: parseFloat(soloNumero) };
+    }
+    return { esNumero: false, valor: texto.toLowerCase() };
+  }
+
+  function habilitarOrden(tabla) {
+    const filaEncabezado = tabla.querySelector('thead tr');
+    if (!filaEncabezado) return;
+    const encabezados = Array.from(filaEncabezado.children);
+    encabezados.forEach(function (th, indice) {
+      if (!th.textContent.trim()) return;
+      th.classList.add('th-ordenable');
+      th.addEventListener('click', function () {
+        const tbody = tabla.querySelector('tbody');
+        if (!tbody) return;
+        const ascendente = th.dataset.dir !== 'asc';
+        encabezados.forEach(function (otro) {
+          delete otro.dataset.dir;
+          otro.classList.remove('th-asc', 'th-desc');
+        });
+        th.dataset.dir = ascendente ? 'asc' : 'desc';
+        th.classList.add(ascendente ? 'th-asc' : 'th-desc');
+
+        const filas = Array.from(tbody.querySelectorAll(':scope > tr')).filter(function (fila) {
+          return fila.children.length > indice;
+        });
+        filas.sort(function (a, b) {
+          const va = valorOrdenable(a.children[indice]);
+          const vb = valorOrdenable(b.children[indice]);
+          let cmp;
+          if (va.esNumero && vb.esNumero) {
+            cmp = va.valor - vb.valor;
+          } else {
+            cmp = String(va.valor).localeCompare(String(vb.valor), 'es');
+          }
+          return ascendente ? cmp : -cmp;
+        });
+        filas.forEach(function (fila) { tbody.appendChild(fila); });
+      });
+    });
+  }
+
+  function habilitarFiltro(tabla) {
+    const tbody = tabla.querySelector('tbody');
+    if (!tbody) return;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tabla-buscador-auto';
+    input.placeholder = tabla.dataset.searchPlaceholder || 'Buscar en esta tabla...';
+    tabla.parentNode.insertBefore(input, tabla);
+
+    const mensajeVacio = document.createElement('p');
+    mensajeVacio.textContent = tabla.dataset.emptyMessage || 'No se encontró ningún resultado con esa búsqueda.';
+    mensajeVacio.style.cssText = 'display:none; color:#888; text-align:center; padding:16px 0;';
+    tabla.parentNode.insertBefore(mensajeVacio, tabla.nextSibling);
+
+    input.addEventListener('input', function () {
+      const q = input.value.trim().toLowerCase();
+      let visibles = 0;
+      Array.from(tbody.querySelectorAll(':scope > tr')).forEach(function (fila) {
+        const coincide = !q || fila.textContent.toLowerCase().includes(q);
+        fila.style.display = coincide ? '' : 'none';
+        if (coincide) visibles++;
+      });
+      mensajeVacio.style.display = (q && visibles === 0) ? 'block' : 'none';
+    });
+  }
+
+  function mejorarTablas() {
+    document.querySelectorAll('table.tabla-responsive').forEach(function (tabla) {
+      if (tabla.dataset.enhanced === '1') return;
+      tabla.dataset.enhanced = '1';
+      if (tabla.dataset.sort !== 'off') habilitarOrden(tabla);
+      if (tabla.dataset.search !== 'off') habilitarFiltro(tabla);
+    });
+  }
+
+  mejorarTablas();
+  window.mejorarTablasDatos = mejorarTablas;
+})();
 </script>
 {% block extra_scripts %}{% endblock %}
 </body>

@@ -11,22 +11,17 @@
 </div>
 
 <div class="card">
-  <h2>🔍 Buscar jugador</h2>
-  <input type="text" id="buscadorSanciones" placeholder="Buscar por nombre, apellido o equipo...">
-</div>
-
-<div class="card">
   <h2>Acumulación de tarjetas por jugador</h2>
   <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
     Las tarjetas se cargan 100% desde Vocalía en la hoja de cada partido. Las amarillas que resultaron en
     expulsión por doble amarilla en el mismo partido NO cuentan aquí (esa falta ya se paga con la roja).
-    Ordenado de mayor a menor cantidad de tarjetas acumuladas.
+    Ordenado de mayor a menor cantidad de tarjetas acumuladas. Haz clic en los encabezados para ordenar.
   </p>
   {% if not acumulado %}
     <p style="color:#888;">Todavía no hay tarjetas registradas.</p>
   {% else %}
   <div style="overflow-x:auto;">
-  <table class="tabla-responsive" id="tablaAcumulado">
+  <table class="tabla-responsive" id="tablaAcumulado" data-search-placeholder="Buscar por jugador o equipo...">
     <thead>
       <tr><th>Jugador</th><th>Equipo</th><th>🟨 Válidas</th><th>🟥 Rojas</th><th>Total</th><th>Multas acumuladas</th></tr>
     </thead>
@@ -97,7 +92,7 @@
     <p style="color:#888;">No hay sanciones registradas.</p>
   {% else %}
   <div style="overflow-x:auto;">
-  <table class="tabla-responsive" id="tablaSanciones">
+  <table class="tabla-responsive" id="tablaSanciones" data-search-placeholder="Buscar por jugador, equipo o motivo...">
     <thead>
       <tr><th>Jugador</th><th>Equipo</th><th>Motivo</th><th>Origen</th><th>Jornadas sancionado</th><th>Desde</th><th>Estado</th><th>Valor multa</th><th>Pagada</th><th></th></tr>
     </thead>
@@ -146,24 +141,6 @@
   const JUGADORES = {{ jugadores_js|tojson }};
   const raiz = document.getElementById('buscadorRojaJugador');
   if (raiz) window.initBuscadorJugador(raiz, JUGADORES);
-})();
-</script>
-<script>
-(function () {
-  const buscador = document.getElementById('buscadorSanciones');
-  const tablas = ['tablaAcumulado', 'tablaSanciones']
-    .map(function (id) { return document.getElementById(id); })
-    .filter(Boolean);
-  const filas = tablas.flatMap(function (tabla) {
-    return Array.from(tabla.querySelectorAll('tbody tr'));
-  });
-
-  buscador.addEventListener('input', function () {
-    const q = buscador.value.trim().toLowerCase();
-    filas.forEach(function (fila) {
-      fila.style.display = fila.textContent.toLowerCase().includes(q) ? '' : 'none';
-    });
-  });
 })();
 </script>
 {% endblock %}

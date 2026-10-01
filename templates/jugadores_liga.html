@@ -13,12 +13,11 @@
 {% include "_division_cards.html" %}
 
 <div class="card">
-  <input type="text" id="buscadorLiga" placeholder="Buscar por cédula, nombre, apellido o equipo...">
-  <p style="font-size:0.8rem; color:#888; margin:6px 0 12px;">
+  <p style="font-size:0.8rem; color:#888; margin:0 0 12px;">
     Útil para revisar si un jugador ya está inscrito en otro equipo antes de registrarlo.
   </p>
   <div style="overflow-x:auto;">
-    <table id="tablaLiga" class="tabla-responsive">
+    <table id="tablaLiga" class="tabla-responsive" data-search-placeholder="Buscar por cédula, nombre, apellido o equipo...">
       <thead>
         <tr>
           <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Equipo</th><th>Campeonato</th><th>Estado</th>
@@ -44,30 +43,6 @@
       </tbody>
     </table>
   </div>
-  <p id="sinResultadosLiga" style="display:none; color:#888; text-align:center; padding:16px 0;">
-    No se encontró ningún jugador con esa búsqueda.
-  </p>
 </div>
 
-{% endblock %}
-
-{% block extra_scripts %}
-<script>
-(function () {
-  const buscador = document.getElementById('buscadorLiga');
-  const filas = Array.from(document.querySelectorAll('#tablaLiga tbody tr'));
-  const sinResultados = document.getElementById('sinResultadosLiga');
-
-  buscador.addEventListener('input', function () {
-    const q = buscador.value.trim().toLowerCase();
-    let visibles = 0;
-    filas.forEach(function (fila) {
-      const coincide = fila.textContent.toLowerCase().includes(q);
-      fila.style.display = coincide ? '' : 'none';
-      if (coincide) visibles++;
-    });
-    sinResultados.style.display = (q && visibles === 0) ? 'block' : 'none';
-  });
-})();
-</script>
 {% endblock %}
