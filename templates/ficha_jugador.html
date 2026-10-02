@@ -38,7 +38,9 @@
       <input type="text" name="apellidos" value="{{ jugador.apellidos }}" required {% if bloqueado %}disabled{% endif %}>
 
       <label>Fecha de nacimiento</label>
-      <input type="date" name="fecha_nacimiento" value="{{ jugador.fecha_nacimiento }}" {% if bloqueado %}disabled{% endif %}>
+      <input type="date" name="fecha_nacimiento" value="{{ jugador.fecha_nacimiento }}" {% if bloqueado %}disabled{% endif %}
+             data-edad-minima="{{ edad_minima or '' }}"
+             data-anio-excepcion="{{ '1982' if jugador.categoria == 'Sub 45' else '' }}">
 
       <label>Edad</label>
       <input type="text" value="{{ edad if edad is not none else '-' }}" disabled style="background:#f4f6f5;">

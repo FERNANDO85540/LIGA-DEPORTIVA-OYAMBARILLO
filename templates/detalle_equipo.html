@@ -135,7 +135,9 @@
     <input type="text" name="apellidos" required>
 
     <label>Fecha de nacimiento</label>
-    <input type="date" name="fecha_nacimiento" required>
+    <input type="date" name="fecha_nacimiento" required
+           data-edad-minima="{{ edad_minima or '' }}"
+           data-anio-excepcion="{{ '1982' if categoria == 'Sub 45' else '' }}">
     {% if categoria == 'Sub 45' %}
     <p style="font-size:0.8rem; color:#888; margin:2px 0 0;">La categoría (Sub 45 / Juvenil) se calcula automáticamente según el año de nacimiento. Juvenil es exclusivo para nacidos en 1982.</p>
     {% elif categoria == 'Senior' %}

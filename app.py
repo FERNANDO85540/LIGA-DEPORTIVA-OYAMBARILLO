@@ -993,6 +993,7 @@ def detalle_equipo(equipo_id):
         saldo=saldo,
         cupo_maximo=CUPO_MAXIMO_EQUIPO,
         categoria=equipo["categoria"],
+        edad_minima=_edad_minima_categoria(db, equipo["categoria"]),
         juveniles_count=juveniles_count,
         cupo_maximo_juvenil=CUPO_MAXIMO_JUVENIL,
         partidos_equipo=partidos_equipo,
@@ -1780,7 +1781,11 @@ def ficha_jugador(jugador_id):
     edad = _calcular_edad(jugador["fecha_nacimiento"])
     equipo_row = db.execute("SELECT id FROM equipos WHERE nombre = ?", (jugador["equipo"],)).fetchone()
     equipo_id = equipo_row["id"] if equipo_row else None
-    return render_template("ficha_jugador.html", jugador=jugador, edad=edad, subcategorias=SUBCATEGORIAS, equipo_id=equipo_id)
+    edad_minima = _edad_minima_categoria(db, jugador["categoria"])
+    return render_template(
+        "ficha_jugador.html", jugador=jugador, edad=edad, subcategorias=SUBCATEGORIAS, equipo_id=equipo_id,
+        edad_minima=edad_minima,
+    )
 
 
 @app.route("/jugador/<int:jugador_id>/actualizar", methods=["POST"])

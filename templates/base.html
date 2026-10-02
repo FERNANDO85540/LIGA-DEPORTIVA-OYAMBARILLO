@@ -727,13 +727,21 @@ document.querySelectorAll('input[type=file][data-rotador]').forEach(function (in
   }
 });
 
-// Valida en el navegador si la fecha de nacimiento califica para esta liga:
-// nació en 1982 (Juvenil, cupo aparte) o cumple 45 años este año (Sub 45).
-// Si no califica, marca el campo en rojo y bloquea el guardado — no solo
-// avisa, para que no se pueda pasar por alto sin corregir el dato.
-// El servidor valida lo mismo (esto es solo para avisar rápido).
+// Valida en el navegador si la fecha de nacimiento califica para el campeonato
+// de ESTE jugador/equipo en particular, leyendo data-edad-minima (lo que exige
+// su campeonato, vacío si no tiene mínimo) y data-anio-excepcion (el año de
+// nacimiento que lo exceptúa — solo Sub 45 lo usa, por el cupo Juvenil
+// histórico de nacidos en 1982). Si no califica, marca el campo en rojo y
+// bloquea el guardado — no solo avisa, para que no se pueda pasar por alto
+// sin corregir el dato. El servidor valida lo mismo (esto es solo para
+// avisar rápido); si el input no trae data-edad-minima no se evalúa nada
+// aquí y el servidor decide.
 document.querySelectorAll('input[type="date"][name="fecha_nacimiento"]').forEach(function (input) {
   if (input.disabled) return;
+  if (!('edadMinima' in input.dataset)) return;
+
+  const edadMinima = parseInt(input.dataset.edadMinima, 10) || null;
+  const anioExcepcion = input.dataset.anioExcepcion || null;
 
   const aviso = document.createElement('p');
   aviso.style.cssText = 'font-size:0.8rem; color:#a13a2f; margin:4px 0 0; font-weight:600;';
@@ -741,10 +749,18 @@ document.querySelectorAll('input[type="date"][name="fecha_nacimiento"]').forEach
 
   function califica(fechaISO) {
     if (!fechaISO) return null; // sin fecha todavía, no se evalúa
-    if (fechaISO.slice(0, 4) === '1982') return true;
+    if (anioExcepcion && fechaISO.slice(0, 4) === anioExcepcion) return true;
+    if (!edadMinima) return true; // este campeonato no exige edad mínima
     const anio = parseInt(fechaISO.slice(0, 4), 10);
     if (isNaN(anio)) return null;
-    return (new Date().getFullYear() - anio) >= 45;
+    return (new Date().getFullYear() - anio) >= edadMinima;
+  }
+
+  function mensajeError() {
+    if (edadMinima && anioExcepcion) {
+      return `⛔ Cédula no califica: no cumple ${edadMinima} años este año ni nació en ${anioExcepcion} (Juvenil). No corresponde a esta categoría.`;
+    }
+    return `⛔ Cédula no califica: esta categoría exige ${edadMinima} años cumplidos este año.`;
   }
 
   function validar() {
@@ -752,7 +768,7 @@ document.querySelectorAll('input[type="date"][name="fecha_nacimiento"]').forEach
     if (ok === false) {
       input.style.borderColor = '#a13a2f';
       input.style.background = '#fdecea';
-      aviso.textContent = '⛔ Cédula no califica: no cumple 45 años este año ni nació en 1982 (Juvenil). No corresponde a ninguna categoría.';
+      aviso.textContent = mensajeError();
     } else {
       input.style.borderColor = '';
       input.style.background = '';
