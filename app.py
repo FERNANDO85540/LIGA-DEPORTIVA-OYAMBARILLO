@@ -486,6 +486,8 @@ def init_db():
         db.execute("ALTER TABLE sanciones ADD COLUMN categoria TEXT")
     if "division" not in scols:
         db.execute("ALTER TABLE sanciones ADD COLUMN division TEXT")
+    if "tarjeta_id" not in scols:
+        db.execute("ALTER TABLE sanciones ADD COLUMN tarjeta_id INTEGER")
     sanciones_necesita_backfill = "jornada_desde_numero" not in scols
     if sanciones_necesita_backfill:
         db.execute("ALTER TABLE sanciones ADD COLUMN jornada_desde_numero INTEGER")
@@ -2417,8 +2419,8 @@ def sanciones_modulo():
     jugadores = db.execute(
         "SELECT * FROM jugadores ORDER BY categoria, equipo, apellidos, nombres"
     ).fetchall()
-    jornadas = db.execute("SELECT * FROM jornadas ORDER BY categoria, numero, id").fetchall()
     catalogo = db.execute("SELECT * FROM sanciones_catalogo ORDER BY articulo, id").fetchall()
+    rojas_pendientes = _rojas_pendientes_de_sancion(db)
 
     jugadores_map = {j["id"]: j for j in jugadores}
     validas_por_jugador = _amarillas_validas_agrupadas(db)
@@ -2453,17 +2455,10 @@ def sanciones_modulo():
     """).fetchall()
     sanciones_activas = {s["id"] for s in sanciones if _sancion_activa(db, s)}
 
-    jugadores_js = [
-        {"id": j["id"], "label": f"{j['apellidos']} {j['nombres']} ({j['cedula']})", "equipo": j["equipo"]}
-        for j in jugadores
-    ]
-
     return render_template(
         "sanciones_modulo.html",
-        jugadores=jugadores,
-        jugadores_js=jugadores_js,
-        jornadas=jornadas,
         catalogo=catalogo,
+        rojas_pendientes=rojas_pendientes,
         acumulado=acumulado,
         sanciones=sanciones,
         sanciones_activas=sanciones_activas,
@@ -2474,29 +2469,40 @@ def sanciones_modulo():
 @sanciones_required
 def agregar_roja_directa():
     db = get_db()
-    jugador_id = request.form.get("jugador_id", "").strip()
+    tarjeta_id = request.form.get("tarjeta_id", "").strip()
     catalogo_id = request.form.get("catalogo_id", "").strip()
-    jornada_id = request.form.get("jornada_id", "").strip()
 
-    if not jugador_id.isdigit() or not catalogo_id.isdigit() or not jornada_id.isdigit():
-        flash("Selecciona el jugador, el motivo (catálogo) y la jornada del partido.")
+    if not tarjeta_id.isdigit() or not catalogo_id.isdigit():
+        flash("Selecciona la roja a sancionar y el motivo (catálogo).")
         return redirect(url_for("sanciones_modulo"))
 
+    tarjeta = db.execute("SELECT * FROM tarjetas WHERE id = ? AND tipo = 'roja'", (int(tarjeta_id),)).fetchone()
     catalogo = db.execute("SELECT * FROM sanciones_catalogo WHERE id = ?", (int(catalogo_id),)).fetchone()
-    jornada = db.execute("SELECT * FROM jornadas WHERE id = ?", (int(jornada_id),)).fetchone()
-    if not catalogo or not jornada:
-        flash("El motivo o la jornada seleccionados no son válidos.")
+    if not tarjeta or not catalogo:
+        flash("La roja o el motivo seleccionados no son válidos.")
+        return redirect(url_for("sanciones_modulo"))
+
+    ya_sancionada = db.execute(
+        "SELECT 1 FROM sanciones WHERE tarjeta_id = ?", (tarjeta["id"],)
+    ).fetchone()
+    if ya_sancionada:
+        flash("Esa roja ya tiene una sanción registrada.")
+        return redirect(url_for("sanciones_modulo"))
+
+    jornada = db.execute("SELECT * FROM jornadas WHERE id = ?", (tarjeta["jornada_id"],)).fetchone()
+    if not jornada:
+        flash("No se pudo determinar la jornada de esa roja.")
         return redirect(url_for("sanciones_modulo"))
 
     valor_multa = catalogo["valor_multa_sugerido"] if catalogo["aplica_multa"] else None
 
     db.execute(
         """INSERT INTO sanciones (jugador_id, motivo, jornadas_sancionado, jornada_desde_id,
-           jornada_desde_numero, categoria, division, valor_multa, pagada, fecha, origen, catalogo_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'manual', ?)""",
-        (int(jugador_id), catalogo["descripcion_motivo"], catalogo["cantidad_fechas_suspension"],
+           jornada_desde_numero, categoria, division, valor_multa, pagada, fecha, origen, catalogo_id, tarjeta_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'manual', ?, ?)""",
+        (tarjeta["jugador_id"], catalogo["descripcion_motivo"], catalogo["cantidad_fechas_suspension"],
          jornada["id"], jornada["numero"] + 1, jornada["categoria"], jornada["division"],
-         valor_multa, datetime.now().strftime("%Y-%m-%d %H:%M"), int(catalogo_id)),
+         valor_multa, datetime.now().strftime("%Y-%m-%d %H:%M"), int(catalogo_id), tarjeta["id"]),
     )
     db.commit()
     flash("Roja directa registrada: la sanción se calculó automáticamente según el catálogo.", "ok")
@@ -2847,6 +2853,24 @@ def _sancion_activa(db, sancion):
     ).fetchone()["m"] or 0
     fin = sancion["jornada_desde_numero"] + sancion["jornadas_sancionado"] - 1
     return ultima <= fin
+
+
+def _rojas_pendientes_de_sancion(db):
+    """Tarjetas rojas (ya cargadas 100% desde Vocalía) que todavía no tienen
+    una sanción registrada — son las únicas que puede elegir el formulario
+    de 'Registrar roja directa', para no dejar sancionar a cualquier jugador
+    ni sancionar dos veces la misma expulsión."""
+    return db.execute("""
+        SELECT t.id AS tarjeta_id, t.jugador_id, t.observacion, t.fecha,
+               j.nombres AS j_nombres, j.apellidos AS j_apellidos, j.equipo AS j_equipo,
+               jo.numero AS jornada_numero
+        FROM tarjetas t
+        JOIN jugadores j ON j.id = t.jugador_id
+        LEFT JOIN jornadas jo ON jo.id = t.jornada_id
+        WHERE t.tipo = 'roja'
+          AND t.id NOT IN (SELECT tarjeta_id FROM sanciones WHERE tarjeta_id IS NOT NULL)
+        ORDER BY t.fecha DESC, t.id DESC
+    """).fetchall()
 
 
 def _amarillas_validas_agrupadas(db):

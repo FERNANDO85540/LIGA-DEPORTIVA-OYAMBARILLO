@@ -50,15 +50,21 @@
   </p>
   {% if not catalogo %}
     <p style="color:#b45309;">Todavía no hay motivos cargados en el catálogo. Ve a "Catálogo de sanciones" para agregarlos.</p>
+  {% elif not rojas_pendientes %}
+    <p style="color:#888;">No hay rojas de Vocalía pendientes de sancionar por ahora.</p>
   {% else %}
   <form method="post" action="{{ url_for('agregar_roja_directa') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
-    <div style="flex:1; min-width:220px;">
-      <label>Jugador</label>
-      <div class="buscador-jugador" id="buscadorRojaJugador">
-        <input type="text" class="buscador-input" placeholder="Escribe nombre, apellido o cédula..." autocomplete="off" required>
-        <input type="hidden" class="buscador-valor" name="jugador_id">
-        <div class="buscador-lista" style="display:none;"></div>
-      </div>
+    <div style="flex:1; min-width:280px;">
+      <label>Roja a sancionar</label>
+      <select name="tarjeta_id" required>
+        <option value="">-- Selecciona la roja --</option>
+        {% for t in rojas_pendientes %}
+        <option value="{{ t.tarjeta_id }}">
+          {{ t.j_apellidos }} {{ t.j_nombres }} ({{ t.j_equipo }}){% if t.jornada_numero %} — Jornada {{ t.jornada_numero }}{% endif %}{% if t.observacion %} — {{ t.observacion }}{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <p style="font-size:0.8rem; color:#888; margin:4px 0 0;">Solo aparecen las rojas cargadas desde Vocalía que todavía no tienen sanción.</p>
     </div>
     <div style="flex:1; min-width:220px;">
       <label>Motivo (Art. del reglamento)</label>
@@ -69,15 +75,6 @@
           {% if c.articulo %}Art. {{ c.articulo }} — {% endif %}{{ c.descripcion_motivo }}
           ({{ c.cantidad_fechas_suspension }} fecha{{ 's' if c.cantidad_fechas_suspension != 1 else '' }}{% if c.aplica_multa %}, con multa{% endif %})
         </option>
-        {% endfor %}
-      </select>
-    </div>
-    <div style="min-width:220px;">
-      <label>Jornada del partido (donde se mostró la roja)</label>
-      <select name="jornada_id" required>
-        <option value="">-- Selecciona la jornada --</option>
-        {% for jo in jornadas %}
-        <option value="{{ jo.id }}">Jornada {{ jo.numero }} — {{ jo.categoria }}{% if jo.division %} / {{ jo.division }}{% endif %}</option>
         {% endfor %}
       </select>
     </div>
@@ -133,14 +130,4 @@
   {% endif %}
 </div>
 
-{% endblock %}
-
-{% block extra_scripts %}
-<script>
-(function () {
-  const JUGADORES = {{ jugadores_js|tojson }};
-  const raiz = document.getElementById('buscadorRojaJugador');
-  if (raiz) window.initBuscadorJugador(raiz, JUGADORES);
-})();
-</script>
 {% endblock %}
