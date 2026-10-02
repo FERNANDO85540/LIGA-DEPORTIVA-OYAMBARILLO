@@ -1050,7 +1050,6 @@ def detalle_equipo(equipo_id):
         juveniles_count=juveniles_count,
         cupo_maximo_juvenil=CUPO_MAXIMO_JUVENIL,
         partidos_equipo=partidos_equipo,
-        rendimiento_titulares=_rendimiento_titulares(db, equipo["nombre"]),
     )
 
 
@@ -1157,15 +1156,15 @@ def publico_alineaciones(partido_id):
         return redirect(url_for("publico_inicio"))
     jornada = db.execute("SELECT * FROM jornadas WHERE id = ?", (partido["jornada_id"],)).fetchone()
 
-    def _armar(equipo_nombre):
-        datos = _obtener_alineacion(db, partido_id, equipo_nombre)
-        if not datos:
-            return None
-        slots = FORMACIONES.get(datos["formacion"], FORMACIONES["4-3-3"])
-        return {
-            "formacion": datos["formacion"], "slots": slots,
-            "titulares": datos["titulares"], "suplentes": datos["suplentes"],
-        }
+    def _goles(equipo_nombre):
+        return db.execute(
+            """SELECT j.id, j.nombres, j.apellidos, j.numero_camiseta, SUM(g.cantidad) AS goles
+               FROM goles g JOIN jugadores j ON j.id = g.jugador_id
+               WHERE g.partido_id = ? AND j.equipo = ?
+               GROUP BY j.id, j.nombres, j.apellidos, j.numero_camiseta
+               ORDER BY goles DESC""",
+            (partido_id, equipo_nombre),
+        ).fetchall()
 
     def _tarjetas(equipo_nombre):
         # Cada equipo juega a lo más un partido por jornada, así que las
@@ -1211,7 +1210,7 @@ def publico_alineaciones(partido_id):
     return render_template(
         "publico_alineaciones.html",
         partido=partido, jornada=jornada,
-        local=_armar(partido["equipo_local"]), visitante=_armar(partido["equipo_visitante"]),
+        goles_local=_goles(partido["equipo_local"]), goles_visitante=_goles(partido["equipo_visitante"]),
         tarjetas_local=_tarjetas(partido["equipo_local"]),
         tarjetas_visitante=_tarjetas(partido["equipo_visitante"]),
         asistencia_local=asistencia_local, asistencia_visitante=asistencia_visitante,
@@ -3326,29 +3325,6 @@ def publico_jugadores():
     ).fetchall()
     return render_template(
         "publico_jugadores.html", jugadores=jugadores, categoria=categoria,
-        categorias_liga=_categorias_liga(db), division=division, divisiones=_divisiones_de_categoria(db, categoria),
-    )
-
-
-@app.route("/publico/resultados")
-def publico_resultados():
-    db = get_db()
-    categoria, division = _categoria_y_division(
-        db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
-    )
-    partidos = db.execute(
-        """
-        SELECT p.*, jo.numero AS jornada_numero
-        FROM partidos p
-        JOIN jornadas jo ON jo.id = p.jornada_id
-        WHERE p.jugado = 1 AND jo.categoria = ? AND jo.division = ?
-        ORDER BY jo.numero DESC, p.id DESC
-        """,
-        (categoria, division),
-    ).fetchall()
-    goleadores = _calcular_goleadores(db, categoria, division)
-    return render_template(
-        "publico_resultados.html", partidos=partidos, goleadores=goleadores, categoria=categoria,
         categorias_liga=_categorias_liga(db), division=division, divisiones=_divisiones_de_categoria(db, categoria),
     )
 
