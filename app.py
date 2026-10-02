@@ -8,7 +8,7 @@ from datetime import datetime, date
 from functools import wraps
 
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g, send_file, send_from_directory, jsonify
-from openpyxl import Workbook
+from openpyxl import Workbook, load_workbook
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 app = Flask(__name__)
@@ -1257,6 +1257,138 @@ def exportar_general():
     sufijo = f"{categoria}_{division}" if division else categoria
     nombre_archivo = f"jugadores_liga_oyambarillo_{sufijo.replace(' ', '_')}.xlsx"
     return _exportar_jugadores_excel(jugadores, nombre_archivo, incluir_equipo=True)
+
+
+COLUMNAS_IMPORTACION_ESPERADAS = ["Equipo", "Número/Dorsal", "NOMBRES", "APELLIDOS", "Cédula", "Fecha"]
+
+
+def _normalizar_nombre_equipo(nombre):
+    return re.sub(r"\s+", " ", (nombre or "").strip()).upper()
+
+
+def _normalizar_cedula_importada(valor):
+    """Recupera cédulas que Excel guardó como número y les comió el 0 inicial
+    (ej. 803434299 -> 0803434299). Devuelve None si no son 10 dígitos válidos."""
+    if valor is None:
+        return None
+    if isinstance(valor, float):
+        if not valor.is_integer():
+            return None
+        valor = int(valor)
+    texto = str(valor).strip()
+    if not texto.isdigit():
+        return None
+    if len(texto) < 10:
+        texto = texto.zfill(10)
+    return texto if len(texto) == 10 else None
+
+
+def _normalizar_fecha_importada(valor):
+    if isinstance(valor, datetime):
+        return valor.strftime("%Y-%m-%d")
+    if isinstance(valor, date):
+        return valor.strftime("%Y-%m-%d")
+    texto = str(valor or "").strip()
+    if not texto:
+        return ""
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y", "%d-%m-%Y"):
+        try:
+            return datetime.strptime(texto, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+    return ""
+
+
+def _normalizar_numero_camiseta_importado(valor):
+    if valor is None:
+        return ""
+    if isinstance(valor, float):
+        return str(int(valor)) if valor.is_integer() else str(valor).strip()
+    return str(valor).strip()
+
+
+@app.route("/admin/importar_jugadores", methods=["GET", "POST"])
+@admin_required
+def importar_jugadores():
+    if request.method == "GET":
+        return render_template("importar_jugadores.html")
+
+    db = get_db()
+    archivo = request.files.get("archivo")
+    if not archivo or not archivo.filename:
+        flash("Selecciona un archivo Excel (.xlsx) para importar.")
+        return redirect(url_for("importar_jugadores"))
+    if not archivo.filename.lower().endswith((".xlsx", ".xlsm")):
+        flash("El archivo debe ser un Excel (.xlsx o .xlsm).")
+        return redirect(url_for("importar_jugadores"))
+
+    try:
+        wb = load_workbook(archivo, data_only=True)
+        ws = wb.worksheets[0]
+    except Exception:
+        flash("No se pudo leer el archivo. Verifica que sea un Excel válido y no esté dañado.")
+        return redirect(url_for("importar_jugadores"))
+
+    equipos_por_nombre = {
+        _normalizar_nombre_equipo(e["nombre"]): e
+        for e in db.execute("SELECT nombre, categoria FROM equipos").fetchall()
+    }
+
+    importados = 0
+    omitidas_vacias = 0
+    errores = []
+    fila_num = 1
+    for fila in ws.iter_rows(min_row=2, values_only=True):
+        fila_num += 1
+        celdas = list(fila) + [None] * 6
+        equipo_raw, numero_raw, nombres_raw, apellidos_raw, cedula_raw, fecha_raw = celdas[:6]
+
+        if not any([equipo_raw, numero_raw, nombres_raw, apellidos_raw, cedula_raw, fecha_raw]):
+            omitidas_vacias += 1
+            continue
+
+        equipo_nombre = str(equipo_raw or "").strip()
+        nombres = str(nombres_raw or "").strip()
+        apellidos = str(apellidos_raw or "").strip()
+        etiqueta = f"Fila {fila_num} ({equipo_nombre or '¿?'} — {nombres} {apellidos})".strip()
+
+        if not equipo_nombre:
+            errores.append(f"Fila {fila_num}: falta el nombre del equipo.")
+            continue
+
+        equipo = equipos_por_nombre.get(_normalizar_nombre_equipo(equipo_nombre))
+        if not equipo:
+            errores.append(f"{etiqueta}: el equipo '{equipo_nombre}' no existe en el sistema. Créalo primero en Inscripciones.")
+            continue
+
+        if not nombres or not apellidos:
+            errores.append(f"{etiqueta}: faltan nombres o apellidos.")
+            continue
+
+        cedula = _normalizar_cedula_importada(cedula_raw)
+        if not cedula:
+            errores.append(f"{etiqueta}: la cédula '{cedula_raw}' no es válida (debe tener 10 dígitos).")
+            continue
+
+        fecha_nacimiento = _normalizar_fecha_importada(fecha_raw)
+        numero_camiseta = _normalizar_numero_camiseta_importado(numero_raw)
+
+        jugador_id, error = _insertar_jugador(
+            db, equipo["nombre"], cedula, nombres.title(), apellidos.title(),
+            fecha_nacimiento, equipo["categoria"], numero_camiseta,
+        )
+        if error:
+            errores.append(f"{etiqueta}: {error}")
+        else:
+            importados += 1
+
+    return render_template(
+        "importar_jugadores_resultado.html",
+        importados=importados,
+        omitidas_vacias=omitidas_vacias,
+        errores=errores,
+        total_filas=fila_num - 1,
+    )
 
 
 FORMAS_PAGO_VALIDAS = {"Efectivo", "Depósito", "Transferencia"}

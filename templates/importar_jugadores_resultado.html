@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p><a href="{{ url_for('importar_jugadores') }}">&larr; Importar otro archivo</a></p>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.4rem;">📥 Resultado de la importación</h1>
+</div>
+
+<div class="card">
+  <div style="display:flex; gap:24px; flex-wrap:wrap; font-size:1rem;">
+    <span>📄 Filas leídas: <strong>{{ total_filas }}</strong></span>
+    <span>✅ Jugadores importados: <strong style="color:#1e7d32;">{{ importados }}</strong></span>
+    <span>⏭️ Filas vacías omitidas: <strong>{{ omitidas_vacias }}</strong></span>
+    <span>⚠️ Filas con error: <strong style="color:#c0392b;">{{ errores|length }}</strong></span>
+  </div>
+</div>
+
+{% if errores %}
+<div class="card">
+  <h2>Filas omitidas por error ({{ errores|length }})</h2>
+  <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
+    Corrige el Excel (o crea el equipo que falte) y vuelve a importar — los jugadores ya
+    cargados no se duplican, así que puedes repetir la importación completa sin problema.
+  </p>
+  <ul style="margin:10px 0 0; padding-left:20px; font-size:0.9rem;">
+    {% for e in errores %}
+    <li style="margin-bottom:4px;">{{ e }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<p>
+  <a href="{{ url_for('jugadores_liga') }}">📋 Ver jugadores de toda la liga</a>
+</p>
+
+{% endblock %}
