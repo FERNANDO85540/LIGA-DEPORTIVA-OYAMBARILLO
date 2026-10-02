@@ -270,6 +270,61 @@
       justify-content: flex-end;
     }
     .tabla-responsive td.table-actions::before { display: none; }
+
+    /* .tabla-compacta: en vez de apilar cada columna en su propia línea
+       (ideal para texto largo), mantiene la forma de tabla real y deja
+       scroll horizontal — mejor para tablas deportivas de columnas cortas
+       (posiciones, goleadores, calendario) donde se necesita comparar
+       varias filas/equipos a la vez sin tanto scroll vertical. */
+    .tabla-responsive.tabla-compacta {
+      display: table;
+      width: auto;
+      min-width: 100%;
+    }
+    .tabla-responsive.tabla-compacta thead {
+      display: table-header-group;
+    }
+    .tabla-responsive.tabla-compacta tbody {
+      display: table-row-group;
+      width: auto;
+    }
+    .tabla-responsive.tabla-compacta tr {
+      display: table-row;
+      width: auto;
+      border: none;
+      margin: 0;
+      padding: 0;
+      background: transparent;
+    }
+    .tabla-responsive.tabla-compacta thead tr {
+      border-bottom: 2px solid #e2e8f0;
+    }
+    .tabla-responsive.tabla-compacta th,
+    .tabla-responsive.tabla-compacta td {
+      display: table-cell;
+      width: auto;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--fondo);
+      text-align: left;
+      white-space: nowrap;
+      font-size: 0.85rem;
+    }
+    .tabla-responsive.tabla-compacta th {
+      font-weight: 700;
+      color: #334155;
+      background: #f8fafc;
+    }
+    .tabla-responsive.tabla-compacta td::before {
+      content: none;
+    }
+    .tabla-responsive.tabla-compacta td.table-actions {
+      justify-content: flex-start;
+    }
+  }
+
+  .tabla-compacta-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .tabla-responsive thead th.th-ordenable {

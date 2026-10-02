@@ -12,8 +12,8 @@
 {% include "_division_cards.html" %}
 
 <div class="card">
-  <div style="overflow-x:auto;">
-  <table class="tabla-responsive">
+  <div class="tabla-compacta-wrap" style="overflow-x:auto;">
+  <table class="tabla-responsive tabla-compacta">
     <thead>
       <tr><th>#</th><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>DG</th><th>Pts</th></tr>
     </thead>
@@ -42,8 +42,8 @@
   {% if not goleadores %}
     <p style="color:#888;">Todavía no hay goles registrados.</p>
   {% else %}
-  <div style="overflow-x:auto;">
-  <table class="tabla-responsive">
+  <div class="tabla-compacta-wrap" style="overflow-x:auto;">
+  <table class="tabla-responsive tabla-compacta">
     <thead>
       <tr><th>#</th><th>Jugador</th><th>Equipo</th><th>Goles</th></tr>
     </thead>
