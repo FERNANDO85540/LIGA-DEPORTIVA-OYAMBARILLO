@@ -136,6 +136,12 @@ def _edad_minima_categoria(db, categoria):
     return fila["edad_minima"] if fila else None
 
 
+def _limite_juveniles_categoria(db, categoria):
+    """Tope de jugadores Juvenil por equipo en este campeonato. None = sin límite (ilimitado)."""
+    fila = db.execute("SELECT limite_juveniles FROM categorias WHERE nombre = ?", (categoria,)).fetchone()
+    return fila["limite_juveniles"] if fila else None
+
+
 def _divisiones_de_categoria(db, categoria):
     """Nombres de las divisiones/series de una categoría (ej. Senior -> Máxima,
     Primera), en el orden en que se crearon. Lista vacía si esa categoría no
@@ -536,9 +542,23 @@ def init_db():
             edad_minima INTEGER
         )
     """)
+    ccols = _columnas_existentes(db, "categorias")
+    if "limite_juveniles" not in ccols:
+        db.execute("ALTER TABLE categorias ADD COLUMN limite_juveniles INTEGER")
+        # Se preserva el tope global que regía antes (3) para los campeonatos ya
+        # existentes; Senior queda sin límite (ver más abajo), tal como se definió
+        # para permitir inscribir a todos los juveniles de 14 a 17 años.
+        db.execute("UPDATE categorias SET limite_juveniles = ? WHERE nombre != 'Senior'", (CUPO_MAXIMO_JUVENIL,))
+
     if db.execute("SELECT COUNT(*) c FROM categorias").fetchone()["c"] == 0:
-        db.execute("INSERT INTO categorias (nombre, edad_minima) VALUES (?, ?)", ("Sub 45", 45))
-        db.execute("INSERT INTO categorias (nombre, edad_minima) VALUES (?, ?)", ("Senior", 14))
+        db.execute(
+            "INSERT INTO categorias (nombre, edad_minima, limite_juveniles) VALUES (?, ?, ?)",
+            ("Sub 45", 45, CUPO_MAXIMO_JUVENIL),
+        )
+        db.execute(
+            "INSERT INTO categorias (nombre, edad_minima, limite_juveniles) VALUES (?, ?, ?)",
+            ("Senior", 14, None),
+        )
     else:
         # Senior (Máxima y Primera) se juega desde los 14 años; los de 14 a 17
         # quedan marcados como Juvenil con cupo aparte (ver _subcategoria_por_nacimiento).
@@ -1048,7 +1068,7 @@ def detalle_equipo(equipo_id):
         categoria=equipo["categoria"],
         edad_minima=_edad_minima_categoria(db, equipo["categoria"]),
         juveniles_count=juveniles_count,
-        cupo_maximo_juvenil=CUPO_MAXIMO_JUVENIL,
+        cupo_maximo_juvenil=_limite_juveniles_categoria(db, equipo["categoria"]),
         partidos_equipo=partidos_equipo,
     )
 
@@ -1553,8 +1573,10 @@ def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacim
     if count >= CUPO_MAXIMO_EQUIPO:
         return None, f"El equipo {equipo_nombre} ya alcanzó el cupo máximo de {CUPO_MAXIMO_EQUIPO} jugadores."
 
-    if subcategoria == "Juvenil" and _contar_juveniles(db, equipo_nombre, categoria) >= CUPO_MAXIMO_JUVENIL:
-        return None, f"El equipo {equipo_nombre} ya alcanzó el cupo máximo de {CUPO_MAXIMO_JUVENIL} jugadores Juvenil."
+    limite_juveniles = _limite_juveniles_categoria(db, categoria)
+    if (subcategoria == "Juvenil" and limite_juveniles is not None
+            and _contar_juveniles(db, equipo_nombre, categoria) >= limite_juveniles):
+        return None, f"El equipo {equipo_nombre} ya alcanzó el cupo máximo de {limite_juveniles} jugadores Juvenil."
 
     ahora = datetime.now().strftime("%Y-%m-%d %H:%M")
     documentos_fecha = ahora if (foto or cedula_frontal or cedula_reverso) else None
@@ -1706,13 +1728,18 @@ def agregar_categoria():
     nombre = request.form.get("nombre", "").strip()
     edad_minima_raw = request.form.get("edad_minima", "").strip()
     edad_minima = int(edad_minima_raw) if edad_minima_raw.isdigit() else None
+    limite_juveniles_raw = request.form.get("limite_juveniles", "").strip()
+    limite_juveniles = int(limite_juveniles_raw) if limite_juveniles_raw.isdigit() else None
 
     if not nombre:
         flash("Ingresa un nombre para el campeonato.")
         return redirect(url_for("categorias_modulo"))
 
     try:
-        db.execute("INSERT INTO categorias (nombre, edad_minima) VALUES (?, ?)", (nombre, edad_minima))
+        db.execute(
+            "INSERT INTO categorias (nombre, edad_minima, limite_juveniles) VALUES (?, ?, ?)",
+            (nombre, edad_minima, limite_juveniles),
+        )
         db.commit()
         flash(f"Campeonato '{nombre}' agregado.", "ok")
     except IntegrityError:
@@ -1727,7 +1754,12 @@ def editar_categoria(categoria_id):
     db = get_db()
     edad_minima_raw = request.form.get("edad_minima", "").strip()
     edad_minima = int(edad_minima_raw) if edad_minima_raw.isdigit() else None
-    db.execute("UPDATE categorias SET edad_minima = ? WHERE id = ?", (edad_minima, categoria_id))
+    limite_juveniles_raw = request.form.get("limite_juveniles", "").strip()
+    limite_juveniles = int(limite_juveniles_raw) if limite_juveniles_raw.isdigit() else None
+    db.execute(
+        "UPDATE categorias SET edad_minima = ?, limite_juveniles = ? WHERE id = ?",
+        (edad_minima, limite_juveniles, categoria_id),
+    )
     db.commit()
     flash("Campeonato actualizado.", "ok")
     return redirect(url_for("categorias_modulo"))
@@ -1868,9 +1900,10 @@ def actualizar_jugador(jugador_id):
         flash("Cédula no califica: no cumple con la edad mínima de este campeonato.")
         return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
-    if (subcategoria == "Juvenil" and jugador["subcategoria"] != "Juvenil"
-            and _contar_juveniles(db, jugador["equipo"], jugador["categoria"]) >= CUPO_MAXIMO_JUVENIL):
-        flash(f"No se puede cambiar la fecha: el equipo ya alcanzó el cupo máximo de {CUPO_MAXIMO_JUVENIL} jugadores Juvenil.")
+    limite_juveniles = _limite_juveniles_categoria(db, jugador["categoria"])
+    if (subcategoria == "Juvenil" and jugador["subcategoria"] != "Juvenil" and limite_juveniles is not None
+            and _contar_juveniles(db, jugador["equipo"], jugador["categoria"]) >= limite_juveniles):
+        flash(f"No se puede cambiar la fecha: el equipo ya alcanzó el cupo máximo de {limite_juveniles} jugadores Juvenil.")
         return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
     nuevo_foto = _guardar_imagen_subida(request.files.get("foto"))

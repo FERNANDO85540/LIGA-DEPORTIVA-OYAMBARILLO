@@ -19,11 +19,18 @@
       <label>Edad mínima (opcional)</label>
       <input type="number" name="edad_minima" min="1" placeholder="ej. 18" style="width:120px;">
     </div>
+    <div>
+      <label>Límite de Juveniles por equipo (opcional)</label>
+      <input type="number" name="limite_juveniles" min="0" placeholder="Sin límite" style="width:150px;">
+    </div>
     <button type="submit">Agregar campeonato</button>
   </form>
   <p style="font-size:0.8rem; color:#888; margin-top:10px;">
     Si dejas la edad mínima vacía, el campeonato queda sin restricción de edad (como Senior).
     Si pones un número, un jugador solo podrá inscribirse ahí si cumple esa edad este año.
+    Si dejas el límite de Juveniles vacío, el campeonato permite inscribir todos los jugadores Juvenil
+    que se necesiten (sin tope ni mensaje de restricción); si pones un número, cada equipo no podrá
+    superar ese cupo de jugadores Juvenil.
   </p>
 </div>
 
@@ -39,9 +46,11 @@
     </form>
   </div>
 
-  <form method="post" action="{{ url_for('editar_categoria', categoria_id=c.fila.id) }}" style="display:flex; gap:8px; align-items:center; margin-top:14px;">
+  <form method="post" action="{{ url_for('editar_categoria', categoria_id=c.fila.id) }}" style="display:flex; gap:8px; align-items:center; margin-top:14px; flex-wrap:wrap;">
     <label style="margin:0;">Edad mínima</label>
     <input type="number" name="edad_minima" min="1" value="{{ c.fila.edad_minima or '' }}" placeholder="Sin restricción" style="width:130px;">
+    <label style="margin:0;">Límite de Juveniles por equipo</label>
+    <input type="number" name="limite_juveniles" min="0" value="{{ c.fila.limite_juveniles if c.fila.limite_juveniles is not none else '' }}" placeholder="Sin límite" style="width:130px;">
     <button type="submit" style="padding:6px 12px; font-size:0.85rem;">Guardar</button>
   </form>
 
