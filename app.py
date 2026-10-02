@@ -616,6 +616,8 @@ def init_db():
         )
     """)
 
+    _normalizar_mayusculas_existentes(db)
+
     db.commit()
     db.close()
 
@@ -625,6 +627,55 @@ def _to_float(value):
         return round(float(str(value).replace(",", ".").strip()), 2)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _mayuscula(texto):
+    """MAYÚSCULAS respetando tildes/ñ (str.upper() de Python maneja Unicode
+    bien; el UPPER() de SQL no, por eso esto se hace siempre en Python)."""
+    return (texto or "").strip().upper()
+
+
+def _renombrar_equipo_cascada(db, nombre_viejo, nombre_nuevo):
+    """El nombre del equipo se guarda como texto (no hay llave foránea real)
+    en varias tablas además de equipos.nombre. Actualiza todas para que no
+    queden partidos/alineaciones/etc. huérfanos del nombre anterior."""
+    if nombre_viejo == nombre_nuevo:
+        return
+    db.execute("UPDATE jugadores SET equipo = ? WHERE equipo = ?", (nombre_nuevo, nombre_viejo))
+    db.execute("UPDATE partidos SET equipo_local = ? WHERE equipo_local = ?", (nombre_nuevo, nombre_viejo))
+    db.execute("UPDATE partidos SET equipo_visitante = ? WHERE equipo_visitante = ?", (nombre_nuevo, nombre_viejo))
+    db.execute("UPDATE descansos SET equipo = ? WHERE equipo = ?", (nombre_nuevo, nombre_viejo))
+    db.execute("UPDATE alineaciones SET equipo = ? WHERE equipo = ?", (nombre_nuevo, nombre_viejo))
+    db.execute("UPDATE vocalia_cambios SET equipo = ? WHERE equipo = ?", (nombre_nuevo, nombre_viejo))
+
+
+def _normalizar_mayusculas_existentes(db):
+    """Migración (corre cada arranque, es barata e idempotente): pasa a
+    MAYÚSCULAS los nombres de jugadores y equipos ya guardados, para que se
+    vean uniformes sin importar si se registraron a mano o por el
+    importador de Excel. Si dos equipos quedarían con el mismo nombre en
+    mayúsculas, ese caso se deja intacto para resolverlo a mano (no se
+    puede adivinar cuál de los dos es el correcto)."""
+    for fila in db.execute("SELECT id, nombres, apellidos FROM jugadores").fetchall():
+        nuevos_nombres = _mayuscula(fila["nombres"])
+        nuevos_apellidos = _mayuscula(fila["apellidos"])
+        if nuevos_nombres != fila["nombres"] or nuevos_apellidos != fila["apellidos"]:
+            db.execute(
+                "UPDATE jugadores SET nombres = ?, apellidos = ? WHERE id = ?",
+                (nuevos_nombres, nuevos_apellidos, fila["id"]),
+            )
+
+    for fila in db.execute("SELECT id, nombre FROM equipos").fetchall():
+        nuevo_nombre = _mayuscula(fila["nombre"])
+        if nuevo_nombre == fila["nombre"]:
+            continue
+        colision = db.execute(
+            "SELECT 1 FROM equipos WHERE nombre = ? AND id != ?", (nuevo_nombre, fila["id"])
+        ).fetchone()
+        if colision:
+            continue
+        db.execute("UPDATE equipos SET nombre = ? WHERE id = ?", (nuevo_nombre, fila["id"]))
+        _renombrar_equipo_cascada(db, fila["nombre"], nuevo_nombre)
 
 
 def _contar_juveniles(db, equipo, categoria=CATEGORIA_ACTIVA):
@@ -833,7 +884,7 @@ def index():
 @admin_required
 def agregar_equipo():
     db = get_db()
-    nombre = request.form.get("nombre", "").strip()
+    nombre = _mayuscula(request.form.get("nombre", ""))
     categoria, division = _categoria_y_division(
         db, request.form.get("categoria", CATEGORIA_ACTIVA), request.form.get("division", "")
     )
@@ -855,13 +906,13 @@ def agregar_equipo():
 @admin_required
 def renombrar_equipo(equipo_id):
     db = get_db()
-    nuevo_nombre = request.form.get("nombre", "").strip()
+    nuevo_nombre = _mayuscula(request.form.get("nombre", ""))
     if nuevo_nombre:
         actual = db.execute("SELECT nombre FROM equipos WHERE id = ?", (equipo_id,)).fetchone()
         if actual:
             try:
                 db.execute("UPDATE equipos SET nombre = ? WHERE id = ?", (nuevo_nombre, equipo_id))
-                db.execute("UPDATE jugadores SET equipo = ? WHERE equipo = ?", (nuevo_nombre, actual["nombre"]))
+                _renombrar_equipo_cascada(db, actual["nombre"], nuevo_nombre)
                 db.commit()
                 flash(f"Equipo renombrado a '{nuevo_nombre}'.", "ok")
             except IntegrityError:
@@ -1381,7 +1432,7 @@ def importar_jugadores():
         falta_fecha = not fecha_nacimiento
 
         jugador_id, error = _insertar_jugador(
-            db, equipo["nombre"], cedula, nombres.title(), apellidos.title(),
+            db, equipo["nombre"], cedula, nombres, apellidos,
             fecha_nacimiento, equipo["categoria"], numero_camiseta,
             omitir_validacion_edad=(falta_fecha and permitir_sin_fecha),
         )
@@ -1481,6 +1532,8 @@ def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacim
                        numero_camiseta="", foto=None, cedula_frontal=None, cedula_reverso=None,
                        omitir_validacion_edad=False):
     categoria = _categoria_valida(db, categoria)
+    nombres = _mayuscula(nombres)
+    apellidos = _mayuscula(apellidos)
     subcategoria = _subcategoria_por_nacimiento(fecha_nacimiento, categoria)
 
     if not (cedula and nombres and apellidos):
@@ -1806,8 +1859,8 @@ def actualizar_jugador(jugador_id):
         flash("Este jugador ya fue calificado y no se puede modificar. Contacta a la Comisión de Calificación.")
         return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
 
-    nombres = request.form.get("nombres", "").strip() or jugador["nombres"]
-    apellidos = request.form.get("apellidos", "").strip() or jugador["apellidos"]
+    nombres = _mayuscula(request.form.get("nombres", "")) or jugador["nombres"]
+    apellidos = _mayuscula(request.form.get("apellidos", "")) or jugador["apellidos"]
     fecha_nacimiento = request.form.get("fecha_nacimiento", "").strip() or jugador["fecha_nacimiento"]
     numero_camiseta = request.form.get("numero_camiseta", "").strip()
     subcategoria = _subcategoria_por_nacimiento(fecha_nacimiento, jugador["categoria"])
