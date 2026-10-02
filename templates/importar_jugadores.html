@@ -30,6 +30,13 @@
   <form method="post" action="{{ url_for('importar_jugadores') }}" enctype="multipart/form-data" style="margin-top:16px;">
     <label>Archivo Excel (.xlsx)</label>
     <input type="file" name="archivo" accept=".xlsx,.xlsm" required>
+
+    <label style="display:flex; align-items:center; gap:8px; font-weight:400; margin-top:14px;">
+      <input type="checkbox" name="permitir_sin_fecha" value="1" checked style="width:auto;">
+      Importar también a los jugadores sin fecha de nacimiento (quedan sin clasificación Juvenil/Senior
+      hasta que se complete su fecha desde la ficha del jugador).
+    </label>
+
     <button type="submit" style="margin-top:14px;">📥 Importar</button>
   </form>
 </div>

@@ -1334,9 +1334,12 @@ def importar_jugadores():
         for e in db.execute("SELECT nombre, categoria FROM equipos").fetchall()
     }
 
+    permitir_sin_fecha = request.form.get("permitir_sin_fecha") == "1"
+
     importados = 0
     omitidas_vacias = 0
     errores = []
+    pendientes_fecha = []
     fila_num = 1
     for fila in ws.iter_rows(min_row=2, values_only=True):
         fila_num += 1
@@ -1372,21 +1375,26 @@ def importar_jugadores():
 
         fecha_nacimiento = _normalizar_fecha_importada(fecha_raw)
         numero_camiseta = _normalizar_numero_camiseta_importado(numero_raw)
+        falta_fecha = not fecha_nacimiento
 
         jugador_id, error = _insertar_jugador(
             db, equipo["nombre"], cedula, nombres.title(), apellidos.title(),
             fecha_nacimiento, equipo["categoria"], numero_camiseta,
+            omitir_validacion_edad=(falta_fecha and permitir_sin_fecha),
         )
         if error:
             errores.append(f"{etiqueta}: {error}")
         else:
             importados += 1
+            if falta_fecha:
+                pendientes_fecha.append(f"{etiqueta} — equipo {equipo['nombre']}")
 
     return render_template(
         "importar_jugadores_resultado.html",
         importados=importados,
         omitidas_vacias=omitidas_vacias,
         errores=errores,
+        pendientes_fecha=pendientes_fecha,
         total_filas=fila_num - 1,
     )
 
@@ -1467,14 +1475,15 @@ def _jugador_califica(db, fecha_nacimiento, categoria=CATEGORIA_ACTIVA):
 
 
 def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacimiento, categoria,
-                       numero_camiseta="", foto=None, cedula_frontal=None, cedula_reverso=None):
+                       numero_camiseta="", foto=None, cedula_frontal=None, cedula_reverso=None,
+                       omitir_validacion_edad=False):
     categoria = _categoria_valida(db, categoria)
     subcategoria = _subcategoria_por_nacimiento(fecha_nacimiento, categoria)
 
     if not (cedula and nombres and apellidos):
         return None, "Cédula, nombres y apellidos son obligatorios."
 
-    if not _jugador_califica(db, fecha_nacimiento, categoria):
+    if not omitir_validacion_edad and not _jugador_califica(db, fecha_nacimiento, categoria):
         edad_minima = _edad_minima_categoria(db, categoria)
         if categoria == "Sub 45":
             return None, ("Cédula no califica: según la fecha de nacimiento, no cumple 45 años este año "
