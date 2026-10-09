@@ -1,35 +1,35 @@
 {% extends "base.html" %}
 {% block content %}
 
-<p style="display:flex; gap:12px; align-items:center;">
-  <a href="#" onclick="history.back(); return false;">&larr; Volver</a>
-  <a href="{{ url_for('index') }}" title="Ir al inicio" style="font-size:1.1rem;">🏠 Inicio</a>
-</p>
-
-<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
-  <h1 style="margin:0; font-size:1.4rem;">Ficha del jugador</h1>
-  <p style="margin:6px 0 0; opacity:0.95;">{{ jugador.nombres }} {{ jugador.apellidos }} — {{ jugador.equipo }}</p>
+<!-- Botón de retroceso minimalista -->
+<div style="margin-bottom: 15px;">
+  <a href="javascript:history.back()" title="Volver atrás" style="text-decoration: none; color: #475569; font-size: 1.5rem; display: inline-block; transition: transform 0.2s;">
+    ⬅️
+  </a>
 </div>
 
-<div class="card" style="text-align:center;">
-  <a href="{{ url_for('detalle_equipo', equipo_id=equipo_id) }}">
-    <button type="button">➕ Seguir agregando jugadores</button>
-  </a>
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white; padding: 20px; border-radius: 8px;">
+  <h1 style="margin:0; font-size:1.6rem;">Ficha del Jugador</h1>
+  <p style="margin:6px 0 0; opacity:0.95; font-size: 1.05rem;">
+    <strong>{{ jugador.nombres }} {{ jugador.apellidos }}</strong> — {{ jugador.equipo }}
+  </p>
 </div>
 
 {% set bloqueado = jugador.calificado and session.get('rol') != 'admin' %}
 
-<div class="card" style="display:flex; gap:24px; flex-wrap:wrap;">
+<div class="card" style="display:flex; gap:24px; flex-wrap:wrap; padding: 20px; border-radius: 8px;">
   <div style="flex:1; min-width:280px;">
-    <h2>Datos</h2>
+    <h2 style="margin-top: 0; color: #14532d; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Datos Personales</h2>
+    
     {% if bloqueado %}
-      <p style="background:#fff8e1; border:1px solid #ffe082; color:#6d4c00; padding:10px 14px; border-radius:8px; font-size:0.85rem;">
-        🔒 Este jugador ya fue <strong>calificado</strong> por la Comisión y no se puede modificar. Si necesitas un cambio, contacta a la Comisión de Calificación.
+      <p style="background:#fff8e1; border:1px solid #ffe082; color:#6d4c00; padding:12px; border-radius:8px; font-size:0.9rem; line-height: 1.4;">
+        🔒 Este jugador ya fue <strong>calificado</strong> por la Comisión y su ficha está bloqueada. Si necesitas realizar una corrección, contacta a la Comisión de Calificación.
       </p>
     {% endif %}
+    
     <form method="post" action="{{ url_for('actualizar_jugador', jugador_id=jugador.id) }}" enctype="multipart/form-data">
       <label>Cédula</label>
-      <input type="text" value="{{ jugador.cedula }}" disabled style="background:#f4f6f5;">
+      <input type="text" value="{{ jugador.cedula }}" disabled style="background:#f1f5f9; color: #64748b; font-weight: bold;">
 
       <label>Nombres</label>
       <input type="text" name="nombres" value="{{ jugador.nombres }}" required {% if bloqueado %}disabled{% endif %}>
@@ -37,101 +37,112 @@
       <label>Apellidos</label>
       <input type="text" name="apellidos" value="{{ jugador.apellidos }}" required {% if bloqueado %}disabled{% endif %}>
 
-      <label>Fecha de nacimiento</label>
-      <input type="date" name="fecha_nacimiento" value="{{ jugador.fecha_nacimiento }}" {% if bloqueado %}disabled{% endif %}
-             data-edad-minima="{{ edad_minima or '' }}"
-             data-anio-excepcion="{{ '1982' if jugador.categoria == 'Sub 45' else '' }}">
-
-      <label>Edad</label>
-      <input type="text" value="{{ edad if edad is not none else '-' }}" disabled style="background:#f4f6f5;">
+      <div style="display: flex; gap: 15px; margin-top: 10px;">
+        <div style="flex: 2;">
+          <label style="margin-top: 0;">Fecha de nacimiento</label>
+          <input type="date" name="fecha_nacimiento" value="{{ jugador.fecha_nacimiento }}" {% if bloqueado %}disabled{% endif %}
+                 data-edad-minima="{{ edad_minima or '' }}"
+                 data-anio-excepcion="{{ '1982' if jugador.categoria == 'Sub 45' else '' }}">
+        </div>
+        <div style="flex: 1;">
+          <label style="margin-top: 0;">Edad</label>
+          <input type="text" value="{{ edad if edad is not none else '-' }} años" disabled style="background:#f1f5f9; color: #64748b; text-align: center;">
+        </div>
+      </div>
 
       <label>Equipo</label>
-      <input type="text" value="{{ jugador.equipo }}" disabled style="background:#f4f6f5;">
+      <input type="text" value="{{ jugador.equipo }}" disabled style="background:#f1f5f9; color: #64748b;">
 
       <label>Campeonato</label>
-      <input type="text" value="{{ jugador.categoria }}{% if jugador.subcategoria == 'Juvenil' %} - Juvenil{% endif %}" disabled style="background:#f4f6f5;">
+      <input type="text" value="{{ jugador.categoria }}{% if jugador.subcategoria == 'Juvenil' %} - Juvenil{% endif %}" disabled style="background:#f1f5f9; color: #64748b;">
 
-      <label>Número de camiseta</label>
-      <input type="text" name="numero_camiseta" value="{{ jugador.numero_camiseta or '' }}" maxlength="3" {% if bloqueado %}disabled{% endif %}>
+      <label>Número de camiseta (Dorsal)</label>
+      <input type="text" name="numero_camiseta" value="{{ jugador.numero_camiseta or '' }}" maxlength="3" {% if bloqueado %}disabled{% endif %} placeholder="Ej: 10">
 
       {% if not bloqueado %}
-      <label>Selfie del jugador (foto para el carnet)</label>
-      <p style="font-size:0.8rem; color:#888; margin:2px 0 6px;">
-        🤳 Usa "Tomar selfie con guía" para que quede centrada y del tamaño correcto para el carnet automáticamente —
-        rostro de frente a la cámara, no de lado.
-      </p>
-      <input type="file" name="foto" accept=".jpg,.jpeg,.png" data-rotador data-camara-guia="retrato">
+      <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 20px;">
+        <h3 style="margin: 0 0 15px 0; font-size: 1.1rem; color: #334155;">Actualizar Documentos</h3>
+        
+        <label style="margin-top: 0;">Selfie del jugador (Carnet)</label>
+        <p style="font-size:0.8rem; color:#64748b; margin:2px 0 8px; line-height: 1.3;">
+          Si necesitas cambiar la foto, usa la opción "Tomar selfie con guía" para que quede bien encuadrada.
+        </p>
+        <input type="file" name="foto" accept=".jpg,.jpeg,.png" data-rotador data-camara-guia="retrato" style="margin-bottom: 15px;">
 
-      <label>Foto de la cédula</label>
-      <p style="font-size:0.8rem; color:#888; margin:2px 0 6px;">
-        📸 Usa "Tomar foto con guía" si tienes la cédula del jugador en ese momento — el marco en pantalla la encuadra sola.
-        Si ya te la mandaron (ej. por WhatsApp), súbela con "Seleccionar archivo"; que se vea clara y lo más cerca posible.
-        Al subirla, el sistema intenta llenar Nombres, Apellidos y Fecha de nacimiento solo — igual revisa que quede correcto antes de guardar.
-      </p>
-      <input type="file" name="cedula_frontal" accept=".jpg,.jpeg,.png" data-rotador data-camara-guia="1"
-             data-ocr-cedula='{"nombres":"nombres","apellidos":"apellidos","fecha_nacimiento":"fecha_nacimiento"}'>
+        <label>Foto de la cédula (Lado Frontal)</label>
+        <p style="font-size:0.8rem; color:#64748b; margin:2px 0 8px; line-height: 1.3;">
+          Puedes subir o tomar una nueva foto de la cédula aquí. (Los datos escritos arriba ya no se modificarán automáticamente).
+        </p>
+        <!-- Quitamos data-ocr-cedula para que NO se sobreescriban los datos al editar -->
+        <input type="file" name="cedula_frontal" accept=".jpg,.jpeg,.png" data-rotador data-camara-guia="1">
+      </div>
       {% endif %}
 
       {% if not bloqueado %}
-      <button type="submit">Guardar cambios</button>
+      <button type="submit" style="width: 100%; font-size: 1.05rem; font-weight: bold; margin-top: 20px;">💾 Guardar cambios</button>
       {% endif %}
     </form>
   </div>
 
   <div style="flex:1; min-width:280px;">
-    <h2>Documentos cargados</h2>
+    <h2 style="margin-top: 0; color: #14532d; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Documentos Actuales</h2>
 
-    <div style="text-align:center; margin-bottom:16px;">
-      <p style="font-weight:600; margin-bottom:4px;">Foto del jugador</p>
+    <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; text-align:center; margin-bottom:16px;">
+      <p style="font-weight:600; color: #334155; margin:0 0 10px 0;">Foto del jugador</p>
       {% if jugador.foto %}
-        <img src="{{ url_for('fotos_jugadores', filename=jugador.foto) }}" style="max-width:180px; border-radius:8px; border:1px solid var(--borde); display:block; margin:0 auto 6px;">
+        <img src="{{ url_for('fotos_jugadores', filename=jugador.foto) }}" style="max-width:180px; border-radius:8px; border:2px solid #cbd5e1; display:block; margin:0 auto 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
         {% if not bloqueado %}
-        <form method="post" action="{{ url_for('quitar_foto_jugador', jugador_id=jugador.id, campo='foto') }}" onsubmit="return confirm('¿Eliminar esta foto?');">
-          <button type="submit" class="btn-del">Eliminar</button>
+        <form method="post" action="{{ url_for('quitar_foto_jugador', jugador_id=jugador.id, campo='foto') }}" onsubmit="return confirm('¿Eliminar esta foto permanentemente?');">
+          <button type="submit" class="btn-del" style="background: white;">🗑️ Eliminar foto</button>
         </form>
         {% endif %}
       {% else %}
-        <p style="color:#888; font-size:0.85rem;">Sin foto cargada.</p>
+        <div style="height: 120px; display: flex; align-items: center; justify-content: center; background: #e2e8f0; border-radius: 8px; border: 1px dashed #94a3b8; color: #64748b; font-size: 0.9rem;">
+          Sin foto cargada
+        </div>
       {% endif %}
     </div>
 
-    <div style="text-align:center;">
-      <p style="font-weight:600; margin-bottom:4px; font-size:0.9rem;">Foto de la cédula</p>
+    <div style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; text-align:center;">
+      <p style="font-weight:600; color: #334155; margin:0 0 10px 0;">Cédula Frontal</p>
       {% if jugador.cedula_frontal %}
-        <img src="{{ url_for('fotos_jugadores', filename=jugador.cedula_frontal) }}" style="max-width:180px; border-radius:8px; border:1px solid var(--borde); display:block; margin:0 auto 6px;">
+        <img src="{{ url_for('fotos_jugadores', filename=jugador.cedula_frontal) }}" style="max-width:220px; border-radius:8px; border:2px solid #cbd5e1; display:block; margin:0 auto 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
         {% if not bloqueado %}
-        <form method="post" action="{{ url_for('quitar_foto_jugador', jugador_id=jugador.id, campo='cedula_frontal') }}" onsubmit="return confirm('¿Eliminar esta foto?');">
-          <button type="submit" class="btn-del">Eliminar</button>
+        <form method="post" action="{{ url_for('quitar_foto_jugador', jugador_id=jugador.id, campo='cedula_frontal') }}" onsubmit="return confirm('¿Eliminar esta foto permanentemente?');">
+          <button type="submit" class="btn-del" style="background: white;">🗑️ Eliminar cédula</button>
         </form>
         {% endif %}
       {% else %}
-        <p style="color:#888; font-size:0.8rem;">Sin cargar.</p>
+        <div style="height: 120px; display: flex; align-items: center; justify-content: center; background: #e2e8f0; border-radius: 8px; border: 1px dashed #94a3b8; color: #64748b; font-size: 0.9rem;">
+          Sin cédula cargada
+        </div>
       {% endif %}
     </div>
 
-    <div style="margin-top:20px; display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
-      <a href="{{ url_for('carnet_jugador', jugador_id=jugador.id) }}" target="_blank">
-        <button type="button">🪪 Ver carnet</button>
+    <div style="margin-top:25px; display:flex; flex-direction: column; gap:12px; align-items:center;">
+      <!-- Vista previa del carnet siempre disponible -->
+      <a href="{{ url_for('carnet_jugador', jugador_id=jugador.id) }}" target="_blank" style="width: 100%; text-decoration: none;">
+        <button type="button" style="width: 100%; background: #0f172a; color: white;">🪪 Vista previa del Carnet</button>
       </a>
-      <a href="{{ url_for('carnet_jugador_pdf', jugador_id=jugador.id) }}">
-        <button type="button">⬇️ Descargar PDF</button>
-      </a>
-    </div>
 
-    {% if session.get('rol') == 'admin' %}
-    <div style="margin-top:12px; text-align:center;">
-      <form method="post" action="{{ url_for('calificar_jugador', jugador_id=jugador.id) }}">
-        <button type="submit">{{ '🔓 Quitar calificación' if jugador.calificado else '✅ Calificar jugador' }}</button>
+      <!-- Botón de Calificación (Solo Admin) -->
+      {% if session.get('rol') == 'admin' %}
+      <form method="post" action="{{ url_for('calificar_jugador', jugador_id=jugador.id) }}" style="width: 100%;">
+        {% if jugador.calificado %}
+          <button type="submit" style="width: 100%; background: #fef3c7; color: #92400e; border: 1px solid #fde68a;">🔓 Quitar calificación</button>
+        {% else %}
+          <button type="submit" style="width: 100%; background: #1e7d32;">✅ Calificar jugador</button>
+        {% endif %}
       </form>
+      
+      <!-- Si el jugador ya está calificado, le mostramos el estado de forma visual -->
+      {% elif jugador.calificado %}
+      <div style="width: 100%; background: #e6f4ea; border: 1px solid #1e7d32; color: #1e7d32; padding: 10px; border-radius: 6px; text-align: center; font-weight: bold;">
+        ✅ Jugador Calificado Oficialmente
+      </div>
+      {% endif %}
     </div>
-    {% elif jugador.calificado %}
-    <p style="text-align:center; margin-top:12px;"><span class="badge badge-ok">✅ Calificado</span></p>
-    {% endif %}
   </div>
 </div>
 
-{% endblock %}
-
-{% block extra_scripts %}
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 {% endblock %}

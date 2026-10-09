@@ -8,7 +8,7 @@
 
 {% block content %}
 
-<p><a href="{{ url_for('publico_calendario') }}">&larr; Volver al calendario</a></p>
+<p><a href="{{ url_for('publico_calendario') }}" style="text-decoration: none; color: #475569;">&larr; Volver al calendario</a></p>
 
 <div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
   <h1 style="margin:0; font-size:1.3rem;">📋 Detalle del encuentro</h1>
@@ -20,24 +20,39 @@
 </div>
 
 <div class="card" style="text-align:center;{% if partido.en_vivo %} border:2px solid #c0392b;{% endif %}">
+  
   {% if partido.en_vivo %}
-  <span class="badge" style="background:#fdecea; color:#c0392b; margin-bottom:10px;">🔴 EN VIVO</span>
-  <p style="font-size:0.78rem; color:#888; margin:2px 0 8px;">Esta página se actualiza sola cada 20 segundos.</p>
+    <span class="badge" style="background:#fdecea; color:#c0392b; margin-bottom:10px;">🔴 EN VIVO</span>
+    <p style="font-size:0.78rem; color:#888; margin:2px 0 8px;">Esta página se actualiza sola cada 20 segundos.</p>
+  {% elif partido.ganador_escritorio %}
+    <span class="badge" style="background:#fef2f2; color:#b91c1c; border: 1px solid #fca5a5; margin-bottom:10px;">⚖️ Resuelto en Mesa</span>
   {% elif partido.jugado %}
-  <span class="badge badge-ok" style="margin-bottom:10px;">✅ Finalizado</span>
+    <span class="badge badge-ok" style="margin-bottom:10px;">✅ Finalizado</span>
   {% else %}
-  <span class="badge" style="background:#eef3ee; color:#555; margin-bottom:10px;">⏳ Todavía no se ha jugado</span>
+    <span class="badge" style="background:#eef3ee; color:#555; margin-bottom:10px;">⏳ Pendiente de Oficializar</span>
   {% endif %}
+  
   <div style="display:flex; align-items:center; justify-content:center; gap:18px; flex-wrap:wrap; margin-top:6px;">
-    <strong style="font-size:1.15rem;">{{ partido.equipo_local }}</strong>
-    {% if partido.jugado or partido.en_vivo %}
-      <span style="font-size:1.6rem; font-weight:800; color:{{ '#c0392b' if partido.en_vivo else 'var(--verde-osc)' }};">{{ partido.goles_local }} - {{ partido.goles_visitante }}</span>
+    <strong style="font-size:1.15rem; flex:1; text-align:right;">{{ partido.equipo_local }}</strong>
+    
+    {% if partido.ganador_escritorio %}
+      <div style="display: flex; flex-direction: column; align-items: center;">
+        <span style="font-size:1.6rem; font-weight:800; color:var(--verde-osc);">
+          {{ 2 if partido.ganador_escritorio == partido.equipo_local else 0 }} - {{ 2 if partido.ganador_escritorio == partido.equipo_visitante else 0 }}
+        </span>
+      </div>
+    {% elif partido.goles_local is not none %}
+      <span style="font-size:1.6rem; font-weight:800; color:{{ '#c0392b' if partido.en_vivo else 'var(--verde-osc)' }};">
+        {{ partido.goles_local }} - {{ partido.goles_visitante }}
+      </span>
     {% else %}
       <span style="font-size:1.1rem; color:#888;">vs</span>
     {% endif %}
-    <strong style="font-size:1.15rem;">{{ partido.equipo_visitante }}</strong>
+    
+    <strong style="font-size:1.15rem; flex:1; text-align:left;">{{ partido.equipo_visitante }}</strong>
   </div>
 </div>
+
 
 <div class="cupos-grid" style="grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); align-items:start;">
   {% for nombre_equipo, goles, tarjetas, asistencia in [

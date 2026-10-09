@@ -449,7 +449,24 @@ def init_db():
     """)
     if "fecha" not in _columnas_existentes(db, "partidos"):
         db.execute("ALTER TABLE partidos ADD COLUMN fecha TEXT")
-
+    # 1. Nuevas columnas para ganar por escritorio (mesa)
+    pcols = _columnas_existentes(db, "partidos")
+    if "ganador_escritorio" not in pcols:
+        # Guardará el nombre del equipo ganador por sanción (ej. jugó con sancionados)
+        db.execute("ALTER TABLE partidos ADD COLUMN ganador_escritorio TEXT")
+    
+    # 2. Nueva tabla para quitar puntos en la tabla de posiciones
+    db.execute(f"""
+        CREATE TABLE IF NOT EXISTS puntos_sancion (
+            id {tipo_id},
+            equipo TEXT NOT NULL,
+            categoria TEXT NOT NULL,
+            division TEXT NOT NULL DEFAULT '',
+            puntos_descontar INTEGER NOT NULL DEFAULT 0,
+            motivo TEXT NOT NULL,
+            fecha TEXT NOT NULL
+        )
+    """)
     db.execute(f"""
         CREATE TABLE IF NOT EXISTS descansos (
             id {tipo_id},
@@ -2690,28 +2707,45 @@ def _calcular_tabla_posiciones(db, categoria=CATEGORIA_ACTIVA, division=""):
     equipos = db.execute(
         "SELECT nombre FROM equipos WHERE categoria = ? AND division = ? ORDER BY nombre", (categoria, division)
     ).fetchall()
+    
     tabla = {
-        e["nombre"]: {"equipo": e["nombre"], "pj": 0, "g": 0, "e": 0, "p": 0, "gf": 0, "gc": 0, "pts": 0}
+        e["nombre"]: {"equipo": e["nombre"], "pj": 0, "g": 0, "e": 0, "p": 0, "gf": 0, "gc": 0, "pts": 0, "pts_sancion": 0}
         for e in equipos
     }
 
+    # 1. Procesar Partidos
     partidos = db.execute(
         """SELECT p.* FROM partidos p JOIN jornadas jo ON jo.id = p.jornada_id
-           WHERE jo.categoria = ? AND jo.division = ? AND p.jugado = 1
-             AND p.goles_local IS NOT NULL AND p.goles_visitante IS NOT NULL""",
+           WHERE jo.categoria = ? AND jo.division = ? AND p.jugado = 1""",
         (categoria, division),
     ).fetchall()
+    
     for p in partidos:
         local, visitante = p["equipo_local"], p["equipo_visitante"]
-        gl, gv = p["goles_local"], p["goles_visitante"]
         if local not in tabla or visitante not in tabla:
             continue
+            
         tabla[local]["pj"] += 1
         tabla[visitante]["pj"] += 1
+
+        # ¿El partido se resolvió por escritorio (Comisión Técnica)?
+        if p["ganador_escritorio"]:
+            if p["ganador_escritorio"] == local:
+                gl, gv = 2, 0
+            else:
+                gl, gv = 0, 2
+        else:
+            # Si fue partido normal, sumamos los goles que registró Vocalía
+            gl_rows = db.execute("SELECT SUM(cantidad) AS g FROM goles g JOIN jugadores j ON j.id = g.jugador_id WHERE g.partido_id = ? AND j.equipo = ?", (p["id"], local)).fetchone()
+            gv_rows = db.execute("SELECT SUM(cantidad) AS g FROM goles g JOIN jugadores j ON j.id = g.jugador_id WHERE g.partido_id = ? AND j.equipo = ?", (p["id"], visitante)).fetchone()
+            gl = gl_rows["g"] if gl_rows and gl_rows["g"] is not None else 0
+            gv = gv_rows["g"] if gv_rows and gv_rows["g"] is not None else 0
+
         tabla[local]["gf"] += gl
         tabla[local]["gc"] += gv
         tabla[visitante]["gf"] += gv
         tabla[visitante]["gc"] += gl
+        
         if gl > gv:
             tabla[local]["g"] += 1
             tabla[local]["pts"] += 3
@@ -2726,12 +2760,19 @@ def _calcular_tabla_posiciones(db, categoria=CATEGORIA_ACTIVA, division=""):
             tabla[local]["pts"] += 1
             tabla[visitante]["pts"] += 1
 
+    # 2. Descontar Puntos de Sanción
+    sanciones = db.execute("SELECT equipo, SUM(puntos_descontar) as perdidos FROM puntos_sancion WHERE categoria = ? AND division = ? GROUP BY equipo", (categoria, division)).fetchall()
+    for s in sanciones:
+        if s["equipo"] in tabla:
+            tabla[s["equipo"]]["pts"] -= s["perdidos"]
+            tabla[s["equipo"]]["pts_sancion"] = s["perdidos"]
+
     filas = list(tabla.values())
     for f in filas:
         f["dg"] = f["gf"] - f["gc"]
+        
     filas.sort(key=lambda f: (-f["pts"], -f["dg"], -f["gf"]))
     return filas
-
 
 def _calcular_goleadores(db, categoria=CATEGORIA_ACTIVA, division="", limite=15):
     return db.execute(
@@ -2752,6 +2793,8 @@ def _calcular_goleadores(db, categoria=CATEGORIA_ACTIVA, division="", limite=15)
 @tecnica_required
 def tecnica_modulo():
     db = get_db()
+    
+    # ... y agregas sanciones_puntos=sanciones_puntos a los argumentos de render_template.
     categoria, division = _categoria_y_division(
         db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
     )
@@ -2765,6 +2808,7 @@ def tecnica_modulo():
     siguiente_numero = (ultima or 0) + 1
     tabla = _calcular_tabla_posiciones(db, categoria, division)
     goleadores = _calcular_goleadores(db, categoria, division, limite=1000)
+    sanciones_puntos = db.execute("SELECT * FROM puntos_sancion WHERE categoria = ? AND division = ? ORDER BY id DESC", (categoria, division)).fetchall()
 
     return render_template(
         "tecnica_modulo.html",
@@ -3068,11 +3112,24 @@ def vocalia_hoja(partido_id):
     ).fetchall()
     amarillas_count = {}
     rojas_ids = set()
+    
+    # Resumen para mostrar en el frontend
+    resumen_tarjetas = {
+        partido["equipo_local"]: {"amarillas": 0, "rojas": 0},
+        partido["equipo_visitante"]: {"amarillas": 0, "rojas": 0}
+    }
+    
+    # Map de jugador a equipo para sumar al resumen
+    equipo_por_jugador = {j["id"]: j["equipo"] for j in list(jugadores_local) + list(jugadores_visitante)}
+
     for r in tarjetas_rows:
+        equipo = equipo_por_jugador.get(r["jugador_id"])
         if r["tipo"] == "amarilla":
             amarillas_count[r["jugador_id"]] = amarillas_count.get(r["jugador_id"], 0) + 1
+            if equipo: resumen_tarjetas[equipo]["amarillas"] += 1
         else:
             rojas_ids.add(r["jugador_id"])
+            if equipo: resumen_tarjetas[equipo]["rojas"] += 1
 
     goles_rows = db.execute(
         "SELECT jugador_id, SUM(cantidad) AS total FROM goles WHERE partido_id = ? GROUP BY jugador_id", (partido_id,)
@@ -3081,16 +3138,6 @@ def vocalia_hoja(partido_id):
 
     incidentes = db.execute(
         "SELECT * FROM vocalia_incidentes WHERE partido_id = ? ORDER BY fecha", (partido_id,)
-    ).fetchall()
-
-    cambios = db.execute(
-        """SELECT c.*, js.apellidos AS sale_apellidos, js.nombres AS sale_nombres, js.numero_camiseta AS sale_numero,
-                  je.apellidos AS entra_apellidos, je.nombres AS entra_nombres, je.numero_camiseta AS entra_numero
-           FROM vocalia_cambios c
-           JOIN jugadores js ON js.id = c.jugador_sale_id
-           JOIN jugadores je ON je.id = c.jugador_entra_id
-           WHERE c.partido_id = ? ORDER BY c.fecha""",
-        (partido_id,),
     ).fetchall()
 
     jugadores_js = [
@@ -3109,11 +3156,10 @@ def vocalia_hoja(partido_id):
         jugadores_local=jugadores_local, jugadores_visitante=jugadores_visitante,
         asistencia=asistencia, amarillas_count=amarillas_count, rojas_ids=rojas_ids,
         suspendidos_ids=suspendidos_ids,
-        goles_por_jugador=goles_por_jugador, incidentes=incidentes, cambios=cambios,
+        goles_por_jugador=goles_por_jugador, incidentes=incidentes,
         jugadores_js=jugadores_js,
+        resumen_tarjetas=resumen_tarjetas # Pasamos el resumen
     )
-
-
 @app.route("/vocalia/partido/<int:partido_id>/arbitro/guardar", methods=["POST"])
 @vocalia_required
 def guardar_arbitro(partido_id):
@@ -3202,7 +3248,20 @@ def guardar_hoja_equipo(partido_id):
                 (jugador_id, partido_id, cantidad, ahora),
             )
 
+    # ... (todo el código anterior de guardar_hoja_equipo se mantiene igual)
+
     _generar_sanciones_por_acumulacion(db)
+    
+    # --- NUEVO: Sincronizar el marcador global sumando los goles de los jugadores ---
+    gl_row = db.execute("SELECT SUM(cantidad) AS c FROM goles g JOIN jugadores j ON j.id = g.jugador_id WHERE g.partido_id = ? AND j.equipo = ?", (partido_id, partido["equipo_local"])).fetchone()
+    gv_row = db.execute("SELECT SUM(cantidad) AS c FROM goles g JOIN jugadores j ON j.id = g.jugador_id WHERE g.partido_id = ? AND j.equipo = ?", (partido_id, partido["equipo_visitante"])).fetchone()
+    
+    gl = gl_row["c"] if gl_row and gl_row["c"] is not None else 0
+    gv = gv_row["c"] if gv_row and gv_row["c"] is not None else 0
+    
+    db.execute("UPDATE partidos SET goles_local = ?, goles_visitante = ? WHERE id = ?", (gl, gv, partido_id))
+    # -------------------------------------------------------------------------------
+
     db.commit()
     flash(f"Hoja de {equipo_nombre} guardada.", "ok")
     return redirect(url_for("vocalia_hoja", partido_id=partido_id))
@@ -3403,7 +3462,92 @@ def eliminar_jugador(jugador_id):
     flash("Jugador eliminado.", "ok")
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
+# (Asegúrate de que esta ruta esté en tu app.py)
+@app.route("/equipo/<int:equipo_id>/jugador/nuevo", methods=["GET"])
+@login_required # Usamos login_required en vez de admin_required para que el delegado también pueda entrar
+def nuevo_jugador_vista(equipo_id):
+    # Validamos permisos (solo admin o el propio delegado del equipo)
+    if session.get('rol') != 'admin' and session.get('equipo_id') != equipo_id:
+        flash("No tienes permiso para inscribir jugadores en este equipo.")
+        return redirect(url_for('index'))
 
+    db = get_db()
+    equipo = db.execute("SELECT * FROM equipos WHERE id = ?", (equipo_id,)).fetchone()
+    if not equipo:
+        flash("Equipo no encontrado.")
+        return redirect(url_for('inscripcion'))
+
+    # Se necesita la edad_minima para las validaciones del frontend
+    edad_minima = _edad_minima_categoria(db, equipo["categoria"])
+
+    return render_template(
+        "nuevo_jugador.html", 
+        equipo=equipo, 
+        categoria=equipo['categoria'],
+        edad_minima=edad_minima
+    )
+@app.route("/tecnica/partido/<int:partido_id>/aprobar", methods=["POST"])
+@tecnica_required
+def tecnica_aprobar_partido(partido_id):
+    """La comisión técnica simplemente da el 'OK' al partido que ya cerró Vocalía."""
+    db = get_db()
+    categoria, division = _categoria_de_partido(db, partido_id)
+    db.execute("UPDATE partidos SET jugado = 1, en_vivo = 0, ganador_escritorio = NULL WHERE id = ?", (partido_id,))
+    db.commit()
+    flash("Partido oficializado con el resultado de Vocalía.", "ok")
+    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+
+@app.route("/tecnica/partido/<int:partido_id>/escritorio", methods=["POST"])
+@tecnica_required
+def tecnica_ganador_escritorio(partido_id):
+    """El partido lo gana un equipo en la mesa (2-0) por sanción al rival."""
+    db = get_db()
+    categoria, division = _categoria_de_partido(db, partido_id)
+    ganador = request.form.get("ganador_escritorio")
+    
+    partido = db.execute("SELECT equipo_local, equipo_visitante FROM partidos WHERE id = ?", (partido_id,)).fetchone()
+    if ganador not in (partido["equipo_local"], partido["equipo_visitante"]):
+        flash("Debes seleccionar un equipo válido.")
+        return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+        
+    db.execute("UPDATE partidos SET jugado = 1, en_vivo = 0, ganador_escritorio = ? WHERE id = ?", (ganador, partido_id))
+    db.commit()
+    flash(f"Partido resuelto en mesa: 2 - 0 a favor de {ganador}.", "ok")
+    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+
+@app.route("/tecnica/restar_puntos", methods=["POST"])
+@tecnica_required
+def tecnica_restar_puntos():
+    db = get_db()
+    categoria = request.form.get("categoria")
+    division = request.form.get("division")
+    equipo = request.form.get("equipo")
+    puntos = request.form.get("puntos", "0")
+    motivo = request.form.get("motivo", "").strip()
+    
+    if not puntos.isdigit() or int(puntos) <= 0 or not motivo:
+        flash("Ingresa una cantidad de puntos válida y un motivo.")
+        return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+        
+    db.execute(
+        "INSERT INTO puntos_sancion (equipo, categoria, division, puntos_descontar, motivo, fecha) VALUES (?, ?, ?, ?, ?, ?)",
+        (equipo, categoria, division, int(puntos), motivo, datetime.now().strftime("%Y-%m-%d %H:%M"))
+    )
+    db.commit()
+    flash(f"Se restaron {puntos} puntos a {equipo}.", "ok")
+    return redirect(url_for("tecnica_modulo", categoria=categoria, division=division))
+
+@app.route("/tecnica/restar_puntos/<int:sancion_id>/eliminar", methods=["POST"])
+@tecnica_required
+def tecnica_eliminar_resta_puntos(sancion_id):
+    db = get_db()
+    sancion = db.execute("SELECT categoria, division FROM puntos_sancion WHERE id = ?", (sancion_id,)).fetchone()
+    if sancion:
+        db.execute("DELETE FROM puntos_sancion WHERE id = ?", (sancion_id,))
+        db.commit()
+        flash("Penalización de puntos eliminada. La tabla ha sido recalculada.", "ok")
+        return redirect(url_for("tecnica_modulo", categoria=sancion["categoria"], division=sancion["division"]))
+    return redirect(url_for("tecnica_modulo"))
 try:
     init_db()
 except Exception as e:
