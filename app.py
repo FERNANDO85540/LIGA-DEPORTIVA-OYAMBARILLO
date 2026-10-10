@@ -2518,21 +2518,39 @@ def eliminar_jornada(jornada_id):
 @sanciones_required
 def sanciones_modulo():
     db = get_db()
+    
+    # 1. Obtenemos los filtros de la URL (igual que en técnica y vocalía)
+    categoria, division = _categoria_y_division(
+        db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
+    )
+
+    # 2. Filtramos los jugadores por categoría y división
     jugadores = db.execute(
-        "SELECT * FROM jugadores ORDER BY categoria, equipo, apellidos, nombres"
+        "SELECT * FROM jugadores WHERE categoria = ? AND division = ? ORDER BY equipo, apellidos, nombres",
+        (categoria, division)
     ).fetchall()
+    
     catalogo = db.execute("SELECT * FROM sanciones_catalogo ORDER BY articulo, id").fetchall()
-    rojas_pendientes = _rojas_pendientes_de_sancion(db)
+    
+    # 3. Filtramos rojas pendientes por categoría y división
+    rojas_pendientes = [r for r in _rojas_pendientes_de_sancion(db) 
+                        if r["categoria"] == categoria and r["division"] == division]
 
     jugadores_map = {j["id"]: j for j in jugadores}
-    validas_por_jugador = _amarillas_validas_agrupadas(db)
+    
+    # 4. _amarillas_validas_agrupadas ya nos devuelve todas, la filtramos aquí por las de estos jugadores
+    todas_validas = _amarillas_validas_agrupadas(db)
+    validas_por_jugador = {jid: tarjetas for jid, tarjetas in todas_validas.items() if jid in jugadores_map}
+    
+    # 5. Contamos rojas y multas SOLO de los jugadores de esta categoría/división
     todas_tarjetas = db.execute("SELECT jugador_id, tipo, valor_multa FROM tarjetas").fetchall()
     rojas_count = {}
     multas_total = {}
     for t in todas_tarjetas:
-        multas_total[t["jugador_id"]] = multas_total.get(t["jugador_id"], 0) + (t["valor_multa"] or 0)
-        if t["tipo"] == "roja":
-            rojas_count[t["jugador_id"]] = rojas_count.get(t["jugador_id"], 0) + 1
+        if t["jugador_id"] in jugadores_map:
+            multas_total[t["jugador_id"]] = multas_total.get(t["jugador_id"], 0) + (t["valor_multa"] or 0)
+            if t["tipo"] == "roja":
+                rojas_count[t["jugador_id"]] = rojas_count.get(t["jugador_id"], 0) + 1
 
     jugadores_con_tarjetas = set(validas_por_jugador) | set(rojas_count)
     acumulado = []
@@ -2549,12 +2567,15 @@ def sanciones_modulo():
         })
     acumulado.sort(key=lambda x: x["total"], reverse=True)
 
+    # 6. Filtramos las sanciones por categoría y división
     sanciones = db.execute("""
         SELECT s.*, j.nombres AS j_nombres, j.apellidos AS j_apellidos, j.equipo AS j_equipo
         FROM sanciones s
         JOIN jugadores j ON j.id = s.jugador_id
+        WHERE s.categoria = ? AND s.division = ?
         ORDER BY s.fecha DESC, s.id DESC
-    """).fetchall()
+    """, (categoria, division)).fetchall()
+    
     sanciones_activas = {s["id"] for s in sanciones if _sancion_activa(db, s)}
 
     return render_template(
@@ -2564,6 +2585,11 @@ def sanciones_modulo():
         acumulado=acumulado,
         sanciones=sanciones,
         sanciones_activas=sanciones_activas,
+        # Pasamos las variables para la navegación superior:
+        categoria=categoria,
+        categorias_liga=_categorias_liga(db),
+        division=division,
+        divisiones=_divisiones_de_categoria(db, categoria),
     )
 
 
@@ -2992,7 +3018,7 @@ def _rojas_pendientes_de_sancion(db):
     return db.execute("""
         SELECT t.id AS tarjeta_id, t.jugador_id, t.observacion, t.fecha,
                j.nombres AS j_nombres, j.apellidos AS j_apellidos, j.equipo AS j_equipo,
-               jo.numero AS jornada_numero
+               jo.numero AS jornada_numero, jo.categoria AS categoria, jo.division AS division
         FROM tarjetas t
         JOIN jugadores j ON j.id = t.jugador_id
         LEFT JOIN jornadas jo ON jo.id = t.jornada_id

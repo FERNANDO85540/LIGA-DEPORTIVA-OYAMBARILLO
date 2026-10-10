@@ -5,7 +5,7 @@
 <style>
   .sticky-scoreboard {
     position: sticky;
-    top: 68px; /* Ajusta este valor si tu header base es más alto o más bajo */
+    top: 68px;
     z-index: 40;
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(8px);
@@ -126,6 +126,7 @@
       <p style="color:#94a3b8; font-style: italic; text-align: center; margin: 10px 0;">Sin incidentes registrados.</p>
       {% endif %}
     </div>
+
     <div class="card" style="margin-bottom: 0;">
       <h2 style="margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Informe de Vocalía</h2>
       <form method="post" action="{{ url_for('guardar_informe_vocalia', partido_id=partido.id) }}">
@@ -140,18 +141,21 @@
   <!-- Columna Derecha: Tablas de Jugadores -->
   <div style="flex: 2; min-width: 300px; display: flex; flex-direction: column; gap: 20px;">
     
-    <!-- Macro ajustado para recibir el tipo (local o visitante) para el script JS -->
     {% macro tabla_equipo(equipo_nombre, jugadores, tipo_equipo) %}
     <div class="card" style="margin-bottom: 0;">
       <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
         <h2 style="margin: 0; font-size: 1.3rem; color: #1e293b;">🛡️ {{ equipo_nombre }}</h2>
         
-        <div style="display: flex; gap: 10px;">
+        <!-- Contadores dinámicos que se actualizan con JS -->
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <span style="background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 0.9rem;">
+            👥 Jugaron: <span id="contador-asistencia-{{ tipo_equipo }}">0</span> / {{ jugadores|length }}
+          </span>
           <span style="background: #fef9c3; color: #a16207; border: 1px solid #fde047; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 0.9rem;">
-            🟨 Amarillas: {{ amarillas_count|selectattr('1')|list|length if amarillas_count else 0 }} <!-- Resumen visual simple -->
+            🟨 Amarillas: <span id="contador-amarillas-{{ tipo_equipo }}">0</span>
           </span>
           <span style="background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 0.9rem;">
-            🟥 Rojas: {{ rojas_ids|length if rojas_ids else 0 }}
+            🟥 Rojas: <span id="contador-rojas-{{ tipo_equipo }}">0</span>
           </span>
         </div>
       </div>
@@ -198,13 +202,13 @@
               </td>
               
               <td data-label="Participó" style="padding: 8px; text-align: center;">
-                <input type="checkbox" name="participo" value="{{ j.id }}" style="width: 20px; height: 20px; cursor: pointer;" 
+                <input type="checkbox" name="participo" value="{{ j.id }}" class="check-asistencia-{{ tipo_equipo }}" style="width: 20px; height: 20px; cursor: pointer;" 
                        {% if asistencia.get(j.id) %}checked{% endif %} 
-                       {% if j.id in suspendidos_ids %}disabled{% endif %}>
+                       {% if j.id in suspendidos_ids %}disabled{% endif %} onchange="actualizarResumen()">
               </td>
               
               <td data-label="🟨" style="padding: 8px; text-align: center;">
-                <select name="amarillas_{{ j.id }}" style="width:50px; padding:6px; text-align: center; font-weight: bold;">
+                <select name="amarillas_{{ j.id }}" class="select-amarillas-{{ tipo_equipo }}" style="width:50px; padding:6px; text-align: center; font-weight: bold;" onchange="actualizarResumen()">
                   {% for n in (0, 1, 2) %}
                   <option value="{{ n }}" {% if amarillas_count.get(j.id, 0) == n %}selected{% endif %}>{{ n }}</option>
                   {% endfor %}
@@ -212,12 +216,11 @@
               </td>
               
               <td data-label="🟥" style="padding: 8px; text-align: center;">
-                <input type="checkbox" name="roja" value="{{ j.id }}" style="width: 20px; height: 20px; cursor: pointer; accent-color: #ef4444;" {% if j.id in rojas_ids %}checked{% endif %}>
+                <input type="checkbox" name="roja" value="{{ j.id }}" class="check-rojas-{{ tipo_equipo }}" style="width: 20px; height: 20px; cursor: pointer; accent-color: #ef4444;" {% if j.id in rojas_ids %}checked{% endif %} onchange="actualizarResumen()">
               </td>
               
-              <!-- Goles: Con evento OnInput para sumar dinámicamente -->
               <td data-label="Goles" style="padding: 8px; text-align: center;">
-                <input type="number" name="goles_{{ j.id }}" min="0" value="{{ goles_por_jugador.get(j.id, 0) }}" class="input-goles-{{ tipo_equipo }}" style="width:60px; text-align: center; font-weight: bold;" oninput="sumarGoles()">
+                <input type="number" name="goles_{{ j.id }}" min="0" value="{{ goles_por_jugador.get(j.id, 0) }}" class="input-goles-{{ tipo_equipo }}" style="width:60px; text-align: center; font-weight: bold;" oninput="actualizarResumen()">
               </td>
             </tr>
             {% else %}
@@ -243,19 +246,33 @@
 
 {% block extra_scripts %}
 <script>
-// Script que suma los goles automáticamente mientras se escriben en la tabla
-function sumarGoles() {
-  let local = 0;
-  document.querySelectorAll('.input-goles-local').forEach(el => local += (parseInt(el.value) || 0));
-  document.getElementById('score-local').textContent = local;
+// Función maestra que actualiza TODOS los contadores de la página en tiempo real
+function actualizarResumen() {
+  ['local', 'visitante'].forEach(tipo => {
+    // 1. Contar Goles
+    let goles = 0;
+    document.querySelectorAll(`.input-goles-${tipo}`).forEach(el => goles += (parseInt(el.value) || 0));
+    document.getElementById(`score-${tipo}`).textContent = goles;
 
-  let visitante = 0;
-  document.querySelectorAll('.input-goles-visitante').forEach(el => visitante += (parseInt(el.value) || 0));
-  document.getElementById('score-visitante').textContent = visitante;
+    // 2. Contar Asistencia (jugadores que participaron)
+    let asistencia = 0;
+    document.querySelectorAll(`.check-asistencia-${tipo}:checked`).forEach(() => asistencia++);
+    document.getElementById(`contador-asistencia-${tipo}`).textContent = asistencia;
+
+    // 3. Contar Amarillas
+    let amarillas = 0;
+    document.querySelectorAll(`.select-amarillas-${tipo}`).forEach(el => amarillas += (parseInt(el.value) || 0));
+    document.getElementById(`contador-amarillas-${tipo}`).textContent = amarillas;
+
+    // 4. Contar Rojas
+    let rojas = 0;
+    document.querySelectorAll(`.check-rojas-${tipo}:checked`).forEach(() => rojas++);
+    document.getElementById(`contador-rojas-${tipo}`).textContent = rojas;
+  });
 }
 
-// Ejecutar al cargar la página para mostrar el marcador guardado
-document.addEventListener("DOMContentLoaded", sumarGoles);
+// Ejecutar al cargar la página para mostrar el marcador y totales guardados
+document.addEventListener("DOMContentLoaded", actualizarResumen);
 
 // (El resto del script de buscador que ya tenías)
 (function () {

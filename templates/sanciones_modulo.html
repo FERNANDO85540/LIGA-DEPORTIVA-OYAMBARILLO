@@ -1,39 +1,55 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
-  <h1 style="margin:0; font-size:1.4rem;">🟨🟥 Comisión de Penas y Sanciones</h1>
-  <p style="margin:6px 0 0; opacity:0.95;">Tarjetas, acumulación, sanciones y multas por jugador.</p>
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+  <h1 style="margin:0; font-size:1.6rem;">🟨🟥 Comisión de Penas y Sanciones</h1>
+  <p style="margin:8px 0 0; opacity:0.95; font-size: 1rem;">Tarjetas, acumulación, sanciones y multas por jugador.</p>
 </div>
 
-<div class="card" style="text-align:right;">
-  <a href="{{ url_for('catalogo_sanciones') }}">📖 Catálogo de sanciones (Reglamento 2026)</a>
+<!-- NAVEGACIÓN DE CAMPEONATOS Y SERIES -->
+{% set categoria_endpoint = 'sanciones_modulo' %}
+{% include "_categoria_cards.html" %}
+{% include "_division_cards.html" %}
+
+<div class="card" style="text-align:right; background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; margin-bottom: 20px; border-radius: 8px;">
+  <a href="{{ url_for('catalogo_sanciones') }}" style="text-decoration: none; font-weight: bold; color: #1e7d32; display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
+    <span>📖 Catálogo de Sanciones (Reglamento)</span>
+    <span style="font-size: 1.2rem;">➡️</span>
+  </a>
 </div>
 
 <div class="card">
-  <h2>Acumulación de tarjetas por jugador</h2>
-  <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
-    Las tarjetas se cargan 100% desde Vocalía en la hoja de cada partido. Las amarillas que resultaron en
-    expulsión por doble amarilla en el mismo partido NO cuentan aquí (esa falta ya se paga con la roja).
-    Ordenado de mayor a menor cantidad de tarjetas acumuladas. Haz clic en los encabezados para ordenar.
+  <h2 style="margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; color: #1e293b;">
+    Acumulación de tarjetas — {{ categoria }}{% if division %} - {{ division }}{% endif %}
+  </h2>
+  <p style="font-size:0.85rem; color:#64748b; margin-top:-4px;">
+    Las tarjetas se cargan desde Vocalía en la hoja de cada partido. Las amarillas que resultaron en
+    expulsión por doble amarilla en el mismo partido NO cuentan aquí. Haz clic en los encabezados para ordenar.
   </p>
   {% if not acumulado %}
-    <p style="color:#888;">Todavía no hay tarjetas registradas.</p>
+    <p style="color:#94a3b8; font-style: italic; text-align: center; padding: 15px;">Todavía no hay tarjetas registradas en este campeonato.</p>
   {% else %}
   <div style="overflow-x:auto;">
   <table class="tabla-responsive" id="tablaAcumulado" data-search-placeholder="Buscar por jugador o equipo...">
     <thead>
-      <tr><th>Jugador</th><th>Equipo</th><th>🟨 Válidas</th><th>🟥 Rojas</th><th>Total</th><th>Multas acumuladas</th></tr>
+      <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
+        <th style="padding: 10px; text-align: left;">Jugador</th>
+        <th style="padding: 10px; text-align: left;">Equipo</th>
+        <th style="padding: 10px; text-align: center;">🟨 Válidas</th>
+        <th style="padding: 10px; text-align: center;">🟥 Rojas</th>
+        <th style="padding: 10px; text-align: center;">Total</th>
+        <th style="padding: 10px; text-align: right;">Multas</th>
+      </tr>
     </thead>
     <tbody>
       {% for a in acumulado %}
-      <tr>
-        <td data-label="Jugador">{{ a.apellidos }} {{ a.nombres }}</td>
-        <td data-label="Equipo">{{ a.equipo }}</td>
-        <td data-label="Válidas">{{ a.amarillas_validas }}</td>
-        <td data-label="Rojas">{{ a.rojas }}</td>
-        <td data-label="Total"><strong>{{ a.total }}</strong></td>
-        <td data-label="Multas">${{ '%.2f' % a.multas }}</td>
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td data-label="Jugador" style="padding: 8px; font-weight: 600; color: #334155;">{{ a.apellidos }} {{ a.nombres }}</td>
+        <td data-label="Equipo" style="padding: 8px;">{{ a.equipo }}</td>
+        <td data-label="Válidas" style="padding: 8px; text-align: center; font-weight: bold; color: #b45309;">{{ a.amarillas_validas }}</td>
+        <td data-label="Rojas" style="padding: 8px; text-align: center; font-weight: bold; color: #ef4444;">{{ a.rojas }}</td>
+        <td data-label="Total" style="padding: 8px; text-align: center; font-weight: 900; font-size: 1.1rem;">{{ a.total }}</td>
+        <td data-label="Multas" style="padding: 8px; text-align: right; font-weight: bold; color: #1e7d32;">${{ '%.2f' % a.multas }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -42,21 +58,24 @@
   {% endif %}
 </div>
 
-<div class="card">
-  <h2>Registrar roja directa</h2>
-  <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
-    Único ingreso manual permitido en este módulo. Las jornadas de suspensión y la multa se calculan solas
-    según el motivo elegido del catálogo (Reglamento 2026).
+<div class="card" style="border: 2px solid #fca5a5;">
+  <h2 style="margin-top: 0; color: #b91c1c;">🟥 Registrar Sanción por Roja Directa</h2>
+  <p style="font-size:0.85rem; color:#64748b; margin-top:-6px;">
+    Único ingreso manual. Selecciona una expulsión de Vocalía y asígnale el artículo del reglamento. Las fechas y multas se calculan solas.
   </p>
   {% if not catalogo %}
-    <p style="color:#b45309;">Todavía no hay motivos cargados en el catálogo. Ve a "Catálogo de sanciones" para agregarlos.</p>
+    <p style="color:#b45309; background: #fef3c7; padding: 10px; border-radius: 6px; border: 1px solid #fde68a;">
+      Todavía no hay motivos cargados en el catálogo. Ve a "Catálogo de sanciones" para agregarlos.
+    </p>
   {% elif not rojas_pendientes %}
-    <p style="color:#888;">No hay rojas de Vocalía pendientes de sancionar por ahora.</p>
+    <p style="color:#94a3b8; font-style: italic; text-align: center; padding: 15px; background: #f8fafc; border-radius: 6px;">
+      No hay rojas de Vocalía pendientes de sancionar en este campeonato por ahora.
+    </p>
   {% else %}
-  <form method="post" action="{{ url_for('agregar_roja_directa') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+  <form method="post" action="{{ url_for('agregar_roja_directa') }}" style="display:flex; gap:15px; flex-wrap:wrap; align-items:flex-end; background: #fef2f2; padding: 15px; border-radius: 8px;">
     <div style="flex:1; min-width:280px;">
-      <label>Roja a sancionar</label>
-      <select name="tarjeta_id" required>
+      <label style="color: #7f1d1d; margin-top: 0;">Expulsión a sancionar</label>
+      <select name="tarjeta_id" required style="border-color: #fca5a5;">
         <option value="">-- Selecciona la roja --</option>
         {% for t in rojas_pendientes %}
         <option value="{{ t.tarjeta_id }}">
@@ -64,11 +83,10 @@
         </option>
         {% endfor %}
       </select>
-      <p style="font-size:0.8rem; color:#888; margin:4px 0 0;">Solo aparecen las rojas cargadas desde Vocalía que todavía no tienen sanción.</p>
     </div>
     <div style="flex:1; min-width:220px;">
-      <label>Motivo (Art. del reglamento)</label>
-      <select name="catalogo_id" required>
+      <label style="color: #7f1d1d; margin-top: 0;">Motivo (Art. del reglamento)</label>
+      <select name="catalogo_id" required style="border-color: #fca5a5;">
         <option value="">-- Selecciona un motivo --</option>
         {% for c in catalogo %}
         <option value="{{ c.id }}">
@@ -78,48 +96,65 @@
         {% endfor %}
       </select>
     </div>
-    <button type="submit">Registrar roja directa</button>
+    <button type="submit" style="margin: 0; background: #b91c1c; font-weight: bold;">Dictar Sanción</button>
   </form>
   {% endif %}
 </div>
 
 <div class="card">
-  <h2>Sanciones ({{ sanciones|length }})</h2>
+  <h2 style="margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; color: #1e293b;">
+    Historial de Sanciones ({{ sanciones|length }})
+  </h2>
   {% if not sanciones %}
-    <p style="color:#888;">No hay sanciones registradas.</p>
+    <p style="color:#94a3b8; font-style: italic; text-align: center; padding: 15px;">No hay sanciones registradas en este campeonato.</p>
   {% else %}
   <div style="overflow-x:auto;">
   <table class="tabla-responsive" id="tablaSanciones" data-search-placeholder="Buscar por jugador, equipo o motivo...">
     <thead>
-      <tr><th>Jugador</th><th>Equipo</th><th>Motivo</th><th>Origen</th><th>Jornadas sancionado</th><th>Desde</th><th>Estado</th><th>Valor multa</th><th>Pagada</th><th></th></tr>
+      <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
+        <th style="padding: 10px; text-align: left;">Jugador</th>
+        <th style="padding: 10px; text-align: left;">Equipo</th>
+        <th style="padding: 10px; text-align: left;">Motivo</th>
+        <th style="padding: 10px; text-align: center;">Origen</th>
+        <th style="padding: 10px; text-align: center;">Jornadas</th>
+        <th style="padding: 10px; text-align: center;">Desde</th>
+        <th style="padding: 10px; text-align: center;">Estado</th>
+        <th style="padding: 10px; text-align: right;">Multa</th>
+        <th style="padding: 10px; text-align: center;">Pago</th>
+        <th style="padding: 10px; text-align: center;">Acciones</th>
+      </tr>
     </thead>
     <tbody>
       {% for s in sanciones %}
-      <tr>
-        <td data-label="Jugador">{{ s.j_apellidos }} {{ s.j_nombres }}</td>
-        <td data-label="Equipo">{{ s.j_equipo }}</td>
-        <td data-label="Motivo">{{ s.motivo or '-' }}</td>
-        <td data-label="Origen">{{ '⚽ Vocalía (acumulación)' if s.origen == 'acumulacion' else '🟥 Roja directa' }}</td>
-        <td data-label="Jornadas sancionado">{{ s.jornadas_sancionado }}</td>
-        <td data-label="Desde">{{ 'Jornada ' + s.jornada_desde_numero|string if s.jornada_desde_numero else '-' }}</td>
-        <td data-label="Estado">
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td data-label="Jugador" style="padding: 8px; font-weight: 600;">{{ s.j_apellidos }} {{ s.j_nombres }}</td>
+        <td data-label="Equipo" style="padding: 8px;">{{ s.j_equipo }}</td>
+        <td data-label="Motivo" style="padding: 8px; font-size: 0.9rem;">{{ s.motivo or '-' }}</td>
+        <td data-label="Origen" style="padding: 8px; text-align: center; font-size: 0.85rem;">
+          <span class="badge" style="background: {{ '#fef9c3; color: #a16207' if s.origen == 'acumulacion' else '#fef2f2; color: #b91c1c' }};">
+            {{ '🟨 Acumulación' if s.origen == 'acumulacion' else '🟥 Roja Directa' }}
+          </span>
+        </td>
+        <td data-label="Jornadas sancionado" style="padding: 8px; text-align: center; font-weight: bold;">{{ s.jornadas_sancionado }}</td>
+        <td data-label="Desde" style="padding: 8px; text-align: center;">{{ 'Jornada ' + s.jornada_desde_numero|string if s.jornada_desde_numero else '-' }}</td>
+        <td data-label="Estado" style="padding: 8px; text-align: center;">
           {% if s.id in sanciones_activas %}
-            <span class="badge" style="background:#fdecea; color:#c0392b;">🔴 Activa</span>
+            <span class="badge pulse-red" style="background:#ef4444; color:white;">🔴 Activa</span>
           {% else %}
             <span class="badge badge-ok">✅ Cumplida</span>
           {% endif %}
         </td>
-        <td data-label="Valor multa">{{ '$%.2f' % s.valor_multa if s.valor_multa else '-' }}</td>
-        <td data-label="Pagada">
+        <td data-label="Valor multa" style="padding: 8px; text-align: right; font-weight: bold;">{{ '$%.2f' % s.valor_multa if s.valor_multa else '-' }}</td>
+        <td data-label="Pagada" style="padding: 8px; text-align: center;">
           <form method="post" action="{{ url_for('marcar_sancion_pagada', sancion_id=s.id) }}" style="margin:0;">
-            <button type="submit" class="badge" style="border:none; cursor:pointer; {% if s.pagada %}background:#e6f4ea; color:var(--verde-osc);{% else %}background:#fdecea; color:#a13a2f;{% endif %}">
+            <button type="submit" class="badge" style="border:none; cursor:pointer; font-weight: bold; {% if s.pagada %}background:#10b981; color:white;{% else %}background:#fdecea; color:#a13a2f;{% endif %}">
               {{ '✅ Pagada' if s.pagada else '⏳ Pendiente' }}
             </button>
           </form>
         </td>
-        <td data-label="" class="table-actions">
-          <form method="post" action="{{ url_for('eliminar_sancion', sancion_id=s.id) }}" onsubmit="return confirm('¿Eliminar esta sanción?');" style="margin:0;">
-            <button type="submit" class="btn-del">Eliminar</button>
+        <td data-label="Acciones" class="table-actions" style="padding: 8px; text-align: center;">
+          <form method="post" action="{{ url_for('eliminar_sancion', sancion_id=s.id) }}" onsubmit="return confirm('¿Eliminar esta sanción permanentemente?');" style="margin:0;">
+            <button type="submit" class="btn-del" style="padding: 4px 8px; background: white;">🗑️</button>
           </form>
         </td>
       </tr>
