@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 
-<!-- Estilos para el marcador fijo en la parte superior -->
+<!-- Estilos optimizados para la redistribución y ahorro de espacio -->
 <style>
   .sticky-scoreboard {
     position: sticky;
@@ -12,17 +12,110 @@
     border: 1px solid #e2e8f0;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     border-radius: 8px;
-    padding: 15px;
-    margin-bottom: 20px;
+    padding: 10px 15px;
+    margin-bottom: 15px;
     text-align: center;
   }
-  .team-name { font-size: 1.2rem; font-weight: 700; color: #1e293b; }
-  .score-display { font-size: 2.5rem; font-weight: 900; color: #14532d; padding: 0 20px; }
+  .team-name { font-size: 1.1rem; font-weight: 700; color: #1e293b; }
+  .score-display { font-size: 2.2rem; font-weight: 900; color: #14532d; padding: 0 15px; }
+  
   .pulse-red { animation: pulse 2s infinite; }
   @keyframes pulse {
     0% { transform: scale(1); }
     50% { transform: scale(1.05); }
     100% { transform: scale(1); }
+  }
+
+  /* Layout principal */
+  .rosters-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Mitad y mitad en desktop */
+    gap: 15px;
+  }
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+  }
+
+  /* -----------------------------------------------------------------
+     NUEVO: FORZAR FORMATO TABLA EN MÓVILES (Anula el estilo "cards") 
+     ----------------------------------------------------------------- */
+  .force-table {
+    display: table !important;
+    width: 100% !important;
+  }
+  .force-table thead {
+    display: table-header-group !important;
+  }
+  .force-table tbody {
+    display: table-row-group !important;
+  }
+  .force-table tr {
+    display: table-row !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    margin-bottom: 0 !important;
+    background: none !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+  .force-table th, .force-table td {
+    display: table-cell !important;
+    text-align: center;
+  }
+  /* Oculta los pseudo-elementos (Dorsal, Jugador, etc.) que tu CSS global inyecta en móviles */
+  .force-table td::before {
+    display: none !important; 
+  }
+
+  /* Optimización extrema de celdas para verticalidad */
+  .compact-table th {
+    padding: 4px 2px !important;
+    font-size: 0.8rem !important;
+    white-space: nowrap;
+  }
+  .compact-table td {
+    padding: 4px 2px !important; 
+    vertical-align: middle !important;
+  }
+  
+  /* Truncar el nombre a máximo 2 líneas */
+  .player-name-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.1;
+    font-size: 0.8rem !important;
+    text-align: left;
+  }
+
+  /* Reducción de inputs para que todo quepa en una fila de celular */
+  .compact-input {
+    width: 38px !important; /* Más angosto */
+    padding: 2px !important;
+    font-size: 0.8rem !important;
+    text-align: center;
+  }
+  .compact-checkbox {
+    width: 16px !important; 
+    height: 16px !important;
+    cursor: pointer;
+    margin: 0 !important;
+  }
+
+  /* Responsive para móviles */
+  @media (max-width: 768px) {
+    .rosters-grid {
+      grid-template-columns: 1fr; /* Una columna en celular (arriba y abajo) */
+    }
+    .player-avatar {
+      display: none !important; /* Ocultamos la foto en celular para dar más espacio al nombre */
+    }
+    .player-name-container {
+      width: 100px; /* Forzamos un ancho para que las otras columnas quepan */
+    }
   }
 </style>
 
@@ -35,28 +128,29 @@
   </a>
 </div>
 
-<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-  <h1 style="margin:0; font-size:1.5rem;">🗳️ Hoja de Vocalía</h1>
-  <p style="margin:6px 0 0; opacity:0.95; font-size: 1rem;">
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white; padding: 10px; border-radius: 8px; margin-bottom: 15px;">
+  <h1 style="margin:0; font-size:1.3rem;">🗳️ Hoja de Vocalía</h1>
+  <p style="margin:4px 0 0; opacity:0.95; font-size: 0.9rem;">
     {% if jornada %}Jornada {{ jornada.numero }}{% endif %}
     {% if partido.fecha %} · {{ partido.fecha }}{% endif %}{% if partido.hora %} · {{ partido.hora }}{% endif %}
   </p>
 </div>
 
-<!-- MARCADOR STICKY (Automático) -->
+<!-- MARCADOR STICKY -->
 <div class="sticky-scoreboard {% if partido.en_vivo %}border-red-500{% endif %}" style="{% if partido.en_vivo %}border: 2px solid #ef4444;{% endif %}">
-  
-  <div style="margin-bottom: 10px;">
+<div style="margin-bottom: 10px;">
     {% if partido.en_vivo %}
       <span class="badge pulse-red" style="background:#fef2f2; color:#ef4444; font-size: 0.9rem; border: 1px solid #f87171; padding: 4px 12px;">🔴 PARTIDO EN VIVO</span>
     {% elif partido.jugado %}
-      <span class="badge badge-ok" style="font-size: 0.9rem; padding: 4px 12px;">✅ Partido Finalizado</span>
+      <span class="badge badge-ok" style="font-size: 0.9rem; padding: 4px 12px;">✅ Partido Finalizado (Oficializado)</span>
+    {% elif partido.hoja_editada %}
+      <span class="badge" style="background:#fef9c3; color:#a16207; font-size: 0.9rem; border: 1px solid #fde047; padding: 4px 12px;">✍️ Hoja en edición</span>
     {% else %}
       <span class="badge" style="background:#f1f5f9; color:#64748b; font-size: 0.9rem; padding: 4px 12px;">⏳ No iniciado</span>
     {% endif %}
   </div>
 
-  <div style="display:flex; align-items:center; justify-content:center; flex-wrap:wrap; margin:10px 0;">
+  <div style="display:flex; align-items:center; justify-content:center; flex-wrap:wrap; margin:5px 0;">
     <span class="team-name" style="flex:1; text-align:right;">{{ partido.equipo_local }}</span>
     <span class="score-display">
       <span id="score-local">0</span> - <span id="score-visitante">0</span>
@@ -64,181 +158,168 @@
     <span class="team-name" style="flex:1; text-align:left;">{{ partido.equipo_visitante }}</span>
   </div>
 
-  <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-top: 15px;">
+  <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-top: 10px;">
     {% if partido.en_vivo %}
       <form method="post" action="{{ url_for('finalizar_en_vivo', partido_id=partido.id) }}" onsubmit="return confirm('¿Finalizar este partido?');" style="margin:0;">
-        <button type="submit" style="padding:8px 16px; margin: 0; font-size:0.9rem; font-weight: bold; background: #10b981;">⏹️ Pitar Final</button>
+        <button type="submit" style="padding:6px 12px; margin: 0; font-size:0.85rem; font-weight: bold; background: #10b981;">⏹️ Pitar Final</button>
       </form>
       <form method="post" action="{{ url_for('cancelar_en_vivo', partido_id=partido.id) }}" style="margin:0;">
-        <button type="submit" class="btn-del" style="padding:8px 16px; margin: 0; font-weight: bold; background: white;">Cancelar En Vivo</button>
+        <button type="submit" class="btn-del" style="padding:6px 12px; margin: 0; font-size:0.85rem; font-weight: bold; background: white;">Cancelar En Vivo</button>
       </form>
     {% elif not partido.jugado %}
       <form method="post" action="{{ url_for('iniciar_en_vivo', partido_id=partido.id) }}" style="margin:0;">
-        <button type="submit" style="padding:8px 20px; margin: 0; font-size:1rem; font-weight: bold; background:#ef4444; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.3);">▶️ Iniciar Partido EN VIVO</button>
+        <button type="submit" style="padding:6px 16px; margin: 0; font-size:0.9rem; font-weight: bold; background:#ef4444; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.3);">▶️ Iniciar Partido EN VIVO</button>
       </form>
     {% endif %}
   </div>
 </div>
 
-<div style="display: flex; gap: 20px; flex-wrap: wrap;">
-  <!-- Columna Izquierda: Árbitro e Incidentes -->
-  <div style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 20px;">
-     <!-- Árbitro 
-    <div class="card" style="margin-bottom: 0;">
-      <h2 style="margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Árbitro del Encuentro</h2>
-      <form method="post" action="{{ url_for('guardar_arbitro', partido_id=partido.id) }}">
-        <label>Nombre del árbitro principal</label>
-        <input type="text" name="arbitro" value="{{ partido.arbitro or '' }}" placeholder="ej. Juan Pérez">
-        
-        <label style="margin-top: 10px;">Informe del árbitro (Opcional)</label>
-        <textarea name="informe_arbitro" rows="3" placeholder="Observaciones en la papeleta del árbitro...">{{ partido.informe_arbitro or '' }}</textarea>
-        
-        <button type="submit" style="width: 100%; margin-top: 10px;">💾 Guardar Árbitro</button>
-      </form>
-    </div>
-    -->
 
-
-
-    <div class="card" style="margin-bottom: 0;">
-      <h2 style="margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Incidentes</h2>
-      <p style="font-size:0.85rem; color:#64748b; margin-top:0;">Reclamos, suspensiones temporales, peleas.</p>
-      
-      <form method="post" action="{{ url_for('agregar_incidente', partido_id=partido.id) }}" style="display:flex; gap:10px; align-items:flex-end; margin-bottom: 15px;">
-        <div style="flex:1;">
-          <input type="text" name="descripcion" placeholder="Ej: Min 60, partido detenido por lluvia..." required>
-        </div>
-        <button type="submit" style="margin: 0; padding: 10px 15px;">➕ Añadir</button>
-      </form>
-
-      {% if incidentes %}
-      <ul style="margin:0; padding-left:0; list-style: none; display: flex; flex-direction: column; gap: 8px;">
-        {% for i in incidentes %}
-        <li style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 8px 12px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-          <span style="font-size: 0.9rem;">{{ i.descripcion }}</span>
-          <form method="post" action="{{ url_for('eliminar_incidente', incidente_id=i.id) }}" style="margin:0;">
-            <button type="submit" class="btn-del" style="padding:4px 8px; font-size:0.8rem; background: white;">🗑️</button>
-          </form>
-        </li>
-        {% endfor %}
-      </ul>
-      {% else %}
-      <p style="color:#94a3b8; font-style: italic; text-align: center; margin: 10px 0;">Sin incidentes registrados.</p>
-      {% endif %}
-    </div>
-
-    <div class="card" style="margin-bottom: 0;">
-      <h2 style="margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Informe de Vocalía</h2>
-      <form method="post" action="{{ url_for('guardar_informe_vocalia', partido_id=partido.id) }}">
-        <label>Observaciones del vocal de turno</label>
-        <textarea name="informe_vocalia" rows="3" placeholder="Conducta, problemas, observaciones...">{{ partido.informe_vocalia or '' }}</textarea>
-        
-        <button type="submit" style="width: 100%; margin-top: 10px;">💾 Guardar Informe Final</button>
-      </form>
+<!-- MACRO PARA TABLAS DE EQUIPOS -->
+{% macro tabla_equipo(equipo_nombre, jugadores, tipo_equipo) %}
+<div class="card" style="margin-bottom: 0; padding: 10px;">
+  <div style="display: flex; flex-direction: column; gap: 8px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 10px;">
+    <h2 style="margin: 0; font-size: 1.1rem; color: #1e293b;">🛡️ {{ equipo_nombre }}</h2>
+    
+    <!-- Contadores dinámicos -->
+    <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+      <span style="background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 0.75rem;">
+        👥 <span id="contador-asistencia-{{ tipo_equipo }}">0</span> / {{ jugadores|length }}
+      </span>
+      <span style="background: #fef9c3; color: #a16207; border: 1px solid #fde047; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 0.75rem;">
+        🟨 <span id="contador-amarillas-{{ tipo_equipo }}">0</span>
+      </span>
+      <span style="background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 0.75rem;">
+        🟥 <span id="contador-rojas-{{ tipo_equipo }}">0</span>
+      </span>
     </div>
   </div>
 
-  <!-- Columna Derecha: Tablas de Jugadores -->
-  <div style="flex: 2; min-width: 300px; display: flex; flex-direction: column; gap: 20px;">
+  <form method="post" action="{{ url_for('guardar_hoja_equipo', partido_id=partido.id) }}" style="margin: 0;">
+    <input type="hidden" name="equipo_nombre" value="{{ equipo_nombre }}">
     
-    {% macro tabla_equipo(equipo_nombre, jugadores, tipo_equipo) %}
-    <div class="card" style="margin-bottom: 0;">
-      <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
-        <h2 style="margin: 0; font-size: 1.3rem; color: #1e293b;">🛡️ {{ equipo_nombre }}</h2>
-        
-        <!-- Contadores dinámicos que se actualizan con JS -->
-        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-          <span style="background: #e0f2fe; color: #0369a1; border: 1px solid #7dd3fc; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 0.9rem;">
-            👥 Jugaron: <span id="contador-asistencia-{{ tipo_equipo }}">0</span> / {{ jugadores|length }}
-          </span>
-          <span style="background: #fef9c3; color: #a16207; border: 1px solid #fde047; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 0.9rem;">
-            🟨 Amarillas: <span id="contador-amarillas-{{ tipo_equipo }}">0</span>
-          </span>
-          <span style="background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 0.9rem;">
-            🟥 Rojas: <span id="contador-rojas-{{ tipo_equipo }}">0</span>
-          </span>
-        </div>
-      </div>
-
-      <form method="post" action="{{ url_for('guardar_hoja_equipo', partido_id=partido.id) }}">
-        <input type="hidden" name="equipo_nombre" value="{{ equipo_nombre }}">
-        
-        <div style="overflow-x:auto;">
-        <table class="tabla-responsive" style="width: 100%; border-collapse: collapse;">
-          <thead>
-            <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
-              <th style="padding: 10px; text-align: center;">#</th>
-              <th style="padding: 10px; text-align: left;">Jugador</th>
-              <th style="padding: 10px; text-align: center;" title="Asistencia">✅ Part.</th>
-              <th style="padding: 10px; text-align: center;">🟨 (0-2)</th>
-              <th style="padding: 10px; text-align: center;">🟥</th>
-              <th style="padding: 10px; text-align: center;">⚽ Goles</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for j in jugadores %}
-            <tr style="border-bottom: 1px solid #e2e8f0; {% if j.id in suspendidos_ids %}background: #fef2f2; opacity: 0.8;{% endif %}">
-              <td data-label="Dorsal" style="padding: 8px; text-align: center; font-weight: bold;">
-                <input type="hidden" name="todos_ids" value="{{ j.id }}">
-                {{ j.numero_camiseta or '-' }}
-              </td>
-              
-              <td data-label="Jugador" style="padding: 8px;">
-                <div style="display:flex; align-items:center; gap:10px;">
-                  <div style="width:36px; height:36px; flex-shrink:0; border-radius:50%; overflow:hidden; background:#e2e8f0; display:flex; align-items:center; justify-content:center; border:1px solid #cbd5e1;">
-                    {% if j.foto %}
-                    <img src="{{ url_for('fotos_jugadores', filename=j.foto) }}" loading="lazy" style="width:100%; height:100%; object-fit:cover;">
-                    {% else %}
-                    <span style="font-size:1.1rem; color:#94a3b8;">👤</span>
-                    {% endif %}
-                  </div>
-                  <div>
-                    <strong style="color: #334155; font-size: 0.95rem;">{{ j.apellidos }} {{ j.nombres }}</strong>
-                    {% if j.id in suspendidos_ids %}
-                    <span style="display:block; color:#ef4444; font-size:0.75rem; font-weight:bold;">[SUSPENDIDO]</span>
-                    {% endif %}
-                  </div>
-                </div>
-              </td>
-              
-              <td data-label="Participó" style="padding: 8px; text-align: center;">
-                <input type="checkbox" name="participo" value="{{ j.id }}" class="check-asistencia-{{ tipo_equipo }}" style="width: 20px; height: 20px; cursor: pointer;" 
-                       {% if asistencia.get(j.id) %}checked{% endif %} 
-                       {% if j.id in suspendidos_ids %}disabled{% endif %} onchange="actualizarResumen()">
-              </td>
-              
-              <td data-label="🟨" style="padding: 8px; text-align: center;">
-                <select name="amarillas_{{ j.id }}" class="select-amarillas-{{ tipo_equipo }}" style="width:50px; padding:6px; text-align: center; font-weight: bold;" onchange="actualizarResumen()">
-                  {% for n in (0, 1, 2) %}
-                  <option value="{{ n }}" {% if amarillas_count.get(j.id, 0) == n %}selected{% endif %}>{{ n }}</option>
-                  {% endfor %}
-                </select>
-              </td>
-              
-              <td data-label="🟥" style="padding: 8px; text-align: center;">
-                <input type="checkbox" name="roja" value="{{ j.id }}" class="check-rojas-{{ tipo_equipo }}" style="width: 20px; height: 20px; cursor: pointer; accent-color: #ef4444;" {% if j.id in rojas_ids %}checked{% endif %} onchange="actualizarResumen()">
-              </td>
-              
-              <td data-label="Goles" style="padding: 8px; text-align: center;">
-                <input type="number" name="goles_{{ j.id }}" min="0" value="{{ goles_por_jugador.get(j.id, 0) }}" class="input-goles-{{ tipo_equipo }}" style="width:60px; text-align: center; font-weight: bold;" oninput="actualizarResumen()">
-              </td>
-            </tr>
-            {% else %}
-            <tr><td colspan="6" style="padding: 20px; text-align: center; color: #64748b;">No hay jugadores registrados en este equipo.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        </div>
-        
-        <div style="margin-top: 15px; text-align: right;">
-          <button type="submit" style="padding: 10px 24px; font-weight: bold;">💾 Guardar tabla de {{ equipo_nombre }}</button>
-        </div>
-      </form>
+    <!-- Contenedor con scroll horizontal solo por si acaso en pantallas ultra pequeñas -->
+    <div style="overflow-x:auto; width: 100%;">
+    <!-- Quitamos "tabla-responsive" y agregamos "force-table" -->
+    <table class="force-table compact-table" style="width: 100%; border-collapse: collapse;">
+      <thead>
+        <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
+          <th style="width: 25px;">#</th>
+          <th style="text-align: left;">Jugador</th>
+          <th title="Asistencia">✅</th>
+          <th>🟨</th>
+          <th>🟥</th>
+          <th>⚽</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for j in jugadores %}
+        <tr style="border-bottom: 1px solid #e2e8f0; {% if j.id in suspendidos_ids %}background: #fef2f2; opacity: 0.8;{% endif %}">
+          <td style="font-weight: bold; font-size: 0.8rem;">
+            <input type="hidden" name="todos_ids" value="{{ j.id }}">
+            {{ j.numero_camiseta or '-' }}
+          </td>
+          
+          <td style="text-align: left;">
+            <div style="display:flex; align-items:center; gap:4px;">
+              <div class="player-avatar" style="width:24px; height:24px; flex-shrink:0; border-radius:50%; overflow:hidden; background:#e2e8f0; display:flex; align-items:center; justify-content:center; border:1px solid #cbd5e1;">
+                {% if j.foto %}
+                <img src="{{ url_for('fotos_jugadores', filename=j.foto) }}" loading="lazy" style="width:100%; height:100%; object-fit:cover;">
+                {% else %}
+                <span style="font-size:0.7rem; color:#94a3b8;">👤</span>
+                {% endif %}
+              </div>
+              <div class="player-name-container" style="display: flex; flex-direction: column; justify-content: center;">
+                <strong class="player-name-text" style="color: #334155;" title="{{ j.apellidos }} {{ j.nombres }}">{{ j.apellidos }} {{ j.nombres }}</strong>
+                {% if j.id in suspendidos_ids %}
+                <span style="color:#ef4444; font-size:0.6rem; font-weight:bold;">[SUSP.]</span>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+          
+          <td>
+            <input type="checkbox" name="participo" value="{{ j.id }}" class="check-asistencia-{{ tipo_equipo }} compact-checkbox" 
+                   {% if asistencia.get(j.id) %}checked{% endif %} 
+                   {% if j.id in suspendidos_ids %}disabled{% endif %} onchange="actualizarResumen()">
+          </td>
+          
+          <td>
+            <select name="amarillas_{{ j.id }}" class="select-amarillas-{{ tipo_equipo }} compact-input" onchange="actualizarResumen()">
+              {% for n in (0, 1, 2) %}
+              <option value="{{ n }}" {% if amarillas_count.get(j.id, 0) == n %}selected{% endif %}>{{ n }}</option>
+              {% endfor %}
+            </select>
+          </td>
+          
+          <td>
+            <input type="checkbox" name="roja" value="{{ j.id }}" class="check-rojas-{{ tipo_equipo }} compact-checkbox" style="accent-color: #ef4444;" {% if j.id in rojas_ids %}checked{% endif %} onchange="actualizarResumen()">
+          </td>
+          
+          <td>
+            <input type="number" name="goles_{{ j.id }}" min="0" value="{{ goles_por_jugador.get(j.id, 0) }}" class="input-goles-{{ tipo_equipo }} compact-input" oninput="actualizarResumen()">
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="padding: 15px; text-align: center; color: #64748b;">No hay jugadores.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
     </div>
-    {% endmacro %}
+    
+    <div style="margin-top: 10px; text-align: right;">
+      <button type="submit" style="padding: 8px 16px; font-weight: bold; font-size: 0.85rem;">💾 Guardar {{ equipo_nombre }}</button>
+    </div>
+  </form>
+</div>
+{% endmacro %}
 
-    {{ tabla_equipo(partido.equipo_local, jugadores_local, 'local') }}
-    {{ tabla_equipo(partido.equipo_visitante, jugadores_visitante, 'visitante') }}
+
+<!-- CONTENEDOR PRINCIPAL: EQUIPOS LADO A LADO -->
+<div class="rosters-grid">
+  {{ tabla_equipo(partido.equipo_local, jugadores_local, 'local') }}
+  {{ tabla_equipo(partido.equipo_visitante, jugadores_visitante, 'visitante') }}
+</div>
+
+<!-- CONTENEDOR INFERIOR: INCIDENTES E INFORME (SE MUESTRAN DEBAJO) -->
+<div class="bottom-grid">
+  <!-- Incidentes -->
+  <div class="card" style="margin-bottom: 0;">
+    <h2 style="margin-top: 0; font-size: 1.1rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">Incidentes</h2>
+    <p style="font-size:0.8rem; color:#64748b; margin-top:0;">Reclamos, suspensiones temporales, peleas.</p>
+    
+    <form method="post" action="{{ url_for('agregar_incidente', partido_id=partido.id) }}" style="display:flex; gap:8px; align-items:flex-end; margin-bottom: 15px;">
+      <div style="flex:1;">
+        <input type="text" name="descripcion" placeholder="Min 60, partido detenido..." style="font-size: 0.85rem; padding: 6px;" required>
+      </div>
+      <button type="submit" style="margin: 0; padding: 6px 12px; font-size: 0.85rem;">➕ Añadir</button>
+    </form>
+
+    {% if incidentes %}
+    <ul style="margin:0; padding-left:0; list-style: none; display: flex; flex-direction: column; gap: 6px;">
+      {% for i in incidentes %}
+      <li style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 6px 10px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+        <span style="font-size: 0.85rem;">{{ i.descripcion }}</span>
+        <form method="post" action="{{ url_for('eliminar_incidente', incidente_id=i.id) }}" style="margin:0;">
+          <button type="submit" class="btn-del" style="padding:4px 6px; font-size:0.75rem; background: white;">🗑️</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p style="color:#94a3b8; font-style: italic; text-align: center; font-size: 0.85rem; margin: 10px 0;">Sin incidentes registrados.</p>
+    {% endif %}
+  </div>
+
+  <!-- Informe de Vocalía -->
+  <div class="card" style="margin-bottom: 0;">
+    <h2 style="margin-top: 0; font-size: 1.1rem; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">Informe de Vocalía</h2>
+    <form method="post" action="{{ url_for('guardar_informe_vocalia', partido_id=partido.id) }}">
+      <label style="font-size: 0.85rem;">Observaciones del vocal de turno</label>
+      <textarea name="informe_vocalia" rows="3" style="font-size: 0.85rem; padding: 6px;" placeholder="Conducta, problemas, observaciones...">{{ partido.informe_vocalia or '' }}</textarea>
+      
+      <button type="submit" style="width: 100%; margin-top: 8px; font-size: 0.85rem; padding: 8px;">💾 Guardar Informe Vocal</button>
+    </form>
   </div>
 </div>
 

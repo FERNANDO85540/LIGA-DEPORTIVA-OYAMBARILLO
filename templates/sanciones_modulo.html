@@ -11,51 +11,18 @@
 {% include "_categoria_cards.html" %}
 {% include "_division_cards.html" %}
 
-<div class="card" style="text-align:right; background: #f8fafc; border: 1px solid #cbd5e1; padding: 12px; margin-bottom: 20px; border-radius: 8px;">
-  <a href="{{ url_for('catalogo_sanciones') }}" style="text-decoration: none; font-weight: bold; color: #1e7d32; display: flex; align-items: center; justify-content: flex-end; gap: 8px;">
-    <span>📖 Catálogo de Sanciones (Reglamento)</span>
-    <span style="font-size: 1.2rem;">➡️</span>
+<div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 20px;">
+  <a href="{{ url_for('sanciones_acumulacion', categoria=categoria, division=division) }}" style="flex: 1; text-decoration: none;">
+    <div class="card" style="margin: 0; text-align: center; background: #e8f5e9; border: 1px solid #bbf7d0; padding: 15px; border-radius: 8px; font-weight: bold; color: #166534; transition: background 0.2s;">
+      📊 Ver Acumulación de Tarjetas y Multas
+    </div>
   </a>
-</div>
 
-<div class="card">
-  <h2 style="margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; color: #1e293b;">
-    Acumulación de tarjetas — {{ categoria }}{% if division %} - {{ division }}{% endif %}
-  </h2>
-  <p style="font-size:0.85rem; color:#64748b; margin-top:-4px;">
-    Las tarjetas se cargan desde Vocalía en la hoja de cada partido. Las amarillas que resultaron en
-    expulsión por doble amarilla en el mismo partido NO cuentan aquí. Haz clic en los encabezados para ordenar.
-  </p>
-  {% if not acumulado %}
-    <p style="color:#94a3b8; font-style: italic; text-align: center; padding: 15px;">Todavía no hay tarjetas registradas en este campeonato.</p>
-  {% else %}
-  <div style="overflow-x:auto;">
-  <table class="tabla-responsive" id="tablaAcumulado" data-search-placeholder="Buscar por jugador o equipo...">
-    <thead>
-      <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
-        <th style="padding: 10px; text-align: left;">Jugador</th>
-        <th style="padding: 10px; text-align: left;">Equipo</th>
-        <th style="padding: 10px; text-align: center;">🟨 Válidas</th>
-        <th style="padding: 10px; text-align: center;">🟥 Rojas</th>
-        <th style="padding: 10px; text-align: center;">Total</th>
-        <th style="padding: 10px; text-align: right;">Multas</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for a in acumulado %}
-      <tr style="border-bottom: 1px solid #e2e8f0;">
-        <td data-label="Jugador" style="padding: 8px; font-weight: 600; color: #334155;">{{ a.apellidos }} {{ a.nombres }}</td>
-        <td data-label="Equipo" style="padding: 8px;">{{ a.equipo }}</td>
-        <td data-label="Válidas" style="padding: 8px; text-align: center; font-weight: bold; color: #b45309;">{{ a.amarillas_validas }}</td>
-        <td data-label="Rojas" style="padding: 8px; text-align: center; font-weight: bold; color: #ef4444;">{{ a.rojas }}</td>
-        <td data-label="Total" style="padding: 8px; text-align: center; font-weight: 900; font-size: 1.1rem;">{{ a.total }}</td>
-        <td data-label="Multas" style="padding: 8px; text-align: right; font-weight: bold; color: #1e7d32;">${{ '%.2f' % a.multas }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
-  {% endif %}
+  <a href="{{ url_for('catalogo_sanciones') }}" style="flex: 1; text-decoration: none;">
+    <div class="card" style="margin: 0; text-align: center; background: #f8fafc; border: 1px solid #cbd5e1; padding: 15px; border-radius: 8px; font-weight: bold; color: #334155; transition: background 0.2s;">
+      📖 Catálogo de Sanciones (Reglamento)
+    </div>
+  </a>
 </div>
 
 <div class="card" style="border: 2px solid #fca5a5;">
@@ -103,7 +70,7 @@
 
 <div class="card">
   <h2 style="margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; color: #1e293b;">
-    Historial de Sanciones ({{ sanciones|length }})
+    Historial de Sanciones ({{ sanciones|length }}) — {{ categoria }}{% if division %} - {{ division }}{% endif %}
   </h2>
   {% if not sanciones %}
     <p style="color:#94a3b8; font-style: italic; text-align: center; padding: 15px;">No hay sanciones registradas en este campeonato.</p>

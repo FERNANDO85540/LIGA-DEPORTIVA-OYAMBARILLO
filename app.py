@@ -541,6 +541,8 @@ def init_db():
         db.execute("ALTER TABLE partidos ADD COLUMN informe_arbitro TEXT")
     if "informe_vocalia" not in pcols:
         db.execute("ALTER TABLE partidos ADD COLUMN informe_vocalia TEXT")
+    if "hoja_editada" not in pcols:
+        db.execute("ALTER TABLE partidos ADD COLUMN hoja_editada INTEGER NOT NULL DEFAULT 0")
 
     db.execute(f"""
         CREATE TABLE IF NOT EXISTS goles (
@@ -1046,10 +1048,9 @@ def detalle_equipo(equipo_id):
         return redirect(url_for("index"))
 
     jugadores = db.execute(
-        "SELECT * FROM jugadores WHERE equipo = ? AND categoria = ? ORDER BY apellidos",
+        "SELECT * FROM jugadores WHERE equipo = ? AND categoria = ? ORDER BY CAST(numero_camiseta AS INTEGER)",
         (equipo["nombre"], equipo["categoria"]),
     ).fetchall()
-
     saldo = equipo["valor_inscripcion"] - equipo["abono"]
     juveniles_count = _contar_juveniles(db, equipo["nombre"], equipo["categoria"])
 
@@ -1676,8 +1677,6 @@ def agregar_jugador_equipo(equipo_id):
         flash(error)
     else:
         flash("Jugador registrado correctamente.", "ok")
-        return redirect(url_for("ficha_jugador", jugador_id=jugador_id))
-
     return redirect(url_for("detalle_equipo", equipo_id=equipo_id))
 
 
@@ -2519,55 +2518,17 @@ def eliminar_jornada(jornada_id):
 def sanciones_modulo():
     db = get_db()
     
-    # 1. Obtenemos los filtros de la URL (igual que en técnica y vocalía)
     categoria, division = _categoria_y_division(
         db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
     )
 
-    # 2. Filtramos los jugadores por categoría y división
-    jugadores = db.execute(
-        "SELECT * FROM jugadores WHERE categoria = ? AND division = ? ORDER BY equipo, apellidos, nombres",
-        (categoria, division)
-    ).fetchall()
-    
     catalogo = db.execute("SELECT * FROM sanciones_catalogo ORDER BY articulo, id").fetchall()
     
-    # 3. Filtramos rojas pendientes por categoría y división
+    # Filtramos rojas pendientes por categoría y división
     rojas_pendientes = [r for r in _rojas_pendientes_de_sancion(db) 
                         if r["categoria"] == categoria and r["division"] == division]
 
-    jugadores_map = {j["id"]: j for j in jugadores}
-    
-    # 4. _amarillas_validas_agrupadas ya nos devuelve todas, la filtramos aquí por las de estos jugadores
-    todas_validas = _amarillas_validas_agrupadas(db)
-    validas_por_jugador = {jid: tarjetas for jid, tarjetas in todas_validas.items() if jid in jugadores_map}
-    
-    # 5. Contamos rojas y multas SOLO de los jugadores de esta categoría/división
-    todas_tarjetas = db.execute("SELECT jugador_id, tipo, valor_multa FROM tarjetas").fetchall()
-    rojas_count = {}
-    multas_total = {}
-    for t in todas_tarjetas:
-        if t["jugador_id"] in jugadores_map:
-            multas_total[t["jugador_id"]] = multas_total.get(t["jugador_id"], 0) + (t["valor_multa"] or 0)
-            if t["tipo"] == "roja":
-                rojas_count[t["jugador_id"]] = rojas_count.get(t["jugador_id"], 0) + 1
-
-    jugadores_con_tarjetas = set(validas_por_jugador) | set(rojas_count)
-    acumulado = []
-    for jid in jugadores_con_tarjetas:
-        j = jugadores_map.get(jid)
-        if not j:
-            continue
-        validas = len(validas_por_jugador.get(jid, []))
-        rojas = rojas_count.get(jid, 0)
-        acumulado.append({
-            "nombres": j["nombres"], "apellidos": j["apellidos"], "equipo": j["equipo"],
-            "amarillas_validas": validas, "rojas": rojas, "total": validas + rojas,
-            "multas": multas_total.get(jid, 0),
-        })
-    acumulado.sort(key=lambda x: x["total"], reverse=True)
-
-    # 6. Filtramos las sanciones por categoría y división
+    # Sanciones registradas de la categoría
     sanciones = db.execute("""
         SELECT s.*, j.nombres AS j_nombres, j.apellidos AS j_apellidos, j.equipo AS j_equipo
         FROM sanciones s
@@ -2582,16 +2543,61 @@ def sanciones_modulo():
         "sanciones_modulo.html",
         catalogo=catalogo,
         rojas_pendientes=rojas_pendientes,
-        acumulado=acumulado,
         sanciones=sanciones,
         sanciones_activas=sanciones_activas,
-        # Pasamos las variables para la navegación superior:
         categoria=categoria,
         categorias_liga=_categorias_liga(db),
         division=division,
         divisiones=_divisiones_de_categoria(db, categoria),
     )
 
+@app.route("/sanciones/acumulacion")
+@sanciones_required
+def sanciones_acumulacion():
+    """Nueva vista separada para ver solo la acumulación de tarjetas."""
+    db = get_db()
+    categoria, division = _categoria_y_division(
+        db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
+    )
+    
+    jugadores = db.execute(
+        "SELECT * FROM jugadores WHERE categoria = ? AND division = ? ORDER BY equipo, apellidos, nombres",
+        (categoria, division)
+    ).fetchall()
+    jugadores_map = {j["id"]: j for j in jugadores}
+    
+    todas_validas = _amarillas_validas_agrupadas(db)
+    validas_por_jugador = {jid: tarjetas for jid, tarjetas in todas_validas.items() if jid in jugadores_map}
+    
+    todas_tarjetas = db.execute("SELECT jugador_id, tipo, valor_multa FROM tarjetas").fetchall()
+    rojas_count = {}
+    multas_total = {}
+    for t in todas_tarjetas:
+        if t["jugador_id"] in jugadores_map:
+            multas_total[t["jugador_id"]] = multas_total.get(t["jugador_id"], 0) + (t["valor_multa"] or 0)
+            if t["tipo"] == "roja":
+                rojas_count[t["jugador_id"]] = rojas_count.get(t["jugador_id"], 0) + 1
+
+    jugadores_con_tarjetas = set(validas_por_jugador) | set(rojas_count)
+    acumulado = []
+    for jid in jugadores_con_tarjetas:
+        j = jugadores_map.get(jid)
+        if not j: continue
+        validas = len(validas_por_jugador.get(jid, []))
+        rojas = rojas_count.get(jid, 0)
+        acumulado.append({
+            "nombres": j["nombres"], "apellidos": j["apellidos"], "equipo": j["equipo"],
+            "amarillas_validas": validas, "rojas": rojas, "total": validas + rojas,
+            "multas": multas_total.get(jid, 0),
+        })
+    acumulado.sort(key=lambda x: x["total"], reverse=True)
+
+    return render_template(
+        "acumulacion_tarjetas.html",
+        acumulado=acumulado,
+        categoria=categoria,
+        division=division
+    )
 
 @app.route("/sanciones/roja_directa/agregar", methods=["POST"])
 @sanciones_required
@@ -2602,25 +2608,23 @@ def agregar_roja_directa():
 
     if not tarjeta_id.isdigit() or not catalogo_id.isdigit():
         flash("Selecciona la roja a sancionar y el motivo (catálogo).")
-        return redirect(url_for("sanciones_modulo"))
+        return redirect(request.referrer or url_for("sanciones_modulo"))
 
     tarjeta = db.execute("SELECT * FROM tarjetas WHERE id = ? AND tipo = 'roja'", (int(tarjeta_id),)).fetchone()
     catalogo = db.execute("SELECT * FROM sanciones_catalogo WHERE id = ?", (int(catalogo_id),)).fetchone()
     if not tarjeta or not catalogo:
         flash("La roja o el motivo seleccionados no son válidos.")
-        return redirect(url_for("sanciones_modulo"))
+        return redirect(request.referrer or url_for("sanciones_modulo"))
 
-    ya_sancionada = db.execute(
-        "SELECT 1 FROM sanciones WHERE tarjeta_id = ?", (tarjeta["id"],)
-    ).fetchone()
+    ya_sancionada = db.execute("SELECT 1 FROM sanciones WHERE tarjeta_id = ?", (tarjeta["id"],)).fetchone()
     if ya_sancionada:
         flash("Esa roja ya tiene una sanción registrada.")
-        return redirect(url_for("sanciones_modulo"))
+        return redirect(request.referrer or url_for("sanciones_modulo"))
 
     jornada = db.execute("SELECT * FROM jornadas WHERE id = ?", (tarjeta["jornada_id"],)).fetchone()
     if not jornada:
         flash("No se pudo determinar la jornada de esa roja.")
-        return redirect(url_for("sanciones_modulo"))
+        return redirect(request.referrer or url_for("sanciones_modulo"))
 
     valor_multa = catalogo["valor_multa_sugerido"] if catalogo["aplica_multa"] else None
 
@@ -2633,19 +2637,22 @@ def agregar_roja_directa():
          valor_multa, datetime.now().strftime("%Y-%m-%d %H:%M"), int(catalogo_id), tarjeta["id"]),
     )
     db.commit()
-    flash("Roja directa registrada: la sanción se calculó automáticamente según el catálogo.", "ok")
-    return redirect(url_for("sanciones_modulo"))
-
+    flash("Roja directa registrada: la sanción se calculó automáticamente.", "ok")
+    
+    # Redirigir a la misma categoría y división donde estaba el usuario
+    return redirect(url_for("sanciones_modulo", categoria=jornada["categoria"], division=jornada["division"]))
 
 @app.route("/sanciones/sancion/<int:sancion_id>/eliminar", methods=["POST"])
 @sanciones_required
 def eliminar_sancion(sancion_id):
     db = get_db()
+    sancion = db.execute("SELECT categoria, division FROM sanciones WHERE id = ?", (sancion_id,)).fetchone()
     db.execute("DELETE FROM sanciones WHERE id = ?", (sancion_id,))
     db.commit()
     flash("Sanción eliminada.", "ok")
+    if sancion:
+        return redirect(url_for("sanciones_modulo", categoria=sancion["categoria"], division=sancion["division"]))
     return redirect(url_for("sanciones_modulo"))
-
 
 @app.route("/sanciones/sancion/<int:sancion_id>/pagada", methods=["POST"])
 @sanciones_required
@@ -2659,8 +2666,7 @@ def marcar_sancion_pagada(sancion_id):
     db.execute("UPDATE sanciones SET pagada = ? WHERE id = ?", (nuevo, sancion_id))
     db.commit()
     flash("Estado de pago actualizado.", "ok")
-    return redirect(url_for("sanciones_modulo"))
-
+    return redirect(url_for("sanciones_modulo", categoria=sancion["categoria"], division=sancion["division"]))
 
 @app.route("/sanciones/catalogo")
 @sanciones_required
@@ -2800,7 +2806,7 @@ def _calcular_tabla_posiciones(db, categoria=CATEGORIA_ACTIVA, division=""):
     filas.sort(key=lambda f: (-f["pts"], -f["dg"], -f["gf"]))
     return filas
 
-def _calcular_goleadores(db, categoria=CATEGORIA_ACTIVA, division="", limite=15):
+def _calcular_goleadores(db, categoria=CATEGORIA_ACTIVA, division="", limite=10):
     return db.execute(
         """
         SELECT j.id, j.nombres, j.apellidos, j.equipo, SUM(g.cantidad) AS goles
@@ -2833,7 +2839,7 @@ def tecnica_modulo():
     ).fetchone()["m"]
     siguiente_numero = (ultima or 0) + 1
     tabla = _calcular_tabla_posiciones(db, categoria, division)
-    goleadores = _calcular_goleadores(db, categoria, division, limite=1000)
+    goleadores = _calcular_goleadores(db, categoria, division, limite=10)
     sanciones_puntos = db.execute("SELECT * FROM puntos_sancion WHERE categoria = ? AND division = ? ORDER BY id DESC", (categoria, division)).fetchall()
 
     return render_template(
@@ -3193,24 +3199,22 @@ def guardar_arbitro(partido_id):
     arbitro = request.form.get("arbitro", "").strip()
     informe_arbitro = request.form.get("informe_arbitro", "").strip()
     db.execute(
-        "UPDATE partidos SET arbitro = ?, informe_arbitro = ? WHERE id = ?",
+        "UPDATE partidos SET arbitro = ?, informe_arbitro = ?, hoja_editada = 1 WHERE id = ?",
         (arbitro or None, informe_arbitro or None, partido_id),
     )
     db.commit()
     flash("Árbitro guardado.", "ok")
     return redirect(url_for("vocalia_hoja", partido_id=partido_id))
 
-
 @app.route("/vocalia/partido/<int:partido_id>/informe_vocalia/guardar", methods=["POST"])
 @vocalia_required
 def guardar_informe_vocalia(partido_id):
     db = get_db()
     informe_vocalia = request.form.get("informe_vocalia", "").strip()
-    db.execute("UPDATE partidos SET informe_vocalia = ? WHERE id = ?", (informe_vocalia or None, partido_id))
+    db.execute("UPDATE partidos SET informe_vocalia = ?, hoja_editada = 1 WHERE id = ?", (informe_vocalia or None, partido_id))
     db.commit()
     flash("Informe de vocalía guardado.", "ok")
     return redirect(url_for("vocalia_hoja", partido_id=partido_id))
-
 
 @app.route("/vocalia/partido/<int:partido_id>/hoja/guardar", methods=["POST"])
 @vocalia_required
@@ -3285,7 +3289,8 @@ def guardar_hoja_equipo(partido_id):
     gl = gl_row["c"] if gl_row and gl_row["c"] is not None else 0
     gv = gv_row["c"] if gv_row and gv_row["c"] is not None else 0
     
-    db.execute("UPDATE partidos SET goles_local = ?, goles_visitante = ? WHERE id = ?", (gl, gv, partido_id))
+    # ACTUALIZA ESTA LÍNEA:
+    db.execute("UPDATE partidos SET goles_local = ?, goles_visitante = ?, hoja_editada = 1 WHERE id = ?", (gl, gv, partido_id))
     # -------------------------------------------------------------------------------
 
     db.commit()
@@ -3354,6 +3359,7 @@ def agregar_incidente(partido_id):
         "INSERT INTO vocalia_incidentes (partido_id, descripcion, fecha) VALUES (?, ?, ?)",
         (partido_id, descripcion, datetime.now().strftime("%Y-%m-%d %H:%M")),
     )
+    db.execute("UPDATE partidos SET hoja_editada = 1 WHERE id = ?", (partido_id,)) # <- LÍNEA NUEVA
     db.commit()
     flash("Incidente registrado.", "ok")
     return redirect(url_for("vocalia_hoja", partido_id=partido_id))

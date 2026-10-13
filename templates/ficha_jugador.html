@@ -118,12 +118,13 @@
         </div>
       {% endif %}
     </div>
-
     <div style="margin-top:25px; display:flex; flex-direction: column; gap:12px; align-items:center;">
       <!-- Vista previa del carnet siempre disponible -->
+      {% if session.get('rol') == 'admin' %}
       <a href="{{ url_for('carnet_jugador', jugador_id=jugador.id) }}" target="_blank" style="width: 100%; text-decoration: none;">
         <button type="button" style="width: 100%; background: #0f172a; color: white;">🪪 Vista previa del Carnet</button>
       </a>
+      {% endif %}
 
       <!-- Botón de Calificación (Solo Admin) -->
       {% if session.get('rol') == 'admin' %}

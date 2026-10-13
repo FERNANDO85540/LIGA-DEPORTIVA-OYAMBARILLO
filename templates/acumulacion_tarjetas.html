@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Botón de retroceso minimalista -->
+<div style="margin-bottom: 15px;">
+  <a href="javascript:history.back()" title="Volver atrás" style="text-decoration: none; color: #475569; font-size: 1.5rem; display: inline-block; transition: transform 0.2s;">
+    ⬅️
+  </a>
+</div>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #166534, #064e3b); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+  <h1 style="margin:0; font-size:1.6rem;">📊 Acumulación de Tarjetas y Multas</h1>
+  <p style="margin:8px 0 0; opacity:0.95; font-size: 1rem;">Campeonato {{ categoria }}{% if division %} - {{ division }}{% endif %}</p>
+</div>
+
+<div class="card">
+  <p style="font-size:0.9rem; color:#64748b; margin-top:0;">
+    Las tarjetas se cargan desde Vocalía en la hoja de cada partido. Las amarillas que resultaron en
+    expulsión por doble amarilla en el mismo partido NO cuentan aquí (ya se purgan con la sanción roja).
+  </p>
+  {% if not acumulado %}
+    <p style="color:#94a3b8; font-style: italic; text-align: center; padding: 20px;">Todavía no hay tarjetas registradas en este campeonato.</p>
+  {% else %}
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive" id="tablaAcumulado" data-search-placeholder="Buscar por jugador o equipo...">
+    <thead>
+      <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1;">
+        <th style="padding: 10px; text-align: left;">Jugador</th>
+        <th style="padding: 10px; text-align: left;">Equipo</th>
+        <th style="padding: 10px; text-align: center;">🟨 Válidas</th>
+        <th style="padding: 10px; text-align: center;">🟥 Rojas</th>
+        <th style="padding: 10px; text-align: center;">Total Tarjetas</th>
+        <th style="padding: 10px; text-align: right;">Multas Acumuladas</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in acumulado %}
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td data-label="Jugador" style="padding: 8px; font-weight: 600; color: #334155;">{{ a.apellidos }} {{ a.nombres }}</td>
+        <td data-label="Equipo" style="padding: 8px;">{{ a.equipo }}</td>
+        <td data-label="Válidas" style="padding: 8px; text-align: center; font-weight: bold; color: #b45309;">{{ a.amarillas_validas }}</td>
+        <td data-label="Rojas" style="padding: 8px; text-align: center; font-weight: bold; color: #ef4444;">{{ a.rojas }}</td>
+        <td data-label="Total Tarjetas" style="padding: 8px; text-align: center; font-weight: 900; font-size: 1.1rem; color: #0f172a;">{{ a.total }}</td>
+        <td data-label="Multas Acumuladas" style="padding: 8px; text-align: right; font-weight: bold; color: #1e7d32;">${{ '%.2f' % a.multas }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
