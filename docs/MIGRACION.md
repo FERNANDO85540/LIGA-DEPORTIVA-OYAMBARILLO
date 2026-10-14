@@ -17,11 +17,24 @@ Además, la app hace **un respaldo automático** de la base SQLite antes de apli
 cualquier migración de esquema pendiente (`/data/backups/liga-pre-migracion-*.db`),
 así que aunque se olvide el paso manual, siempre queda una copia del estado previo.
 
+### Migraciones que aplica esta versión (una sola vez, anotadas en la tabla `migraciones`)
+
+| Migración | Qué hace |
+|---|---|
+| `2026_10_columnas_sanciones_y_reemplazo` | Agrega `sanciones.fecha_inicio`, `sanciones.anulada`, `jugadores.reemplazo_solicitado`, `jugadores.reemplazo_fecha` |
+| `2026_10_cedula_unica_por_torneo` | Quita el `UNIQUE` global de `jugadores.cedula` (en SQLite reconstruye la tabla conservando ids y el contador) y crea el índice único `(cedula, categoria)` |
+| `2026_10_fecha_registro_hora_ecuador` | Convierte `jugadores.fecha_registro` de la hora del servidor (UTC en Render) a la de America/Guayaquil |
+| `2026_10_quitar_estado_en_vivo` | Deja `partidos.en_vivo = 0` (la columna se conserva) |
+
 ## Rollback
 
 ### Código
 
-El último commit antes de esta migración es `b51ac78`. Para volver a esa versión:
+El último commit antes de esta migración es `b51ac78`.
+
+> Si ya se aplicaron las migraciones, volver al código viejo exige también
+> restaurar la base previa (`liga-pre-migracion-*.db`): el código viejo no
+> conoce las columnas nuevas y asume la cédula única global. Para volver a esa versión:
 en Render → *Manual Deploy* → *Deploy a specific commit* → `b51ac78`
 (o `git revert` de los commits de la migración y desplegar).
 
