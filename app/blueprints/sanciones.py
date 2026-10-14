@@ -1,14 +1,15 @@
 """Comisión de Penas y Sanciones."""
-from datetime import datetime
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
-from config import CATEGORIA_ACTIVA
+from datetime import datetime
+
+from config import CATEGORIA_ACTIVA, MOSTRAR_TESORERIA
 from app.database import get_db
 from app.decorators import sanciones_required
 from app.services.liga import _categoria_y_division, _categorias_liga, _divisiones_de_categoria
-from app.services.sanciones import _amarillas_validas_agrupadas, _rojas_pendientes_de_sancion, _sancion_activa
-from app.utils import _to_float
+from app.services.sanciones import _amarillas_validas_agrupadas, _rojas_pendientes_de_sancion, estado_sancion
+from app.utils import _to_float, ahora_ecuador, volver_a
 
 bp = Blueprint("sanciones", __name__)
 
@@ -37,7 +38,8 @@ def sanciones_modulo():
         ORDER BY s.fecha DESC, s.id DESC
     """, (categoria, division)).fetchall()
     
-    sanciones_activas = {s["id"] for s in sanciones if _sancion_activa(db, s)}
+    estados = {s["id"]: estado_sancion(db, s, equipo=s["j_equipo"]) for s in sanciones}
+    sanciones_activas = {sid for sid, e in estados.items() if e["activa"]}
 
     return render_template(
         "sanciones/sanciones_modulo.html",
@@ -45,6 +47,7 @@ def sanciones_modulo():
         rojas_pendientes=rojas_pendientes,
         sanciones=sanciones,
         sanciones_activas=sanciones_activas,
+        estados=estados,
         categoria=categoria,
         categorias_liga=_categorias_liga(db),
         division=division,
@@ -136,26 +139,97 @@ def agregar_roja_directa():
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'manual', ?, ?)""",
         (tarjeta["jugador_id"], catalogo["descripcion_motivo"], catalogo["cantidad_fechas_suspension"],
          jornada["id"], jornada["numero"] + 1, jornada["categoria"], jornada["division"],
-         valor_multa, datetime.now().strftime("%Y-%m-%d %H:%M"), int(catalogo_id), tarjeta["id"]),
+         valor_multa, ahora_ecuador().strftime("%Y-%m-%d %H:%M"), int(catalogo_id), tarjeta["id"]),
     )
     db.commit()
     flash("Roja directa registrada: la sanción se calculó automáticamente.", "ok")
     
     # Redirigir a la misma categoría y división donde estaba el usuario
-    return redirect(url_for("sanciones.sanciones_modulo", categoria=jornada["categoria"], division=jornada["division"]))
+    return volver_a(url_for("sanciones.sanciones_modulo", categoria=jornada["categoria"], division=jornada["division"]))
+
+
+def _volver_a_sanciones(sancion):
+    if sancion:
+        return volver_a(url_for("sanciones.sanciones_modulo", categoria=sancion["categoria"], division=sancion["division"]))
+    return volver_a(url_for("sanciones.sanciones_modulo"))
 
 
 @bp.route("/sanciones/sancion/<int:sancion_id>/eliminar", methods=["POST"])
 @sanciones_required
 def eliminar_sancion(sancion_id):
     db = get_db()
-    sancion = db.execute("SELECT categoria, division FROM sanciones WHERE id = ?", (sancion_id,)).fetchone()
+    sancion = db.execute("SELECT * FROM sanciones WHERE id = ?", (sancion_id,)).fetchone()
+    if sancion and sancion["origen"] == "acumulacion":
+        # Se recalcula sola desde las amarillas de Vocalía: si se borrara, volvería
+        # a crearse al guardar la siguiente hoja. Para dejarla sin efecto, se levanta.
+        flash("Las sanciones por acumulación se recalculan solas con las amarillas de Vocalía. "
+              "Para dejarla sin efecto usa 'Levantar'.")
+        return _volver_a_sanciones(sancion)
     db.execute("DELETE FROM sanciones WHERE id = ?", (sancion_id,))
     db.commit()
     flash("Sanción eliminada.", "ok")
-    if sancion:
-        return redirect(url_for("sanciones.sanciones_modulo", categoria=sancion["categoria"], division=sancion["division"]))
-    return redirect(url_for("sanciones.sanciones_modulo"))
+    return _volver_a_sanciones(sancion)
+
+
+@bp.route("/sanciones/sancion/<int:sancion_id>/editar", methods=["POST"])
+@sanciones_required
+def editar_sancion(sancion_id):
+    """Corrige una sanción: motivo (o artículo del catálogo), cantidad de
+    partidos y fecha desde la que corre la suspensión."""
+    db = get_db()
+    sancion = db.execute("SELECT * FROM sanciones WHERE id = ?", (sancion_id,)).fetchone()
+    if not sancion:
+        flash("Sanción no encontrada.")
+        return _volver_a_sanciones(None)
+
+    motivo = request.form.get("motivo", "").strip()
+    partidos = request.form.get("jornadas_sancionado", "").strip()
+    fecha_inicio = request.form.get("fecha_inicio", "").strip()
+    catalogo_id = request.form.get("catalogo_id", "").strip()
+
+    catalogo = None
+    if catalogo_id.isdigit():
+        catalogo = db.execute("SELECT * FROM sanciones_catalogo WHERE id = ?", (int(catalogo_id),)).fetchone()
+    if catalogo and not motivo:
+        motivo = catalogo["descripcion_motivo"]
+    if not motivo:
+        flash("El motivo de la sanción no puede quedar vacío.")
+        return _volver_a_sanciones(sancion)
+    if not partidos.isdigit() or int(partidos) < 1:
+        flash("La cantidad de partidos de suspensión debe ser un número mayor a 0.")
+        return _volver_a_sanciones(sancion)
+    if fecha_inicio:
+        try:
+            fecha_inicio = datetime.strptime(fecha_inicio, "%Y-%m-%d").strftime("%Y-%m-%d")
+        except ValueError:
+            flash("La fecha de inicio no es válida.")
+            return _volver_a_sanciones(sancion)
+
+    db.execute(
+        "UPDATE sanciones SET motivo = ?, jornadas_sancionado = ?, fecha_inicio = ?, catalogo_id = ? WHERE id = ?",
+        (motivo, int(partidos), fecha_inicio or None,
+         catalogo["id"] if catalogo else sancion["catalogo_id"], sancion_id),
+    )
+    db.commit()
+    flash("Sanción actualizada.", "ok")
+    return _volver_a_sanciones(sancion)
+
+
+@bp.route("/sanciones/sancion/<int:sancion_id>/levantar", methods=["POST"])
+@sanciones_required
+def levantar_sancion(sancion_id):
+    """Levanta (o reactiva) una sanción a mano: queda en el historial pero
+    deja de suspender al jugador."""
+    db = get_db()
+    sancion = db.execute("SELECT * FROM sanciones WHERE id = ?", (sancion_id,)).fetchone()
+    if not sancion:
+        flash("Sanción no encontrada.")
+        return _volver_a_sanciones(None)
+    nuevo = 0 if sancion["anulada"] else 1
+    db.execute("UPDATE sanciones SET anulada = ? WHERE id = ?", (nuevo, sancion_id))
+    db.commit()
+    flash("Sanción levantada: el jugador ya puede jugar." if nuevo else "Sanción reactivada.", "ok")
+    return _volver_a_sanciones(sancion)
 
 
 @bp.route("/sanciones/sancion/<int:sancion_id>/pagada", methods=["POST"])
@@ -170,7 +244,7 @@ def marcar_sancion_pagada(sancion_id):
     db.execute("UPDATE sanciones SET pagada = ? WHERE id = ?", (nuevo, sancion_id))
     db.commit()
     flash("Estado de pago actualizado.", "ok")
-    return redirect(url_for("sanciones.sanciones_modulo", categoria=sancion["categoria"], division=sancion["division"]))
+    return _volver_a_sanciones(sancion)
 
 
 @bp.route("/sanciones/catalogo")
@@ -218,6 +292,13 @@ def editar_catalogo(catalogo_id):
     if not descripcion_motivo or not cantidad_fechas_suspension.isdigit() or int(cantidad_fechas_suspension) < 1:
         flash("Ingresa la descripción del motivo y una cantidad de fechas de suspensión válida.")
         return redirect(url_for("sanciones.catalogo_sanciones"))
+
+    if not MOSTRAR_TESORERIA:
+        # Los campos de multa no se muestran en el formulario: se conservan los guardados.
+        actual = db.execute("SELECT aplica_multa, valor_multa_sugerido FROM sanciones_catalogo WHERE id = ?",
+                            (catalogo_id,)).fetchone()
+        if actual:
+            aplica_multa, valor_multa_sugerido = actual["aplica_multa"], actual["valor_multa_sugerido"]
 
     db.execute(
         """UPDATE sanciones_catalogo SET articulo = ?, descripcion_motivo = ?, cantidad_fechas_suspension = ?,

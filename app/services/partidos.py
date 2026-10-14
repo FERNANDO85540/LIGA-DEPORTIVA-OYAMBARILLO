@@ -26,11 +26,3 @@ def _categoria_de_partido(db, partido_id):
         (partido_id,),
     ).fetchone()
     return (fila["categoria"], fila["division"]) if fila else (CATEGORIA_ACTIVA, "")
-
-
-def _partidos_en_vivo(db):
-    return db.execute(
-        """SELECT p.*, jo.numero AS jornada_numero
-           FROM partidos p JOIN jornadas jo ON jo.id = p.jornada_id
-           WHERE p.en_vivo = 1 ORDER BY p.id DESC"""
-    ).fetchall()

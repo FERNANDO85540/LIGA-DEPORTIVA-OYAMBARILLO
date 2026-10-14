@@ -1,5 +1,5 @@
 """Alineaciones (formaciones en cancha) que arma cada equipo por partido."""
-from datetime import datetime
+from app.utils import ahora_ecuador
 
 from config import USANDO_POSTGRES
 
@@ -77,7 +77,7 @@ def _guardar_alineacion(db, partido_id, equipo_nombre, formacion, titulares, sup
         "SELECT id FROM alineaciones WHERE partido_id = ? AND equipo = ?",
         (partido_id, equipo_nombre),
     ).fetchone()
-    ahora = datetime.now().strftime("%Y-%m-%d %H:%M")
+    ahora = ahora_ecuador().strftime("%Y-%m-%d %H:%M")
     if existente:
         alineacion_id = existente["id"]
         db.execute("DELETE FROM alineacion_jugadores WHERE alineacion_id = ?", (alineacion_id,))

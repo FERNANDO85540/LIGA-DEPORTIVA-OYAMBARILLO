@@ -5,8 +5,8 @@ from config import CATEGORIA_ACTIVA
 from app.database import get_db
 from app.services.estadisticas import _calcular_goleadores, _calcular_tabla_posiciones
 from app.services.liga import _categoria_y_division, _categorias_liga, _divisiones_de_categoria
-from app.services.partidos import _fixture_completo, _partidos_en_vivo
-from app.services.sanciones import _sancion_activa
+from app.services.partidos import _fixture_completo
+from app.services.sanciones import estado_sancion
 
 bp = Blueprint("publico", __name__)
 
@@ -84,8 +84,7 @@ def publico_alineaciones(partido_id):
 
 @bp.route("/publico")
 def publico_inicio():
-    db = get_db()
-    return render_template("publico/publico_inicio.html", partidos_en_vivo=_partidos_en_vivo(db))
+    return render_template("publico/publico_inicio.html")
 
 
 @bp.route("/publico/tabla")
@@ -168,8 +167,9 @@ def publico_sancionados():
            ORDER BY s.jornada_desde_numero DESC, s.id DESC""",
         (categoria, division),
     ).fetchall()
-    sancionados_activos = [s for s in sanciones if _sancion_activa(db, s)]
+    estados = {s["id"]: estado_sancion(db, s, equipo=s["j_equipo"]) for s in sanciones}
+    sancionados_activos = [s for s in sanciones if estados[s["id"]]["activa"]]
     return render_template(
-        "publico/publico_sancionados.html", sancionados=sancionados_activos, categoria=categoria,
+        "publico/publico_sancionados.html", sancionados=sancionados_activos, estados=estados, categoria=categoria,
         categorias_liga=_categorias_liga(db), division=division, divisiones=_divisiones_de_categoria(db, categoria),
     )

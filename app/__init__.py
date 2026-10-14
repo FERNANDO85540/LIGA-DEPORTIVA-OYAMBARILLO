@@ -9,7 +9,7 @@ base de datos en app/database.py; y las constantes en config.py.
 """
 from flask import Flask
 
-from config import Config, STATIC_DIR, TEMPLATES_DIR
+from config import MOSTRAR_TESORERIA, Config, STATIC_DIR, TEMPLATES_DIR
 
 
 def create_app(config_extra=None):
@@ -22,6 +22,13 @@ def create_app(config_extra=None):
     from app.database import close_db, init_db, preparar_directorios_de_datos
     preparar_directorios_de_datos()
     app.teardown_appcontext(close_db)
+
+    from app.utils import formatear_fecha_hora
+    app.jinja_env.filters["fecha_hora"] = formatear_fecha_hora
+
+    @app.context_processor
+    def _variables_globales():
+        return {"mostrar_tesoreria": MOSTRAR_TESORERIA}
 
     from app.blueprints import (
         auth, carnets, categorias, comision, equipos, inscripcion, jugadores, main, publico, sanciones,

@@ -1,11 +1,5 @@
 {% extends "base.html" %}
 
-{% block extra_head %}
-{% if partido.en_vivo %}
-<meta http-equiv="refresh" content="20">
-{% endif %}
-{% endblock %}
-
 {% block content %}
 
 <p><a href="{{ url_for('publico.publico_calendario') }}" style="text-decoration: none; color: #475569;">&larr; Volver al calendario</a></p>
@@ -19,12 +13,9 @@
   </p>
 </div>
 
-<div class="card" style="text-align:center;{% if partido.en_vivo %} border:2px solid #c0392b;{% endif %}">
+<div class="card" style="text-align:center;">
   
-  {% if partido.en_vivo %}
-    <span class="badge" style="background:#fdecea; color:#c0392b; margin-bottom:10px;">🔴 EN VIVO</span>
-    <p style="font-size:0.78rem; color:#888; margin:2px 0 8px;">Esta página se actualiza sola cada 20 segundos.</p>
-  {% elif partido.ganador_escritorio %}
+  {% if partido.ganador_escritorio %}
     <span class="badge" style="background:#fef2f2; color:#b91c1c; border: 1px solid #fca5a5; margin-bottom:10px;">⚖️ Resuelto en Mesa</span>
   {% elif partido.jugado %}
     <span class="badge badge-ok" style="margin-bottom:10px;">✅ Finalizado</span>
@@ -42,7 +33,7 @@
         </span>
       </div>
     {% elif partido.goles_local is not none %}
-      <span style="font-size:1.6rem; font-weight:800; color:{{ '#c0392b' if partido.en_vivo else 'var(--verde-osc)' }};">
+      <span style="font-size:1.6rem; font-weight:800; color:var(--verde-osc);">
         {{ partido.goles_local }} - {{ partido.goles_visitante }}
       </span>
     {% else %}

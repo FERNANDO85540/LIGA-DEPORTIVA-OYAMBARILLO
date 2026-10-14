@@ -1,6 +1,5 @@
 """Módulo de carnets (imprenta): estado de impresión y PDF por lote."""
 import io
-from datetime import datetime
 
 from flask import Blueprint, flash, redirect, render_template, request, send_file, url_for
 
@@ -8,7 +7,7 @@ from config import CARNET_PDF_DPI
 from app.database import get_db
 from app.decorators import imprenta_required
 from app.services.carnets import _armar_paginas_carnets
-from app.utils import _to_float
+from app.utils import _to_float, ahora_ecuador
 
 bp = Blueprint("carnets", __name__)
 
@@ -121,7 +120,7 @@ def carnets_estado(jugador_id):
     valor = _to_float(request.form.get("carnet_valor", "0"))
     fecha = jugador["carnet_fecha"]
     if impreso and not jugador["carnet_impreso"]:
-        fecha = datetime.now().strftime("%Y-%m-%d %H:%M")
+        fecha = ahora_ecuador().strftime("%Y-%m-%d %H:%M")
     elif not impreso:
         fecha = None
 

@@ -1,14 +1,14 @@
 """Comisión Técnica: fixture, oficialización de resultados, mesa y deducción de puntos."""
-from datetime import datetime
 
-from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from config import CATEGORIA_ACTIVA, USANDO_POSTGRES
 from app.database import get_db
-from app.decorators import tecnica_o_vocalia_required, tecnica_required
+from app.decorators import tecnica_required
 from app.services.estadisticas import _calcular_goleadores, _calcular_tabla_posiciones
 from app.services.liga import _categoria_y_division, _categorias_liga, _divisiones_de_categoria
 from app.services.partidos import _categoria_de_partido, _fixture_completo
+from app.utils import ahora_ecuador
 
 bp = Blueprint("tecnica", __name__)
 
@@ -95,7 +95,6 @@ def eliminar_jornada(jornada_id):
 def tecnica_modulo():
     db = get_db()
     
-    # ... y agregas sanciones_puntos=sanciones_puntos a los argumentos de render_template.
     categoria, division = _categoria_y_division(
         db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
     )
@@ -122,6 +121,7 @@ def tecnica_modulo():
         jornadas=jornadas,
         tabla=tabla,
         goleadores=goleadores,
+        sanciones_puntos=sanciones_puntos,
     )
 
 
@@ -160,78 +160,6 @@ def quitar_resultado(partido_id):
     db.commit()
     flash("Resultado eliminado.", "ok")
     return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
-
-
-def _redirect_post_partido(partido_id, categoria, division):
-    """Vocalía vuelve a su hoja del encuentro; el resto (técnica/admin) vuelve
-    al módulo de la Comisión Técnica."""
-    if session.get("rol") == "vocalia":
-        return redirect(url_for("vocalia.vocalia_hoja", partido_id=partido_id))
-    return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
-
-
-@bp.route("/tecnica/partido/<int:partido_id>/en_vivo/iniciar", methods=["POST"])
-@tecnica_o_vocalia_required
-def iniciar_en_vivo(partido_id):
-    db = get_db()
-    partido = db.execute("SELECT * FROM partidos WHERE id = ?", (partido_id,)).fetchone()
-    categoria, division = _categoria_de_partido(db, partido_id)
-    if not partido:
-        flash("Partido no encontrado.")
-        return _redirect_post_partido(partido_id, categoria, division)
-    if partido["jugado"]:
-        flash("Ese partido ya está finalizado.")
-        return _redirect_post_partido(partido_id, categoria, division)
-    goles_local = partido["goles_local"] if partido["goles_local"] is not None else 0
-    goles_visitante = partido["goles_visitante"] if partido["goles_visitante"] is not None else 0
-    db.execute(
-        "UPDATE partidos SET en_vivo = 1, goles_local = ?, goles_visitante = ? WHERE id = ?",
-        (goles_local, goles_visitante, partido_id),
-    )
-    db.commit()
-    flash("Partido marcado como EN VIVO — ya se ve en la página pública.", "ok")
-    return _redirect_post_partido(partido_id, categoria, division)
-
-
-@bp.route("/tecnica/partido/<int:partido_id>/en_vivo/actualizar", methods=["POST"])
-@tecnica_o_vocalia_required
-def actualizar_marcador_en_vivo(partido_id):
-    db = get_db()
-    categoria, division = _categoria_de_partido(db, partido_id)
-    gl = request.form.get("goles_local", "").strip()
-    gv = request.form.get("goles_visitante", "").strip()
-    if not gl.isdigit() or not gv.isdigit():
-        flash("Ingresa un marcador válido (números).")
-        return _redirect_post_partido(partido_id, categoria, division)
-    db.execute(
-        "UPDATE partidos SET goles_local = ?, goles_visitante = ? WHERE id = ? AND en_vivo = 1",
-        (int(gl), int(gv), partido_id),
-    )
-    db.commit()
-    flash("Marcador actualizado.", "ok")
-    return _redirect_post_partido(partido_id, categoria, division)
-
-
-@bp.route("/tecnica/partido/<int:partido_id>/en_vivo/finalizar", methods=["POST"])
-@tecnica_o_vocalia_required
-def finalizar_en_vivo(partido_id):
-    db = get_db()
-    categoria, division = _categoria_de_partido(db, partido_id)
-    db.execute("UPDATE partidos SET jugado = 1, en_vivo = 0 WHERE id = ?", (partido_id,))
-    db.commit()
-    flash("Partido finalizado.", "ok")
-    return _redirect_post_partido(partido_id, categoria, division)
-
-
-@bp.route("/tecnica/partido/<int:partido_id>/en_vivo/cancelar", methods=["POST"])
-@tecnica_o_vocalia_required
-def cancelar_en_vivo(partido_id):
-    db = get_db()
-    categoria, division = _categoria_de_partido(db, partido_id)
-    db.execute("UPDATE partidos SET en_vivo = 0 WHERE id = ?", (partido_id,))
-    db.commit()
-    flash("Se quitó el estado EN VIVO de ese partido.", "ok")
-    return _redirect_post_partido(partido_id, categoria, division)
 
 
 @bp.route("/tecnica/partido/<int:partido_id>/aprobar", methods=["POST"])
@@ -281,7 +209,7 @@ def tecnica_restar_puntos():
         
     db.execute(
         "INSERT INTO puntos_sancion (equipo, categoria, division, puntos_descontar, motivo, fecha) VALUES (?, ?, ?, ?, ?, ?)",
-        (equipo, categoria, division, int(puntos), motivo, datetime.now().strftime("%Y-%m-%d %H:%M"))
+        (equipo, categoria, division, int(puntos), motivo, ahora_ecuador().strftime("%Y-%m-%d %H:%M"))
     )
     db.commit()
     flash(f"Se restaron {puntos} puntos a {equipo}.", "ok")

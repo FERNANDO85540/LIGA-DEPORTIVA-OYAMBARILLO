@@ -64,3 +64,8 @@ class Config:
     DB_PATH = DB_PATH
     FOTOS_DIR = FOTOS_DIR
     DATABASE_URL = DATABASE_URL
+
+
+# Tesorería (multas, cobros y pagos) oculta temporalmente en la interfaz.
+# Los datos se conservan en la base; poner True para volver a mostrarla.
+MOSTRAR_TESORERIA = False

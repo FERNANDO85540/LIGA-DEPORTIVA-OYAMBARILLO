@@ -8,6 +8,7 @@ import re
 import shutil
 import sqlite3
 import uuid
+from datetime import datetime
 
 from flask import g
 
@@ -16,7 +17,7 @@ from config import (
     STATIC_DIR, USANDO_POSTGRES,
 )
 from app.services.equipos import _renombrar_equipo_cascada
-from app.utils import _mayuscula
+from app.utils import ZONA_LIGA, _mayuscula, ahora_ecuador
 
 if USANDO_POSTGRES:
     import psycopg2
@@ -125,6 +126,7 @@ def _columnas_existentes(db, tabla):
 
 
 def init_db():
+    _respaldar_antes_de_migrar()
     db = DBWrapper(_conectar())
 
     tipo_id = "SERIAL PRIMARY KEY" if USANDO_POSTGRES else "INTEGER PRIMARY KEY AUTOINCREMENT"
@@ -132,7 +134,7 @@ def init_db():
     db.execute(f"""
         CREATE TABLE IF NOT EXISTS jugadores (
             id {tipo_id},
-            cedula TEXT NOT NULL UNIQUE,
+            cedula TEXT NOT NULL,
             nombres TEXT NOT NULL,
             apellidos TEXT NOT NULL,
             fecha_nacimiento TEXT,
@@ -442,6 +444,9 @@ def init_db():
     """)
 
     _normalizar_mayusculas_existentes(db)
+    db.commit()
+
+    _aplicar_migraciones(db)
 
     db.commit()
     db.close()
@@ -474,3 +479,135 @@ def _normalizar_mayusculas_existentes(db):
             continue
         db.execute("UPDATE equipos SET nombre = ? WHERE id = ?", (nuevo_nombre, fila["id"]))
         _renombrar_equipo_cascada(db, fila["nombre"], nuevo_nombre)
+
+
+# ---------- Migraciones con registro (se aplican una sola vez) ----------
+#
+# A diferencia de los ALTER TABLE "si falta la columna" de init_db, estas
+# migraciones transforman datos o constraints, así que se anotan en la tabla
+# `migraciones` para no repetirse. Antes de aplicar cualquiera pendiente se
+# guarda un respaldo de la base SQLite (ver _respaldar_antes_de_migrar).
+
+MIGRACIONES = [
+    "2026_10_columnas_sanciones_y_reemplazo",
+    "2026_10_cedula_unica_por_torneo",
+    "2026_10_fecha_registro_hora_ecuador",
+    "2026_10_quitar_estado_en_vivo",
+]
+
+
+def _migraciones_aplicadas(db):
+    db.execute("CREATE TABLE IF NOT EXISTS migraciones (nombre TEXT PRIMARY KEY, aplicada TEXT NOT NULL)")
+    return {f["nombre"] for f in db.execute("SELECT nombre FROM migraciones").fetchall()}
+
+
+def _respaldar_antes_de_migrar():
+    """Si hay migraciones pendientes y la base es SQLite con datos, deja una
+    copia en DATA_DIR/backups/liga-pre-migracion-<fecha>.db antes de tocarla."""
+    if USANDO_POSTGRES or not os.path.exists(DB_PATH):
+        return None
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        existe_tabla = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'migraciones'"
+        ).fetchone()
+        aplicadas = {f[0] for f in conn.execute("SELECT nombre FROM migraciones")} if existe_tabla else set()
+        tiene_datos = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'jugadores'"
+        ).fetchone()
+        if not tiene_datos or set(MIGRACIONES) <= aplicadas:
+            return None
+        carpeta = os.path.join(DATA_DIR, "backups")
+        os.makedirs(carpeta, exist_ok=True)
+        destino = os.path.join(carpeta, f"liga-pre-migracion-{ahora_ecuador():%Y%m%d-%H%M%S}.db")
+        copia = sqlite3.connect(destino)
+        with copia:
+            conn.backup(copia)
+        copia.close()
+        print(f"Respaldo previo a migraciones: {destino}")
+        return destino
+    finally:
+        conn.close()
+
+
+def _aplicar_migraciones(db):
+    aplicadas = _migraciones_aplicadas(db)
+    pasos = {
+        "2026_10_columnas_sanciones_y_reemplazo": _migrar_columnas_sanciones_y_reemplazo,
+        "2026_10_cedula_unica_por_torneo": _migrar_cedula_unica_por_torneo,
+        "2026_10_fecha_registro_hora_ecuador": _migrar_fecha_registro_hora_ecuador,
+        "2026_10_quitar_estado_en_vivo": _migrar_quitar_estado_en_vivo,
+    }
+    for nombre in MIGRACIONES:
+        if nombre in aplicadas:
+            continue
+        pasos[nombre](db)
+        db.execute(
+            "INSERT INTO migraciones (nombre, aplicada) VALUES (?, ?)",
+            (nombre, ahora_ecuador().strftime("%Y-%m-%d %H:%M")),
+        )
+        db.commit()
+
+
+def _migrar_columnas_sanciones_y_reemplazo(db):
+    scols = _columnas_existentes(db, "sanciones")
+    # Fecha (AAAA-MM-DD) desde la que corre la suspensión, definida a mano por la Comisión.
+    if "fecha_inicio" not in scols:
+        db.execute("ALTER TABLE sanciones ADD COLUMN fecha_inicio TEXT")
+    # Sanción levantada a mano: queda en el historial pero ya no suspende.
+    if "anulada" not in scols:
+        db.execute("ALTER TABLE sanciones ADD COLUMN anulada INTEGER NOT NULL DEFAULT 0")
+    jcols = _columnas_existentes(db, "jugadores")
+    # Bandera de "Solicitud de reemplazo" que levanta el delegado.
+    if "reemplazo_solicitado" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN reemplazo_solicitado INTEGER NOT NULL DEFAULT 0")
+    if "reemplazo_fecha" not in jcols:
+        db.execute("ALTER TABLE jugadores ADD COLUMN reemplazo_fecha TEXT")
+
+
+def _migrar_cedula_unica_por_torneo(db):
+    """La cédula deja de ser única en toda la liga: un jugador puede estar en un
+    equipo de Sub 45 y en otro de Senior. La exclusividad pasa a ser por torneo
+    (cédula + categoría), con un índice único."""
+    if USANDO_POSTGRES:
+        for f in db.execute(
+            "SELECT conname, pg_get_constraintdef(oid) AS definicion FROM pg_constraint "
+            "WHERE conrelid = 'jugadores'::regclass AND contype = 'u'"
+        ).fetchall():
+            if f["definicion"].replace(" ", "").upper() == "UNIQUE(CEDULA)":
+                db.execute(f'ALTER TABLE jugadores DROP CONSTRAINT "{f["conname"]}"')
+    else:
+        sql = db.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'jugadores'").fetchone()["sql"]
+        sql_nuevo = re.sub(r"(cedula\s+TEXT\s+NOT\s+NULL)\s+UNIQUE", r"\1", sql, flags=re.IGNORECASE)
+        if sql_nuevo != sql:
+            # SQLite no permite quitar un UNIQUE con ALTER: se reconstruye la tabla
+            # con las mismas columnas y datos (y los mismos ids).
+            seq = db.execute("SELECT seq FROM sqlite_sequence WHERE name = 'jugadores'").fetchone()
+            db.commit()
+            db.execute(re.sub(r"CREATE TABLE\s+\"?jugadores\"?", "CREATE TABLE jugadores_nueva", sql_nuevo, count=1))
+            db.execute("INSERT INTO jugadores_nueva SELECT * FROM jugadores")
+            db.execute("DROP TABLE jugadores")
+            db.execute("ALTER TABLE jugadores_nueva RENAME TO jugadores")
+            if seq:
+                # Conserva el contador AUTOINCREMENT: así no se reutilizan ids de
+                # jugadores eliminados (que aún tienen tarjetas/goles históricos).
+                db.execute("UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'jugadores'", (seq["seq"],))
+    db.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_jugadores_cedula_categoria ON jugadores (cedula, categoria)")
+
+
+def _migrar_fecha_registro_hora_ecuador(db):
+    """Las fechas de inscripción se guardaban con la hora local del servidor
+    (UTC en Render). Se convierten una sola vez a la hora de Quito/Guayaquil."""
+    for f in db.execute("SELECT id, fecha_registro FROM jugadores").fetchall():
+        try:
+            original = datetime.strptime(f["fecha_registro"], "%Y-%m-%d %H:%M")
+        except (TypeError, ValueError):
+            continue
+        convertida = original.astimezone(ZONA_LIGA).strftime("%Y-%m-%d %H:%M")
+        if convertida != f["fecha_registro"]:
+            db.execute("UPDATE jugadores SET fecha_registro = ? WHERE id = ?", (convertida, f["id"]))
+
+
+def _migrar_quitar_estado_en_vivo(db):
+    """El estado "en vivo" se eliminó del sistema: ningún partido queda marcado así."""
+    db.execute("UPDATE partidos SET en_vivo = 0 WHERE en_vivo = 1")

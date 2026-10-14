@@ -125,9 +125,7 @@
             <button type="button" style="margin:0; padding: 4px 10px; font-size: 0.8rem; background: #3b82f6; color: white;">👁️ Ver Hoja de Partido</button>
           </a>
 
-          {% if p.en_vivo %}
-            <span class="badge" style="background:#fef2f2; color:#ef4444; border: 1px solid #fca5a5;">🔴 Partido En Vivo (Vocalía)</span>
-          {% elif p.jugado %}
+          {% if p.jugado %}
             <span class="badge badge-ok">✅ Oficializado</span>
           {% else %}
             <span class="badge" style="background:#e2e8f0; color:#475569;">⏳ Pendiente de Vocalía</span>
@@ -136,7 +134,6 @@
       </div>
 
       <!-- Fila Inferior: Acciones de la Comisión Técnica -->
-      {% if not p.en_vivo %}
       <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #cbd5e1; display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
         
         {% if p.jugado %}
@@ -169,7 +166,6 @@
           </form>
         {% endif %}
       </div>
-      {% endif %}
 
     </div>
     {% endfor %}

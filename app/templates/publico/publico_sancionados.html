@@ -17,21 +17,28 @@
   {% if not sancionados %}
     <p style="color:#888;">No hay jugadores sancionados actualmente en este campeonato.</p>
   {% else %}
-  <div class="tabla-compacta-wrap" style="overflow-x:auto;">
-  <table class="tabla-responsive tabla-compacta">
+  <div class="tabla-scroll">
+  <table class="tabla-responsive" data-search-placeholder="Buscar jugador o equipo...">
     <thead>
-      <tr><th>Jugador</th><th>Equipo</th><th>Motivo</th><th>Jornadas Sancionado</th><th>Sancionado Desde</th><th>Valor Multa</th><th>Estado Pago</th></tr>
+      <tr>
+        <th>Jugador</th><th class="col-sec">Equipo</th><th class="col-sec">Motivo</th>
+        <th class="col-num">Partidos</th><th class="col-num">Pendientes</th><th class="col-sec">Desde</th>
+        {% if mostrar_tesoreria %}<th class="col-sec">Valor Multa</th><th class="col-sec">Estado Pago</th>{% endif %}
+      </tr>
     </thead>
     <tbody>
       {% for s in sancionados %}
+      {% set e = estados[s.id] %}
       <tr>
-        <td data-label="Jugador">{{ s.j_apellidos }} {{ s.j_nombres }}</td>
-        <td data-label="Equipo">{{ s.j_equipo }}</td>
-        <td data-label="Motivo">{{ s.motivo or '-' }}</td>
-        <td data-label="Jornadas Sancionado">{{ s.jornadas_sancionado }}</td>
-        <td data-label="Sancionado Desde">{{ 'Jornada ' + s.jornada_desde_numero|string if s.jornada_desde_numero else '-' }}</td>
-        <td data-label="Valor Multa">{{ '$%.2f' % s.valor_multa if s.valor_multa else '-' }}</td>
-        <td data-label="Estado Pago">
+        <td><strong>{{ s.j_apellidos }} {{ s.j_nombres }}</strong><span class="solo-movil" style="display:block; font-size:0.75rem; color:#64748b;">{{ s.j_equipo }}</span></td>
+        <td class="col-sec">{{ s.j_equipo }}</td>
+        <td class="col-sec">{{ s.motivo or '-' }}</td>
+        <td class="col-num">{{ s.jornadas_sancionado }}</td>
+        <td class="col-num"><strong style="color:#b91c1c;">{{ e.pendientes }}</strong></td>
+        <td class="col-sec">{% if s.fecha_inicio %}{{ s.fecha_inicio }}{% elif s.jornada_desde_numero %}Jornada {{ s.jornada_desde_numero }}{% else %}-{% endif %}</td>
+        {% if mostrar_tesoreria %}
+        <td class="col-sec">{{ '$%.2f' % s.valor_multa if s.valor_multa else '-' }}</td>
+        <td class="col-sec">
           {% if not s.valor_multa %}
             <span class="badge" style="background:#eef3ee; color:#555;">Sin multa</span>
           {% elif s.pagada %}
@@ -40,6 +47,7 @@
             <span class="badge" style="background:#fdecea; color:#a13a2f;">⏳ Pendiente</span>
           {% endif %}
         </td>
+        {% endif %}
       </tr>
       {% endfor %}
     </tbody>

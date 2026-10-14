@@ -1,5 +1,4 @@
 """Vocalía: hoja oficial del encuentro (asistencia, tarjetas, goles, incidentes, árbitro)."""
-from datetime import datetime
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
@@ -10,6 +9,7 @@ from app.services.jugadores import _ordenar_por_numero_camiseta
 from app.services.liga import _categoria_y_division, _categorias_liga, _divisiones_de_categoria
 from app.services.partidos import _fixture_completo
 from app.services.sanciones import _generar_sanciones_por_acumulacion, _jugador_suspendido
+from app.utils import ahora_ecuador
 
 bp = Blueprint("vocalia", __name__)
 
@@ -92,7 +92,7 @@ def vocalia_hoja(partido_id):
 
     suspendidos_ids = {
         j["id"] for j in list(jugadores_local) + list(jugadores_visitante)
-        if _jugador_suspendido(db, j["id"], jornada)
+        if _jugador_suspendido(db, j["id"], jornada, partido)
     }
 
     return render_template(
@@ -155,12 +155,12 @@ def guardar_hoja_equipo(partido_id):
     marcados_roja = {int(x) for x in request.form.getlist("roja") if x.isdigit()}
 
     jornada_actual = db.execute("SELECT * FROM jornadas WHERE id = ?", (partido["jornada_id"],)).fetchone()
-    suspendidos_ids = {jid for jid in todos_ids if _jugador_suspendido(db, jid, jornada_actual)}
+    suspendidos_ids = {jid for jid in todos_ids if _jugador_suspendido(db, jid, jornada_actual, partido)}
     if marcados_participo & suspendidos_ids:
         flash("No se marcó 'Participó' a jugadores actualmente sancionados/suspendidos.", "ok")
     marcados_participo -= suspendidos_ids
 
-    ahora = datetime.now().strftime("%Y-%m-%d %H:%M")
+    ahora = ahora_ecuador().strftime("%Y-%m-%d %H:%M")
 
     for jugador_id in todos_ids:
         db.execute("DELETE FROM vocalia_asistencia WHERE partido_id = ? AND jugador_id = ?", (partido_id, jugador_id))
@@ -238,7 +238,7 @@ def agregar_cambio(partido_id):
     if int(sale_id) not in ids_validos or int(entra_id) not in ids_validos:
         flash("Los jugadores del cambio deben pertenecer al equipo seleccionado.")
         return redirect(url_for("vocalia.vocalia_hoja", partido_id=partido_id))
-    ahora = datetime.now()
+    ahora = ahora_ecuador()
     minuto = ahora.strftime("%H:%M")
     db.execute(
         "INSERT INTO vocalia_cambios (partido_id, equipo, jugador_sale_id, jugador_entra_id, minuto, fecha) "
@@ -274,7 +274,7 @@ def agregar_incidente(partido_id):
         return redirect(url_for("vocalia.vocalia_hoja", partido_id=partido_id))
     db.execute(
         "INSERT INTO vocalia_incidentes (partido_id, descripcion, fecha) VALUES (?, ?, ?)",
-        (partido_id, descripcion, datetime.now().strftime("%Y-%m-%d %H:%M")),
+        (partido_id, descripcion, ahora_ecuador().strftime("%Y-%m-%d %H:%M")),
     )
     db.execute("UPDATE partidos SET hoja_editada = 1 WHERE id = ?", (partido_id,)) # <- LÍNEA NUEVA
     db.commit()

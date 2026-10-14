@@ -19,12 +19,6 @@
   .team-name { font-size: 1.1rem; font-weight: 700; color: #1e293b; }
   .score-display { font-size: 2.2rem; font-weight: 900; color: #14532d; padding: 0 15px; }
   
-  .pulse-red { animation: pulse 2s infinite; }
-  @keyframes pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.05); }
-    100% { transform: scale(1); }
-  }
 
   /* Layout principal */
   .rosters-grid {
@@ -137,11 +131,9 @@
 </div>
 
 <!-- MARCADOR STICKY -->
-<div class="sticky-scoreboard {% if partido.en_vivo %}border-red-500{% endif %}" style="{% if partido.en_vivo %}border: 2px solid #ef4444;{% endif %}">
-<div style="margin-bottom: 10px;">
-    {% if partido.en_vivo %}
-      <span class="badge pulse-red" style="background:#fef2f2; color:#ef4444; font-size: 0.9rem; border: 1px solid #f87171; padding: 4px 12px;">🔴 PARTIDO EN VIVO</span>
-    {% elif partido.jugado %}
+<div class="sticky-scoreboard">
+  <div style="margin-bottom: 10px;">
+    {% if partido.jugado %}
       <span class="badge badge-ok" style="font-size: 0.9rem; padding: 4px 12px;">✅ Partido Finalizado (Oficializado)</span>
     {% elif partido.hoja_editada %}
       <span class="badge" style="background:#fef9c3; color:#a16207; font-size: 0.9rem; border: 1px solid #fde047; padding: 4px 12px;">✍️ Hoja en edición</span>
@@ -156,21 +148,6 @@
       <span id="score-local">0</span> - <span id="score-visitante">0</span>
     </span>
     <span class="team-name" style="flex:1; text-align:left;">{{ partido.equipo_visitante }}</span>
-  </div>
-
-  <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-top: 10px;">
-    {% if partido.en_vivo %}
-      <form method="post" action="{{ url_for('tecnica.finalizar_en_vivo', partido_id=partido.id) }}" onsubmit="return confirm('¿Finalizar este partido?');" style="margin:0;">
-        <button type="submit" style="padding:6px 12px; margin: 0; font-size:0.85rem; font-weight: bold; background: #10b981;">⏹️ Pitar Final</button>
-      </form>
-      <form method="post" action="{{ url_for('tecnica.cancelar_en_vivo', partido_id=partido.id) }}" style="margin:0;">
-        <button type="submit" class="btn-del" style="padding:6px 12px; margin: 0; font-size:0.85rem; font-weight: bold; background: white;">Cancelar En Vivo</button>
-      </form>
-    {% elif not partido.jugado %}
-      <form method="post" action="{{ url_for('tecnica.iniciar_en_vivo', partido_id=partido.id) }}" style="margin:0;">
-        <button type="submit" style="padding:6px 16px; margin: 0; font-size:0.9rem; font-weight: bold; background:#ef4444; box-shadow: 0 4px 6px rgba(239, 68, 68, 0.3);">▶️ Iniciar Partido EN VIVO</button>
-      </form>
-    {% endif %}
   </div>
 </div>
 

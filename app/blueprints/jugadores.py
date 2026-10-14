@@ -1,6 +1,5 @@
 """Ficha del jugador: edición, documentos, calificación, carnet y baja."""
 import io
-from datetime import datetime
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 
@@ -10,7 +9,7 @@ from app.decorators import calificacion_required, jugador_permitido, login_requi
 from app.services.carnets import _carnet_response, _generar_carnet
 from app.services.jugadores import _guardar_imagen_subida, _jugador_califica, _subcategoria_por_nacimiento
 from app.services.liga import _contar_juveniles, _edad_minima_categoria, _limite_juveniles_categoria
-from app.utils import _calcular_edad, _mayuscula
+from app.utils import _calcular_edad, _mayuscula, ahora_ecuador
 
 bp = Blueprint("jugadores", __name__)
 
@@ -98,7 +97,7 @@ def actualizar_jugador(jugador_id):
     cedula_frontal = nuevo_cedula_frontal or jugador["cedula_frontal"]
     cedula_reverso = nuevo_cedula_reverso or jugador["cedula_reverso"]
     documentos_fecha = (
-        datetime.now().strftime("%Y-%m-%d %H:%M")
+        ahora_ecuador().strftime("%Y-%m-%d %H:%M")
         if (nuevo_foto or nuevo_cedula_frontal or nuevo_cedula_reverso)
         else jugador["documentos_fecha"]
     )

@@ -35,14 +35,12 @@
 
     <div style="display: flex; flex-direction: column; gap: 10px;">
       {% for p in item.partidos %}
-      <div style="display:flex; gap:15px; flex-wrap:wrap; align-items:center; justify-content:space-between; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: {% if p.en_vivo %}#fef2f2; border-color: #fca5a5;{% else %}#f8fafc;{% endif %}; transition: transform 0.1s;">
+      <div style="display:flex; gap:15px; flex-wrap:wrap; align-items:center; justify-content:space-between; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; transition: transform 0.1s;">
         
         <div style="display: flex; flex-direction: column; gap: 5px;">
 <!-- Estados del Partido -->
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            {% if p.en_vivo %}
-              <span class="badge" style="background:#ef4444; color:white; font-size: 0.75rem; padding: 2px 8px;">🔴 EN VIVO</span>
-            {% elif p.jugado %}
+            {% if p.jugado %}
               <span class="badge badge-ok" style="font-size: 0.75rem; padding: 2px 8px;">✅ Finalizado</span>
             {% elif p.hoja_editada %}
               <span class="badge" style="background:#fef9c3; color:#a16207; border: 1px solid #fde047; font-size: 0.75rem; padding: 2px 8px;">✍️ En edición (Llenando)</span>
@@ -56,7 +54,7 @@
             <strong style="flex: 1; text-align: right;">{{ p.equipo_local }}</strong>
             
             <span style="background: white; padding: 4px 12px; border-radius: 20px; font-weight: 900; color: #14532d; border: 1px solid #cbd5e1;">
-              {% if p.jugado or p.en_vivo %}
+              {% if p.jugado or p.hoja_editada %}
                 {{ p.goles_local if p.goles_local is not none else '0' }} - {{ p.goles_visitante if p.goles_visitante is not none else '0' }}
               {% else %}
                 VS

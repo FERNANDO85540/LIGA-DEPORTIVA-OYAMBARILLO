@@ -9,7 +9,7 @@
 </div>
 
 <div class="card" style="text-align:center; background: linear-gradient(135deg, #166534, #064e3b); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-  <h1 style="margin:0; font-size:1.6rem;">📊 Acumulación de Tarjetas y Multas</h1>
+  <h1 style="margin:0; font-size:1.6rem;">📊 Acumulación de Tarjetas{% if mostrar_tesoreria %} y Multas{% endif %}</h1>
   <p style="margin:8px 0 0; opacity:0.95; font-size: 1rem;">Campeonato {{ categoria }}{% if division %} - {{ division }}{% endif %}</p>
 </div>
 
@@ -30,7 +30,7 @@
         <th style="padding: 10px; text-align: center;">🟨 Válidas</th>
         <th style="padding: 10px; text-align: center;">🟥 Rojas</th>
         <th style="padding: 10px; text-align: center;">Total Tarjetas</th>
-        <th style="padding: 10px; text-align: right;">Multas Acumuladas</th>
+        {% if mostrar_tesoreria %}<th style="padding: 10px; text-align: right;">Multas Acumuladas</th>{% endif %}
       </tr>
     </thead>
     <tbody>
@@ -41,7 +41,7 @@
         <td data-label="Válidas" style="padding: 8px; text-align: center; font-weight: bold; color: #b45309;">{{ a.amarillas_validas }}</td>
         <td data-label="Rojas" style="padding: 8px; text-align: center; font-weight: bold; color: #ef4444;">{{ a.rojas }}</td>
         <td data-label="Total Tarjetas" style="padding: 8px; text-align: center; font-weight: 900; font-size: 1.1rem; color: #0f172a;">{{ a.total }}</td>
-        <td data-label="Multas Acumuladas" style="padding: 8px; text-align: right; font-weight: bold; color: #1e7d32;">${{ '%.2f' % a.multas }}</td>
+        {% if mostrar_tesoreria %}<td data-label="Multas Acumuladas" style="padding: 8px; text-align: right; font-weight: bold; color: #1e7d32;">${{ '%.2f' % a.multas }}</td>{% endif %}
       </tr>
       {% endfor %}
     </tbody>

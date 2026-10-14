@@ -1,7 +1,7 @@
 """Inscripción de jugadores: validación de edad/cupos, subcategoría y fotos."""
 import os
 import uuid
-from datetime import datetime, date
+from datetime import date
 
 from PIL import Image, ImageOps
 
@@ -10,7 +10,7 @@ from app.database import IntegrityError
 from app.services.liga import (
     _categoria_valida, _contar_juveniles, _edad_minima_categoria, _limite_juveniles_categoria,
 )
-from app.utils import _mayuscula
+from app.utils import _mayuscula, ahora_ecuador
 
 
 def _guardar_imagen_subida(archivo):
@@ -97,7 +97,7 @@ def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacim
             and _contar_juveniles(db, equipo_nombre, categoria) >= limite_juveniles):
         return None, f"El equipo {equipo_nombre} ya alcanzó el cupo máximo de {limite_juveniles} jugadores Juvenil."
 
-    ahora = datetime.now().strftime("%Y-%m-%d %H:%M")
+    ahora = ahora_ecuador().strftime("%Y-%m-%d %H:%M")
     documentos_fecha = ahora if (foto or cedula_frontal or cedula_reverso) else None
     equipo_row = db.execute("SELECT division FROM equipos WHERE nombre = ?", (equipo_nombre,)).fetchone()
     division = equipo_row["division"] if equipo_row else ""
