@@ -30,13 +30,13 @@ así que aunque se olvide el paso manual, siempre queda una copia del estado pre
 
 ### Código
 
-El último commit antes de esta migración es `b51ac78`.
+El último commit antes de esta migración es `b51ac78`. Para volver a esa versión:
+en Render → *Manual Deploy* → *Deploy a specific commit* → `b51ac78`
+(o `git revert` de los commits de la migración y desplegar).
 
 > Si ya se aplicaron las migraciones, volver al código viejo exige también
 > restaurar la base previa (`liga-pre-migracion-*.db`): el código viejo no
-> conoce las columnas nuevas y asume la cédula única global. Para volver a esa versión:
-en Render → *Manual Deploy* → *Deploy a specific commit* → `b51ac78`
-(o `git revert` de los commits de la migración y desplegar).
+> conoce las columnas nuevas y asume la cédula única global.
 
 > El comando de arranque cambió de `gunicorn app:app` a `gunicorn wsgi:app`
 > (ya está en `render.yaml`). Si se vuelve a `b51ac78`, el comando debe volver a
