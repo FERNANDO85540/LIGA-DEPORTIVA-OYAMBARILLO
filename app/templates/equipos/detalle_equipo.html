@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Botón de retroceso minimalista -->
+<div style="margin-bottom: 15px;">
+  <a href="javascript:history.back()" title="Volver atrás" style="text-decoration: none; color: #475569; font-size: 1.5rem; display: inline-block; transition: transform 0.2s;">
+    ⬅️
+  </a>
+</div>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white; padding: 20px; border-radius: 8px;">
+  <h1 style="margin:0; font-size:1.8rem;">{{ equipo.nombre }}</h1>
+  <p style="margin:8px 0 0; opacity:0.95; font-size: 1.05rem;">
+    Campeonato {{ categoria }}{% if equipo.division %} - {{ equipo.division }}{% endif %} — {{ jugadores|length }}/{{ cupo_maximo }} jugadores
+    {% if categoria in ('Sub 45', 'Senior') %}
+      &nbsp;·&nbsp; Juvenil {{ juveniles_count }}{% if cupo_maximo_juvenil is not none %}/{{ cupo_maximo_juvenil }}{% else %} (sin límite){% endif %}
+    {% endif %}
+  </p>
+</div>
+
+<div class="card">
+  <h2>📅 Mis partidos y descansos</h2>
+  {% if not partidos_equipo %}
+    <p style="color:#888;">La Comisión Técnica todavía no ha publicado el fixture.</p>
+  {% else %}
+    <ul style="margin:0; padding-left:20px;">
+      {% for p in partidos_equipo %}
+        {% if p.rival %}
+          <li><strong>Jornada {{ p.jornada.numero }}</strong>{% if p.fecha %} — {{ p.fecha }}{% endif %}{% if p.hora %} {{ p.hora }}{% endif %}:
+            {{ 'Local vs' if p.local else 'Visitante ante' }} <strong>{{ p.rival }}</strong></li>
+        {% else %}
+          <li><strong>Jornada {{ p.jornada.numero }}</strong>{% if p.jornada.fecha %} ({{ p.jornada.fecha }}){% endif %}: <span style="color:#888;">Descansa</span></li>
+        {% endif %}
+      {% endfor %}
+    </ul>
+  {% endif %}
+</div>
+
+{% if session.get('rol') == 'admin' %}
+<div class="card">
+  <h2>🔑 Acceso del delegado del equipo</h2>
+  <p style="font-size:0.85rem; color:#555;">
+    Crea un usuario y clave para que el delegado de este equipo entre directamente a esta pantalla.
+  </p>
+  <form method="post" action="{{ url_for('equipos.credenciales_equipo', equipo_id=equipo.id) }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end; background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0;">
+    <div>
+      <label style="margin-top: 0;">Usuario</label>
+      <input type="text" name="usuario" value="{{ equipo.usuario or '' }}" placeholder="ej. sanjuan">
+    </div>
+    <div>
+      <label style="margin-top: 0;">Clave</label>
+      <div style="display:flex; gap:6px;">
+        <input type="password" name="clave" id="clave-{{ equipo.id }}" value="{{ equipo.clave or '' }}" placeholder="clave de acceso">
+        <button type="button" onclick="const i=document.getElementById('clave-{{ equipo.id }}'); i.type = i.type==='password' ? 'text' : 'password';" style="margin:0; padding:8px 10px; background: white; border: 1px solid #cbd5e1; color: #333;">👁️</button>
+      </div>
+    </div>
+    <button type="submit" style="margin-top: 0;">💾 Guardar acceso</button>
+  </form>
+  {% if equipo.usuario %}
+    <form method="post" action="{{ url_for('equipos.quitar_credenciales_equipo', equipo_id=equipo.id) }}" onsubmit="return confirm('¿Quitar el acceso del delegado?');" style="margin-top:10px;">
+      <button type="submit" class="btn-del">🗑️ Quitar acceso</button>
+    </form>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if session.get('rol') == 'equipo' %}
+<div class="card">
+  <h2>🔑 Cambiar mi clave de acceso</h2>
+  <p style="font-size:0.85rem; color:#555;">
+    Ponle la clave que prefieras para entrar la próxima vez.
+  </p>
+  <form method="post" action="{{ url_for('equipos.cambiar_clave_equipo') }}" style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+    <div>
+      <label>Nueva clave</label>
+      <div style="display:flex; gap:6px;">
+        <input type="password" name="nueva_clave" id="nueva-clave" placeholder="mínimo 4 caracteres">
+        <button type="button" onclick="const i=document.getElementById('nueva-clave'); i.type = i.type==='password' ? 'text' : 'password';" style="margin:0; padding:8px 10px; background: white; border: 1px solid #cbd5e1; color: #333;">👁️</button>
+      </div>
+    </div>
+    <div>
+      <label>Repetir clave</label>
+      <input type="password" name="confirmar_clave" placeholder="repite la clave">
+    </div>
+    <button type="submit">💾 Guardar clave</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <!-- Encabezado con Botones -->
+  <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; margin-bottom: 20px; gap: 15px; border-bottom: 1px solid #e2e8f0; padding-bottom: 15px;">
+    <h2 style="margin: 0;">Jugadores inscritos ({{ jugadores|length }})</h2>
+    
+    <div style="display: flex; gap: 10px;">
+      <a href="{{ url_for('equipos.exportar_equipo', equipo_id=equipo.id) }}" style="text-decoration: none;">
+        <button type="button" style="background: #10b981; margin: 0; display: flex; align-items: center; gap: 6px;">
+          ⬇️ Descargar Excel
+        </button>
+      </a>
+      <!-- BOTÓN PARA IR AL FORMULARIO DE NUEVO JUGADOR -->
+      <a href="{{ url_for('equipos.nuevo_jugador_vista', equipo_id=equipo.id) }}" style="text-decoration: none;">
+        <button type="button" style="background: #1e7d32; margin: 0; display: flex; align-items: center; gap: 6px;">
+          ➕ Nuevo Jugador
+        </button>
+      </a>
+    </div>
+  </div>
+
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive" style="width: 100%; text-align: left; border-collapse: collapse;">
+    <thead>
+      <tr style="background: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+        <th style="padding: 10px;"># Dorsal</th>
+        <th style="padding: 10px;">Cédula</th>
+        <th style="padding: 10px;">Apellidos</th>
+        <th style="padding: 10px;">Nombres</th>
+        <th style="padding: 10px;">Campeonato</th>
+        <th style="padding: 10px;">Nac.</th>
+        <th style="padding: 10px;">Documentos</th>
+        <th style="padding: 10px;">Estado</th>
+        <th style="padding: 10px;">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for j in jugadores %}
+      <tr style="border-bottom: 1px solid #f1f5f9;">
+        <!-- Se agregó el Dorsal -->
+        <td data-label="Dorsal" style="padding: 10px; font-weight: bold; text-align: center;">{{ j.numero_camiseta or '-' }}</td>
+        <td data-label="Cédula" style="padding: 10px;">{{ j.cedula }}</td>
+        <td data-label="Apellidos" style="padding: 10px; font-weight: 600;">{{ j.apellidos }}</td>
+        <td data-label="Nombres" style="padding: 10px;">{{ j.nombres }}</td>
+        <td data-label="Campeonato" style="padding: 10px;">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juv{% endif %}</td>
+        <td data-label="Nac." style="padding: 10px;">{{ j.fecha_nacimiento or '-' }}</td>
+        <td data-label="Documentos" style="padding: 10px;">
+          {% set completos = (j.foto and j.cedula_frontal) %}
+          {% if completos %}
+            <span class="badge badge-ok">✅ Completos</span>
+          {% elif j.foto or j.cedula_frontal or j.cedula_reverso %}
+            <span class="badge" style="background:#fef3c7; color:#92400e;">📷 Incompletos</span>
+          {% else %}
+            <span class="badge badge-full">Faltan docs</span>
+          {% endif %}
+        </td>
+        <td data-label="Estado" style="padding: 10px;">
+          {% if j.calificado %}
+            <span class="badge badge-ok">✅ Calificado</span>
+          {% else %}
+            <span class="badge" style="background:#eef3ee; color:#555;">Pendiente</span>
+          {% endif %}
+        </td>
+        <td data-label="Acciones" class="table-actions" style="padding: 10px;">
+          {% set puede_editar = session.get('rol') == 'admin' or not j.calificado %}
+          <a href="{{ url_for('jugadores.ficha_jugador', jugador_id=j.id) }}">
+            <button type="button" style="margin:0; padding:4px 8px; font-size:0.8rem; background: #e2e8f0; color: #334155;">{{ '✏️ Editar' if puede_editar else '👁️ Ver ficha' }}</button>
+          </a>
+          {% if session.get('rol') == 'admin' %}
+          <form method="post" action="{{ url_for('jugadores.calificar_jugador', jugador_id=j.id) }}">
+            <button type="submit" style="padding:4px 8px; font-size:0.8rem; background: {% if j.calificado %}#fef3c7; color: #92400e;{% else %}#1e7d32; color: white;{% endif %}">
+              {{ 'Quitar Calif.' if j.calificado else '✅ Calificar' }}
+            </button>
+          </form>
+          {% endif %}
+          {% if puede_editar %}
+          <form method="post" action="{{ url_for('jugadores.eliminar_jugador', jugador_id=j.id) }}" onsubmit="return confirm('¿Eliminar este jugador permanentemente?');">
+            <button type="submit" class="btn-del" style="padding: 4px 8px;">🗑️</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" style="padding: 20px; text-align: center; color: #888; font-style: italic;">Aún no hay jugadores inscritos en este equipo.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+{% endblock %}

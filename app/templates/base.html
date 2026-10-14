@@ -1,0 +1,1434 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Liga Deportiva Oyambarillo{% endblock %}</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='logo_ldbo.png') }}">
+  <style>
+  :root {
+    --verde: #1e7d32;
+    --verde-osc: #14532d;
+    --fondo: #f4f6f5;
+    --borde: #dfe3e0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    background: var(--fondo);
+    color: #1c1c1c;
+    overflow-x: hidden; /* Evita scroll horizontal con el menú lateral */
+  }
+  header {
+    background: linear-gradient(135deg, var(--verde), var(--verde-osc));
+    color: white;
+    padding: 15px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 1.3rem;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  header h1 img {
+    height: 36px;
+    width: 36px;
+    display: block;
+    background: #fff;
+    border-radius: 50%;
+    padding: 3px;
+    object-fit: contain;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  }
+  
+  /* --- ESTILOS DEL MENÚ HAMBURGUESA --- */
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+  .menu-btn {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 1.6rem;
+    cursor: pointer;
+    padding: 4px 8px;
+    margin: 0;
+    border-radius: 6px;
+    transition: background 0.2s;
+  }
+  .menu-btn:hover {
+    background: rgba(255,255,255,0.15);
+  }
+  
+  .sidebar-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 99998;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  .sidebar {
+    position: fixed;
+    top: 0; right: -320px;
+    width: 300px;
+    height: 100vh;
+    background: white;
+    z-index: 99999;
+    box-shadow: -4px 0 15px rgba(0,0,0,0.2);
+    transition: right 0.3s ease;
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-header {
+    background: linear-gradient(135deg, var(--verde), var(--verde-osc));
+    color: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .sidebar-header h2 { margin: 0; font-size: 1.2rem; }
+  .close-btn { 
+    background: none; border: none; color: white; font-size: 1.8rem; 
+    cursor: pointer; margin: 0; padding: 0; line-height: 1;
+  }
+  .sidebar-menu {
+    padding: 10px 0;
+    overflow-y: auto;
+    flex: 1;
+  }
+  .sidebar-menu a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    color: #333;
+    text-decoration: none;
+    font-size: 0.95rem;
+    border-bottom: 1px solid #f1f5f9;
+    transition: all 0.2s;
+  }
+  .sidebar-menu a:hover {
+    background: #f8fafc;
+    color: var(--verde-osc);
+    font-weight: 600;
+    padding-left: 24px; /* Pequeño efecto de deslizamiento */
+  }
+  .sidebar-menu a.logout-link {
+    color: #a13a2f;
+    margin-top: 15px;
+    border-top: 3px solid #f1f5f9;
+    font-weight: 600;
+  }
+  .sidebar-menu a.logout-link:hover {
+    background: #fdecea;
+    color: #8c2b22;
+  }
+  /* ------------------------------------ */
+
+  main { max-width: 1000px; margin: 24px auto; padding: 0 16px; }
+  .card {
+    background: white;
+    border: 1px solid var(--borde);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  }
+  #toast-container {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    left: 16px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    pointer-events: none;
+  }
+  .toast {
+    background: #a13a2f;
+    color: white;
+    padding: 12px 18px;
+    border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+    font-size: 0.9rem;
+    max-width: 420px;
+    width: 100%;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: auto;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.toast-ok { background: var(--verde); }
+  label { display: block; margin: 10px 0 4px; font-weight: 600; font-size: 0.9rem; }
+  input, select, textarea {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--borde);
+    border-radius: 6px;
+    font-size: 0.95rem;
+  }
+  textarea { font-family: inherit; resize: vertical; }
+  button {
+    background: var(--verde);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    margin-top: 14px;
+  }
+  button:hover { background: var(--verde-osc); }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--borde); }
+  th { background: #eef3ee; }
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+  }
+  .badge-ok { background: #e6f4ea; color: var(--verde-osc); }
+  .badge-full { background: #fdecea; color: #a13a2f; }
+  .btn-del {
+    background: transparent;
+    color: #a13a2f;
+    border: 1px solid #a13a2f;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    margin: 0;
+  }
+  .btn-del:hover { background: #fdecea; }
+  .cupos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 8px; }
+  .cupo-item { border: 1px solid var(--borde); border-radius: 8px; padding: 10px 12px; font-size: 0.85rem; }
+  .cupo-item strong { display: block; font-size: 0.95rem; }
+
+  .table-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .table-actions form { margin: 0; display: inline; }
+  .table-actions button { margin: 0; }
+
+  .buscador-jugador { position: relative; }
+  .buscador-lista {
+    position: absolute; top: 100%; left: 0; right: 0; z-index: 20;
+    background: white; border: 1px solid var(--borde); border-radius: 6px;
+    max-height: 220px; overflow-y: auto; box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+    margin-top: 2px;
+  }
+  .buscador-item { padding: 8px 10px; cursor: pointer; font-size: 0.9rem; }
+  .buscador-item:hover, .buscador-item.activo { background: #eef3ee; }
+  .buscador-item .equipo-chico { color: #888; font-size: 0.8rem; }
+  .buscador-sin-resultados { padding: 8px 10px; color: #888; font-size: 0.85rem; }
+
+  @media (max-width: 700px) {
+    .tabla-responsive thead { display: none; }
+    .tabla-responsive, .tabla-responsive tbody, .tabla-responsive tr, .tabla-responsive td {
+      display: block;
+      width: 100%;
+    }
+    .tabla-responsive tr {
+      border: 1px solid var(--borde);
+      border-radius: 10px;
+      margin-bottom: 12px;
+      padding: 4px 12px;
+      background: white;
+    }
+    .tabla-responsive td {
+      border-bottom: 1px solid var(--fondo);
+      padding: 8px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      text-align: right;
+    }
+    .tabla-responsive td:last-child { border-bottom: none; }
+    .tabla-responsive td::before {
+      content: attr(data-label);
+      font-weight: 600;
+      color: #555;
+      text-align: left;
+      flex-shrink: 0;
+    }
+    .tabla-responsive td.table-actions {
+      justify-content: flex-end;
+    }
+    .tabla-responsive td.table-actions::before { display: none; }
+
+    /* .tabla-compacta: en vez de apilar cada columna en su propia línea
+       (ideal para texto largo), mantiene la forma de tabla real y deja
+       scroll horizontal — mejor para tablas deportivas de columnas cortas
+       (posiciones, goleadores, calendario) donde se necesita comparar
+       varias filas/equipos a la vez sin tanto scroll vertical. */
+    .tabla-responsive.tabla-compacta {
+      display: table;
+      width: auto;
+      min-width: 100%;
+    }
+    .tabla-responsive.tabla-compacta thead {
+      display: table-header-group;
+    }
+    .tabla-responsive.tabla-compacta tbody {
+      display: table-row-group;
+      width: auto;
+    }
+    .tabla-responsive.tabla-compacta tr {
+      display: table-row;
+      width: auto;
+      border: none;
+      margin: 0;
+      padding: 0;
+      background: transparent;
+    }
+    .tabla-responsive.tabla-compacta thead tr {
+      border-bottom: 2px solid #e2e8f0;
+    }
+    .tabla-responsive.tabla-compacta th,
+    .tabla-responsive.tabla-compacta td {
+      display: table-cell;
+      width: auto;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--fondo);
+      text-align: left;
+      white-space: nowrap;
+      font-size: 0.85rem;
+    }
+    .tabla-responsive.tabla-compacta th {
+      font-weight: 700;
+      color: #334155;
+      background: #f8fafc;
+    }
+    .tabla-responsive.tabla-compacta td::before {
+      content: none;
+    }
+    .tabla-responsive.tabla-compacta td.table-actions {
+      justify-content: flex-start;
+    }
+  }
+
+  .tabla-compacta-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tabla-responsive thead th.th-ordenable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .tabla-responsive thead th.th-ordenable:hover {
+    color: var(--verde-osc);
+  }
+  .tabla-responsive thead th.th-asc::after { content: " \25B2"; font-size: 0.75em; opacity: 0.8; }
+  .tabla-responsive thead th.th-desc::after { content: " \25BC"; font-size: 0.75em; opacity: 0.8; }
+  .tabla-buscador-auto {
+    display: block;
+    width: 100%;
+    max-width: 420px;
+    margin-bottom: 12px;
+  }
+</style>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+
+<header>
+  <a href="/" style="text-decoration:none; color:inherit;">
+    <h1>
+      <img src="{{ url_for('static', filename='logo_ldbo.png') }}" alt="Liga Oyambarillo">
+      Liga Oyambarillo
+    </h1>
+  </a>
+  <div class="header-actions">
+    {% if session.get('logged_in') %}
+      <button class="menu-btn" onclick="toggleSidebar()">&#9776;</button>
+    {% endif %}
+  </div>
+</header>
+
+{% if session.get('logged_in') %}
+<!-- Menú Lateral -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+<div class="sidebar" id="sidebarMenu">
+  <div class="sidebar-header">
+    <h2>⚙️ Panel de Administración</h2>
+    <button class="close-btn" onclick="toggleSidebar()">&times;</button>
+  </div>
+  <div class="sidebar-menu">
+    <a href="{{ url_for('inscripcion.inscripcion') }}">👥 Inscripciones y Equipos</a>
+    <a href="{{ url_for('carnets.carnets_modulo') }}">🪪 Módulo de Carnets</a>
+    <a href="{{ url_for('comision.comision_modulo') }}">🗓️ Comisión de Calificación</a>
+    <a href="{{ url_for('sanciones.sanciones_modulo') }}">🟨🟥 Penas y Sanciones</a>
+    <a href="{{ url_for('tecnica.tecnica_modulo') }}">⚽ Comisión Técnica</a>
+    <a href="{{ url_for('vocalia.vocalia_modulo') }}">🗳️ Vocalía de Encuentros</a>
+    <a href="{{ url_for('categorias.categorias_modulo') }}">🏷️ Gestionar Campeonatos</a>
+    <a href="{{ url_for('inscripcion.importar_jugadores') }}">📥 Importar jugadores (Excel)</a>
+    <a href="{{ url_for('auth.logout') }}" class="logout-link">🚪 Cerrar sesión</a>
+  </div>
+</div>
+
+<script>
+  function toggleSidebar() {
+    const sidebar = document.getElementById('sidebarMenu');
+    const overlay = document.getElementById('sidebarOverlay');
+    if (sidebar.style.right === '0px') {
+      sidebar.style.right = '-320px';
+      overlay.style.opacity = '0';
+      setTimeout(() => overlay.style.display = 'none', 300);
+    } else {
+      overlay.style.display = 'block';
+      // Pequeño retraso para que la transición CSS funcione correctamente
+      setTimeout(() => {
+        sidebar.style.right = '0px';
+        overlay.style.opacity = '1';
+      }, 10);
+    }
+  }
+</script>
+{% endif %}
+
+<main>
+  {% block content %}{% endblock %}
+</main>
+<div id="toast-container"></div>
+<script>
+(function () {
+  const mensajes = [
+    {% for categoria, m in get_flashed_messages(with_categories=true) %}
+      {texto: {{ m|tojson }}, categoria: {{ categoria|tojson }}},
+    {% endfor %}
+  ];
+  const container = document.getElementById('toast-container');
+  mensajes.forEach(function (msg, i) {
+    setTimeout(function () {
+      const toast = document.createElement('div');
+      toast.className = 'toast' + (msg.categoria === 'ok' ? ' toast-ok' : '');
+      toast.textContent = msg.texto;
+      container.appendChild(toast);
+      requestAnimationFrame(function () { toast.classList.add('show'); });
+      setTimeout(function () {
+        toast.classList.remove('show');
+        setTimeout(function () { toast.remove(); }, 300);
+      }, 4500);
+    }, i * 150);
+  });
+})();
+</script>
+<script>
+// Editor simple de rotación para inputs de tipo file con foto.
+// Uso: <input type="file" data-rotador accept=".jpg,.jpeg,.png">
+// Si además tiene data-ocr-cedula='{"cedula":"cedula","nombres":"nombres",...}'
+// (mapa campo_detectado -> name del input a llenar en el mismo form), intenta leer
+// los datos de una cédula ecuatoriana con Tesseract.js (OCR en el propio celular)
+// y autocompleta esos campos para que el delegado no los transcriba a mano.
+document.querySelectorAll('input[type=file][data-rotador]').forEach(function (input) {
+  const wrapper = document.createElement('div');
+  wrapper.style.marginTop = '8px';
+  input.insertAdjacentElement('afterend', wrapper);
+
+  const ocrStatus = document.createElement('p');
+  ocrStatus.style.fontSize = '0.8rem';
+  ocrStatus.style.margin = '4px 0 0';
+  let ocrTimer = null;
+
+  let rotacion = 0;
+  let imgOriginal = null;
+
+  function render() {
+    wrapper.innerHTML = '';
+    if (!imgOriginal) return;
+
+    const canvas = document.createElement('canvas');
+    const swap = rotacion % 180 !== 0;
+    canvas.width = swap ? imgOriginal.height : imgOriginal.width;
+    canvas.height = swap ? imgOriginal.width : imgOriginal.height;
+    const ctx = canvas.getContext('2d');
+    ctx.save();
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((rotacion * Math.PI) / 180);
+    ctx.drawImage(imgOriginal, -imgOriginal.width / 2, -imgOriginal.height / 2);
+    ctx.restore();
+
+    canvas.style.maxWidth = '220px';
+    canvas.style.display = 'block';
+    canvas.style.border = '1px solid var(--borde)';
+    canvas.style.borderRadius = '8px';
+    canvas.style.marginBottom = '6px';
+    wrapper.appendChild(canvas);
+
+    const btnBox = document.createElement('div');
+    btnBox.style.display = 'flex';
+    btnBox.style.gap = '6px';
+
+    const btnIzq = document.createElement('button');
+    btnIzq.type = 'button';
+    btnIzq.textContent = '⟲ Girar izquierda';
+    btnIzq.style.padding = '4px 10px';
+    btnIzq.style.fontSize = '0.8rem';
+    btnIzq.style.margin = '0';
+    btnIzq.onclick = function () { rotacion = (rotacion - 90 + 360) % 360; render(); };
+
+    const btnDer = document.createElement('button');
+    btnDer.type = 'button';
+    btnDer.textContent = 'Girar derecha ⟳';
+    btnDer.style.padding = '4px 10px';
+    btnDer.style.fontSize = '0.8rem';
+    btnDer.style.margin = '0';
+    btnDer.onclick = function () { rotacion = (rotacion + 90) % 360; render(); };
+
+    btnBox.appendChild(btnIzq);
+    btnBox.appendChild(btnDer);
+    wrapper.appendChild(btnBox);
+    wrapper.appendChild(ocrStatus);
+
+    actualizarArchivo(canvas);
+    programarOCR(canvas);
+  }
+
+  function actualizarArchivo(canvas) {
+    canvas.toBlob(function (blob) {
+      if (!blob) return;
+      const nombre = (input.dataset.nombreOriginal || 'foto') + '.jpg';
+      const file = new File([blob], nombre, { type: 'image/jpeg' });
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input._archivoRotado = dt.files;
+    }, 'image/jpeg', 0.9);
+  }
+
+  function programarOCR(canvas) {
+    if (!input.dataset.ocrCedula) return;
+    if (typeof Tesseract === 'undefined') {
+      // El lector no cargó (ej. sin internet en ese momento, o el CDN no respondió).
+      // Antes esto fallaba en silencio; ahora se avisa en vez de solo mostrar "no se pudo leer".
+      ocrStatus.textContent = '⚠️ El lector automático no cargó en este navegador (revisa tu conexión a internet y recarga la página). Completa los datos a mano.';
+      ocrStatus.style.color = '#a13a2f';
+      return;
+    }
+    clearTimeout(ocrTimer);
+    ocrStatus.textContent = '';
+    ocrTimer = setTimeout(function () { leerCedula(canvas); }, 350);
+  }
+
+  // Convierte a blanco y negro y sube el contraste antes de leer: ayuda bastante
+  // con fotos con sombra, poca luz o tomadas a distancia (celular/WhatsApp).
+  function prepararParaOCR(canvasOriginal) {
+    const c = document.createElement('canvas');
+    c.width = canvasOriginal.width;
+    c.height = canvasOriginal.height;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(canvasOriginal, 0, 0);
+    const imgData = ctx.getImageData(0, 0, c.width, c.height);
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const gris = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      const ajustado = Math.min(255, Math.max(0, (gris - 128) * 1.4 + 128));
+      d[i] = d[i + 1] = d[i + 2] = ajustado;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    return c;
+  }
+
+  // En vez de escoger UN intento completo como "el mejor" (lo que puede
+  // agarrar basura completa si ese intento en particular se equivocó en
+  // algo, aunque haya llenado más campos), se compara cada dato por
+  // separado entre TODOS los intentos y se usa el valor en el que más
+  // coincidan. Así un dato mal leído en un solo intento no gana solo por
+  // acompañarse de otro campo "lleno" (aunque también esté mal).
+  function elegirPorConsenso(datosPorIntento) {
+    const campos = ['cedula', 'nombres', 'apellidos', 'fecha_nacimiento'];
+    const resultado = {};
+    campos.forEach(function (campo) {
+      const conteo = {};
+      datosPorIntento.forEach(function (d) {
+        const valor = d[campo];
+        if (!valor) return;
+        if (valor.replace(/\s/g, '').length < 2) return; // descarta fragmentos sueltos de 1 caracter
+        conteo[valor] = (conteo[valor] || 0) + 1;
+      });
+      let mejorValor = null, mejorConteo = 0;
+      Object.keys(conteo).forEach(function (valor) {
+        // En empate, para nombres/apellidos se prefiere el valor MÁS CORTO:
+        // cuando el OCR contamina un nombre con basura (ej. un fragmento
+        // suelto pegado en la misma línea), casi siempre lo alarga en vez
+        // de acortarlo, así que el más corto suele ser el más limpio.
+        const esMejor = conteo[valor] > mejorConteo ||
+          (conteo[valor] === mejorConteo && mejorValor !== null &&
+           (campo === 'nombres' || campo === 'apellidos') && valor.length < mejorValor.length);
+        if (esMejor) { mejorConteo = conteo[valor]; mejorValor = valor; }
+      });
+      if (mejorValor) resultado[campo] = mejorValor;
+    });
+    return resultado;
+  }
+
+  function limpiarCamposMapeados() {
+    // Antes de leer una foto nueva se vacían los campos que este input llena
+    // (Cédula, Nombres, Apellidos, Fecha) — así nunca queda un dato de una
+    // prueba/foto anterior mezclado con el de la foto actual: si esta foto
+    // no logra leer algo, el campo queda vacío (no con el valor viejo).
+    const form = input.closest('form');
+    let mapa = {};
+    try { mapa = JSON.parse(input.dataset.ocrCedula); } catch (e) { mapa = {}; }
+    if (!form) return;
+    Object.keys(mapa).forEach(function (campo) {
+      const destino = form.querySelector('[name="' + mapa[campo] + '"]');
+      if (destino && !destino.disabled) destino.value = '';
+    });
+  }
+
+  function leerCedula(canvas) {
+    limpiarCamposMapeados();
+    ocrStatus.textContent = '🔍 Leyendo cédula, un momento...';
+    ocrStatus.style.color = '#888';
+
+    // Se intenta leer de varias formas y se usa la que más datos rescate:
+    // (1) la foto tal cual, sin tocar; (2) con contraste ajustado (ayuda a
+    // fotos oscuras); y (3) si el sistema logra ubicar dónde está la cédula
+    // dentro de la foto completa (útil cuando no vino recién tomada con guía,
+    // sino ya lista por WhatsApp), esa zona recortada y agrandada.
+    // Cada imagen se lee además con dos modos de segmentación: el automático
+    // (agrupa el texto como si fuera un documento normal) y "texto disperso"
+    // (no intenta ordenar por columnas/párrafos) — una cédula tiene columnas
+    // de datos separadas (foto+etiquetas a un lado, campos al otro) que el
+    // modo automático a veces mezcla en una sola línea sin sentido.
+    const imagenes = [canvas, prepararParaOCR(canvas)];
+    const recorte = detectarRecorteTarjeta(canvas);
+    if (recorte) imagenes.push(prepararParaOCR(recorte));
+
+    const PSM_AUTO = '3';
+    const PSM_TEXTO_DISPERSO = '11';
+    const tareas = [];
+    imagenes.forEach(function (imagen) {
+      tareas.push({ imagen: imagen, psm: PSM_TEXTO_DISPERSO });
+      tareas.push({ imagen: imagen, psm: PSM_AUTO });
+    });
+
+    obtenerWorkerCedula().then(function (worker) {
+      // Un mismo worker no puede leer dos imágenes a la vez: se hace en fila.
+      let cadena = Promise.resolve();
+      const resultados = [];
+      tareas.forEach(function (t) {
+        cadena = cadena.then(function () {
+          return worker.setParameters({ tessedit_pageseg_mode: t.psm })
+            .then(function () { return worker.recognize(t.imagen); })
+            .then(function (r) { resultados.push({ texto: (r.data && r.data.text) || '', error: null }); })
+            .catch(function (error) {
+              console.error('[OCR cédula] error:', error);
+              resultados.push({ texto: '', error: (error && (error.message || String(error))) || 'error desconocido' });
+            });
+        });
+      });
+      return cadena.then(function () { return resultados; });
+    }).then(function (resultados) {
+      let textoMasLargo = '';
+      const datosPorIntento = resultados.map(function (r, i) {
+        console.log('[OCR cédula] intento ' + (i + 1) + ' de ' + resultados.length + ':', r.texto || r.error);
+        if (r.texto.length > textoMasLargo.length) textoMasLargo = r.texto;
+        return parsearCedulaEcuador(r.texto);
+      });
+      const mejor = elegirPorConsenso(datosPorIntento);
+      aplicarDatosDetectados(mejor, resultados, textoMasLargo);
+    });
+  }
+
+  function aplicarDatosDetectados(datos, resultados, textoMasLargo) {
+    const form = input.closest('form');
+    let mapa = {};
+    try { mapa = JSON.parse(input.dataset.ocrCedula); } catch (e) { mapa = {}; }
+    let algunDato = false;
+    Object.keys(mapa).forEach(function (campo) {
+      const valor = datos[campo];
+      if (!valor || !form) return;
+      const destino = form.querySelector('[name="' + mapa[campo] + '"]');
+      if (!destino || destino.disabled) return;
+      destino.value = valor;
+      destino.style.background = '#fff8e1';
+      setTimeout(function () { destino.style.background = ''; }, 2000);
+      algunDato = true;
+      // Avisa a otros scripts (ej. el validador de edad/categoría) que este
+      // campo cambió, ya que asignar .value por JS no dispara 'input' solo.
+      destino.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    resultados = resultados || [];
+    textoMasLargo = textoMasLargo || '';
+
+    if (algunDato) {
+      ocrStatus.textContent = '✅ Datos detectados de la cédula. Verifica que estén correctos antes de guardar.';
+      ocrStatus.style.color = 'var(--verde-osc)';
+    } else {
+      // En vez de un mensaje generico, se explica la causa mas probable segun
+      // lo que realmente paso (error tecnico vs. casi nada de texto legible
+      // vs. texto que no calzo con el formato esperado de una cedula).
+      const huboSoloErrores = resultados.length > 0 && resultados.every(function (r) { return r.error; });
+      const totalCaracteres = textoMasLargo.replace(/\s/g, '').length;
+      let motivo;
+      if (huboSoloErrores) {
+        motivo = 'hubo un error técnico leyendo la imagen (revisa el detalle técnico abajo)';
+      } else if (totalCaracteres < 8) {
+        motivo = 'la foto casi no dejó ver texto — probablemente salió borrosa, oscura o muy de lejos';
+      } else {
+        motivo = 'se leyó algo de texto pero no calzó con el formato de una cédula — revisa que sea el lado frontal, derecho y completo';
+      }
+      ocrStatus.textContent = '⚠️ No se pudo leer la cédula automáticamente: ' + motivo + '. Completa los datos a mano.';
+      ocrStatus.style.color = '#a13a2f';
+    }
+
+    if (resultados.length) {
+      const detalle = document.createElement('details');
+      detalle.style.marginTop = '6px';
+      detalle.style.fontSize = '0.72rem';
+      detalle.style.color = '#888';
+      const resumen = document.createElement('summary');
+      resumen.textContent = 'Ver detalle técnico';
+      resumen.style.cursor = 'pointer';
+      detalle.appendChild(resumen);
+      const pre = document.createElement('pre');
+      pre.style.cssText = 'white-space:pre-wrap; word-break:break-word; background:#f4f6f5; ' +
+        'border:1px solid var(--borde); border-radius:6px; padding:8px; margin-top:4px;';
+      pre.textContent = resultados.map(function (r, i) {
+        if (r.error) return 'Intento ' + (i + 1) + ': ERROR -> ' + r.error;
+        const t = r.texto.trim();
+        return 'Intento ' + (i + 1) + ' (' + r.texto.length + ' caracteres): ' + (t ? t.slice(0, 300) : '(vacío, no detectó texto)');
+      }).join('\n\n');
+      detalle.appendChild(pre);
+      wrapper.appendChild(detalle);
+    }
+  }
+
+  // Si el input lo pide (data-camara-guia) y el navegador soporta cámara,
+  // agrega un botón para tomar la foto ahí mismo con una guía en pantalla:
+  // así el delegado puede fotografiar la cédula (o al jugador) en el
+  // momento, ya bien encuadrada, sin depender de elegir un archivo de la
+  // galería. El valor de data-camara-guia decide la forma de la guía:
+  // "retrato" = marco ovalado vertical para selfie (cámara frontal),
+  // cualquier otro valor = marco rectangular proporción cédula (cámara
+  // trasera).
+  if (input.dataset.camaraGuia && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    const esRetrato = input.dataset.camaraGuia === 'retrato';
+    const btnCamara = document.createElement('button');
+    btnCamara.type = 'button';
+    btnCamara.textContent = esRetrato ? '🤳 Tomar selfie con guía' : '📷 Tomar foto con guía';
+    btnCamara.style.margin = '8px 0 0';
+    btnCamara.style.fontSize = '0.85rem';
+    input.insertAdjacentElement('afterend', btnCamara);
+
+    btnCamara.addEventListener('click', function () {
+      const opciones = esRetrato ? {
+        // El carnet recorta la selfie a un recuadro de 250x280 (más alto
+        // que ancho) — se usa esa misma proporción para la guía, así la
+        // foto ya sale ajustada a ese tamaño sin recortar la cara despues.
+        relacion: 250 / 280,
+        anchoGuiaRatio: 0.6,
+        bordeRadio: '50%',
+        facingMode: 'user',
+        mensaje: 'Centra tu rostro dentro del óvalo, mirando de frente a la cámara',
+      } : {
+        relacion: 1.586,
+        anchoGuiaRatio: 0.82,
+        bordeRadio: '12px',
+        facingMode: 'environment',
+        mensaje: 'Encaja la cédula dentro del marco verde, bien iluminada',
+      };
+      abrirCamaraConGuia(function (canvasCapturado) {
+        input.dataset.nombreOriginal = (esRetrato ? 'selfie_' : 'cedula_') + Date.now();
+        rotacion = 0;
+        imgOriginal = canvasCapturado;
+        render();
+      }, opciones);
+    });
+  }
+
+  input.addEventListener('change', function () {
+    rotacion = 0;
+    const file = input.files && input.files[0];
+    if (!file) { wrapper.innerHTML = ''; imgOriginal = null; return; }
+    input.dataset.nombreOriginal = file.name.replace(/\.[^.]+$/, '');
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      const img = new Image();
+      img.onload = function () {
+        imgOriginal = img;
+        render();
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  const form = input.closest('form');
+  if (form) {
+    form.addEventListener('submit', function () {
+      if (input._archivoRotado) {
+        input.files = input._archivoRotado;
+      }
+    });
+  }
+});
+
+// Valida en el navegador si la fecha de nacimiento califica para el campeonato
+// de ESTE jugador/equipo en particular, leyendo data-edad-minima (lo que exige
+// su campeonato, vacío si no tiene mínimo) y data-anio-excepcion (el año de
+// nacimiento que lo exceptúa — solo Sub 45 lo usa, por el cupo Juvenil
+// histórico de nacidos en 1982). Si no califica, marca el campo en rojo y
+// bloquea el guardado — no solo avisa, para que no se pueda pasar por alto
+// sin corregir el dato. El servidor valida lo mismo (esto es solo para
+// avisar rápido); si el input no trae data-edad-minima no se evalúa nada
+// aquí y el servidor decide.
+document.querySelectorAll('input[type="date"][name="fecha_nacimiento"]').forEach(function (input) {
+  if (input.disabled) return;
+  if (!('edadMinima' in input.dataset)) return;
+
+  const edadMinima = parseInt(input.dataset.edadMinima, 10) || null;
+  const anioExcepcion = input.dataset.anioExcepcion || null;
+
+  const aviso = document.createElement('p');
+  aviso.style.cssText = 'font-size:0.8rem; color:#a13a2f; margin:4px 0 0; font-weight:600;';
+  input.insertAdjacentElement('afterend', aviso);
+
+  function califica(fechaISO) {
+    if (!fechaISO) return null; // sin fecha todavía, no se evalúa
+    if (anioExcepcion && fechaISO.slice(0, 4) === anioExcepcion) return true;
+    if (!edadMinima) return true; // este campeonato no exige edad mínima
+    const anio = parseInt(fechaISO.slice(0, 4), 10);
+    if (isNaN(anio)) return null;
+    return (new Date().getFullYear() - anio) >= edadMinima;
+  }
+
+  function mensajeError() {
+    if (edadMinima && anioExcepcion) {
+      return `⛔ Cédula no califica: no cumple ${edadMinima} años este año ni nació en ${anioExcepcion} (Juvenil). No corresponde a esta categoría.`;
+    }
+    return `⛔ Cédula no califica: esta categoría exige ${edadMinima} años cumplidos este año.`;
+  }
+
+  function validar() {
+    const ok = califica(input.value);
+    if (ok === false) {
+      input.style.borderColor = '#a13a2f';
+      input.style.background = '#fdecea';
+      aviso.textContent = mensajeError();
+    } else {
+      input.style.borderColor = '';
+      input.style.background = '';
+      aviso.textContent = '';
+    }
+  }
+
+  input.addEventListener('input', validar);
+  input.addEventListener('change', validar);
+  validar();
+
+  const form = input.closest('form');
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      if (califica(input.value) === false) {
+        e.preventDefault();
+        validar();
+        input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    });
+  }
+});
+
+// Avisa apenas se escribe o se lee (por OCR) una cédula que ya está
+// registrada, en vez de esperar a que el delegado llene todo el formulario
+// y recién ahí se entere al guardar. La base de datos ya lo bloquea de
+// todas formas (cédula única) — esto es solo para avisar más rápido.
+document.querySelectorAll('input[name="cedula"]').forEach(function (input) {
+  if (input.disabled) return;
+  const form = input.closest('form');
+  if (!form) return;
+
+  const aviso = document.createElement('p');
+  aviso.style.cssText = 'font-size:0.8rem; color:#a13a2f; margin:4px 0 0; font-weight:600;';
+  input.insertAdjacentElement('afterend', aviso);
+
+  let cedulaDuplicada = false;
+  let temporizador = null;
+
+  function limpiar() {
+    cedulaDuplicada = false;
+    input.style.borderColor = '';
+    input.style.background = '';
+    aviso.textContent = '';
+  }
+
+  function verificar() {
+    const cedula = input.value.trim();
+    limpiar();
+    if (cedula.length < 8) return; // muy corta todavía para consultar
+    fetch('/api/cedula_existe?cedula=' + encodeURIComponent(cedula))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (datos) {
+        // Si el campo cambió mientras esperábamos la respuesta, se ignora.
+        if (!datos || input.value.trim() !== cedula) return;
+        if (datos.existe) {
+          cedulaDuplicada = true;
+          input.style.borderColor = '#a13a2f';
+          input.style.background = '#fdecea';
+          aviso.textContent = '⚠️ Esta cédula ya está registrada: ' + datos.nombres + ' ' + datos.apellidos +
+            ' (equipo ' + datos.equipo + '). No se puede duplicar.';
+        }
+      })
+      .catch(function () {});
+  }
+
+  input.addEventListener('input', function () {
+    clearTimeout(temporizador);
+    limpiar();
+    temporizador = setTimeout(verificar, 500);
+  });
+
+  form.addEventListener('submit', function (e) {
+    if (cedulaDuplicada) {
+      e.preventDefault();
+      input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+});
+
+// Un solo worker de Tesseract compartido por toda la página: crearlo tarda
+// (descarga el motor y el idioma), así que se reutiliza entre intentos y
+// entre los distintos campos de cédula en vez de crear uno nuevo cada vez.
+let workerCedulaPromise = null;
+function obtenerWorkerCedula() {
+  if (!workerCedulaPromise) {
+    workerCedulaPromise = Tesseract.createWorker('spa');
+  }
+  return workerCedulaPromise;
+}
+
+// Abre la cámara del celular con una guía en pantalla para que el delegado
+// encaje ahí mismo la cédula (o al jugador, para la selfie). Al capturar,
+// recorta exactamente lo que quedó dentro del marco y se lo entrega a quien
+// llamó a esta función (que lo mete al mismo editor de rotación/OCR de
+// siempre). `opciones` permite reusar esto tanto para la cédula (marco
+// rectangular, cámara trasera) como para la selfie (marco ovalado vertical,
+// cámara frontal) — ver los dos juegos de opciones donde se llama.
+function abrirCamaraConGuia(onCapturar, opciones) {
+  opciones = opciones || {};
+  const relacion = opciones.relacion || 1.586;
+  const anchoGuiaRatio = opciones.anchoGuiaRatio || 0.82;
+  const bordeRadio = opciones.bordeRadio || '12px';
+  const facingMode = opciones.facingMode || 'environment';
+  const mensajeInicial = opciones.mensaje || 'Encaja dentro del marco verde, bien iluminado';
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed; inset:0; background:#000; z-index:10000; ' +
+    'display:flex; flex-direction:column; align-items:center; justify-content:center; padding:12px;';
+
+  const contenedorVideo = document.createElement('div');
+  contenedorVideo.style.cssText = 'position:relative; display:inline-block; max-width:100%; max-height:65vh;';
+
+  const video = document.createElement('video');
+  video.setAttribute('playsinline', '');
+  video.muted = true;
+  video.style.cssText = 'display:block; max-width:100%; max-height:65vh;';
+
+  const guia = document.createElement('div');
+  guia.style.cssText = 'position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); ' +
+    'width:' + (anchoGuiaRatio * 100) + '%; aspect-ratio:' + relacion + '; border:3px solid #4ade80; ' +
+    'border-radius:' + bordeRadio + '; box-shadow:0 0 0 2000px rgba(0,0,0,0.5); pointer-events:none;';
+
+  contenedorVideo.appendChild(video);
+  contenedorVideo.appendChild(guia);
+
+  const ayuda = document.createElement('p');
+  ayuda.textContent = mensajeInicial;
+  ayuda.style.cssText = 'color:#fff; font-size:0.9rem; margin:12px 0; text-align:center;';
+
+  const botones = document.createElement('div');
+  botones.style.cssText = 'display:flex; gap:10px;';
+
+  const btnCapturar = document.createElement('button');
+  btnCapturar.type = 'button';
+  btnCapturar.textContent = '📸 Capturar';
+  btnCapturar.disabled = true;
+
+  const btnCancelar = document.createElement('button');
+  btnCancelar.type = 'button';
+  btnCancelar.textContent = 'Cancelar';
+  btnCancelar.style.background = '#555';
+
+  botones.appendChild(btnCapturar);
+  botones.appendChild(btnCancelar);
+  overlay.appendChild(contenedorVideo);
+  overlay.appendChild(ayuda);
+  overlay.appendChild(botones);
+  document.body.appendChild(overlay);
+
+  let stream = null;
+
+  function cerrar() {
+    if (stream) stream.getTracks().forEach(function (t) { t.stop(); });
+    overlay.remove();
+  }
+
+  navigator.mediaDevices.getUserMedia({
+    video: { facingMode: facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+    audio: false,
+  }).then(function (s) {
+    stream = s;
+    video.srcObject = s;
+    video.play();
+    btnCapturar.disabled = false;
+  }).catch(function () {
+    ayuda.textContent = 'No se pudo abrir la cámara. Cierra esta ventana y usa "Seleccionar archivo".';
+  });
+
+  btnCancelar.addEventListener('click', cerrar);
+
+  btnCapturar.addEventListener('click', function () {
+    if (!video.videoWidth) return;
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const cw = vw * anchoGuiaRatio;
+    const ch = cw / relacion;
+    const cx = (vw - cw) / 2;
+    const cy = (vh - ch) / 2;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(cw);
+    canvas.height = Math.round(ch);
+    canvas.getContext('2d').drawImage(video, cx, cy, cw, ch, 0, 0, canvas.width, canvas.height);
+
+    cerrar();
+    onCapturar(canvas);
+  });
+}
+
+// Intenta ubicar dónde está la cédula dentro de una foto completa (por ejemplo
+// una foto de WhatsApp donde la cédula sale chica sobre una mesa) buscando la
+// zona con más detalle/contraste, y devuelve esa zona recortada y agrandada.
+// Si no encuentra una zona confiable, devuelve null (no se fuerza un recorte
+// que podría cortar datos en vez de ayudar).
+function detectarRecorteTarjeta(canvasOriginal) {
+  const w = canvasOriginal.width, h = canvasOriginal.height;
+  if (w < 60 || h < 60) return null;
+
+  const escala = Math.min(1, 400 / Math.max(w, h));
+  const sw = Math.max(1, Math.round(w * escala));
+  const sh = Math.max(1, Math.round(h * escala));
+  const chico = document.createElement('canvas');
+  chico.width = sw;
+  chico.height = sh;
+  const cctx = chico.getContext('2d');
+  cctx.drawImage(canvasOriginal, 0, 0, sw, sh);
+  const datos = cctx.getImageData(0, 0, sw, sh).data;
+
+  const gris = new Float32Array(sw * sh);
+  for (let i = 0, p = 0; i < datos.length; i += 4, p++) {
+    gris[p] = 0.299 * datos[i] + 0.587 * datos[i + 1] + 0.114 * datos[i + 2];
+  }
+
+  const energiaFila = new Float64Array(sh);
+  const energiaCol = new Float64Array(sw);
+  for (let y = 0; y < sh; y++) {
+    for (let x = 0; x < sw; x++) {
+      const idx = y * sw + x;
+      const dx = x + 1 < sw ? Math.abs(gris[idx] - gris[idx + 1]) : 0;
+      const dy = y + 1 < sh ? Math.abs(gris[idx] - gris[idx + sw]) : 0;
+      const e = dx + dy;
+      energiaFila[y] += e;
+      energiaCol[x] += e;
+    }
+  }
+
+  function rangoConDatos(energia) {
+    const n = energia.length;
+    const suave = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      let s = 0, c = 0;
+      for (let k = -2; k <= 2; k++) {
+        const j = i + k;
+        if (j >= 0 && j < n) { s += energia[j]; c++; }
+      }
+      suave[i] = s / c;
+    }
+    let maxVal = 0;
+    for (let i = 0; i < n; i++) if (suave[i] > maxVal) maxVal = suave[i];
+    if (maxVal <= 0) return null;
+    const umbral = maxVal * 0.18;
+    let ini = -1, fin = -1;
+    for (let i = 0; i < n; i++) {
+      if (suave[i] >= umbral) { if (ini === -1) ini = i; fin = i; }
+    }
+    if (ini === -1) return null;
+    if (fin - ini < n * 0.12) return null;
+    return [ini, fin];
+  }
+
+  const rangoY = rangoConDatos(energiaFila);
+  const rangoX = rangoConDatos(energiaCol);
+  if (!rangoY || !rangoX) return null;
+
+  const areaDetectada = (rangoX[1] - rangoX[0]) * (rangoY[1] - rangoY[0]);
+  if (areaDetectada > sw * sh * 0.92) return null; // ya ocupa casi toda la foto, no vale recortar
+
+  const fx = w / sw, fy = h / sh;
+  const margenX = (rangoX[1] - rangoX[0]) * 0.06;
+  const margenY = (rangoY[1] - rangoY[0]) * 0.06;
+  const x0 = Math.max(0, Math.round((rangoX[0] - margenX) * fx));
+  const x1 = Math.min(w, Math.round((rangoX[1] + margenX) * fx));
+  const y0 = Math.max(0, Math.round((rangoY[0] - margenY) * fy));
+  const y1 = Math.min(h, Math.round((rangoY[1] + margenY) * fy));
+  const cw = x1 - x0, ch = y1 - y0;
+  if (cw < 30 || ch < 30) return null;
+
+  const anchoObjetivo = 1100;
+  const escalaFinal = Math.max(1, anchoObjetivo / cw);
+  const salida = document.createElement('canvas');
+  salida.width = Math.round(cw * escalaFinal);
+  salida.height = Math.round(ch * escalaFinal);
+  const sctx = salida.getContext('2d');
+  sctx.imageSmoothingQuality = 'high';
+  sctx.drawImage(canvasOriginal, x0, y0, cw, ch, 0, 0, salida.width, salida.height);
+  return salida;
+}
+
+// Interpreta el texto crudo que devuelve el OCR sobre una cédula ecuatoriana
+// y trata de rescatar cédula, apellidos, nombres y fecha de nacimiento.
+// Es heurístico (la calidad de la foto varía mucho), por eso el delegado
+// siempre revisa/corrige los campos antes de guardar.
+function parsearCedulaEcuador(texto) {
+  // Quita basura pegada al principio/final de una l\u00ednea (guiones, rayas,
+  // subrayados sueltos que el OCR agrega) sin tocar el contenido real \u2014
+  // ej. "SHINGON CHINGO _" pasa a "SHINGON CHINGO". Deja letras (con
+  // tildes/\u00d1) y n\u00fameros, que es lo \u00fanico que de verdad importa.
+  const limpiarBordes = function (s) {
+    return s
+      .replace(/^[^A-Za-z\u00c1\u00c9\u00cd\u00d3\u00da\u00dc\u00d1\u00e1\u00e9\u00ed\u00f3\u00fa\u00fc\u00f10-9]+/, '')
+      .replace(/[^A-Za-z\u00c1\u00c9\u00cd\u00d3\u00da\u00dc\u00d1\u00e1\u00e9\u00ed\u00f3\u00fa\u00fc\u00f10-9]+$/, '');
+  };
+  const rawLines = texto.split(/\r?\n/).map(function (l) { return limpiarBordes(l.trim()); }).filter(Boolean);
+  const quitarAcentos = function (s) { return s.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); };
+  const lines = rawLines.map(function (l) { return quitarAcentos(l).toUpperCase(); });
+  const resultado = {};
+
+  // Cédula: normalmente 10 dígitos seguidos, pero algunas cédulas nuevas la
+  // muestran como "172605076-6" (9 dígitos + guion + dígito verificador).
+  // Ojo: NO se exige que haya un espacio/símbolo antes de los 10 dígitos —
+  // el OCR a veces pega la etiqueta con el número (ej. "NUI1711451235"), y
+  // como letras y números cuentan igual como "caracter de palabra", una
+  // etiqueta \b ahí no detecta ese límite y se perdía el número completo.
+  const textoJunto = lines.join(' ');
+  let mCedula = textoJunto.match(/(?:^|[^\d])(\d{10})(?!\d)/);
+  if (!mCedula) {
+    const mConGuion = textoJunto.match(/(?:^|[^\d])(\d{9})\s*-\s*(\d)(?!\d)/);
+    if (mConGuion) mCedula = [null, mConGuion[1] + mConGuion[2]];
+  }
+  if (mCedula) resultado.cedula = mCedula[1];
+
+  const meses = { ENE: 1, FEB: 2, MAR: 3, ABR: 4, MAY: 5, JUN: 6, JUL: 7, AGO: 8, SEP: 9, SET: 9, OCT: 10, NOV: 11, DIC: 12 };
+  function buscarFechaEn(candidatas) {
+    // Un dígito mal leído por el OCR puede dar un año imposible (ej. "4997"
+    // en vez de "1997"). En vez de aceptar cualquier fecha con el formato
+    // correcto, se valida que el año/mes/día sean reales antes de usarla —
+    // mejor dejar el campo vacío que mostrar una fecha obviamente mal.
+    const anioActual = new Date().getFullYear();
+    function esValida(anio, mes, dia) {
+      return anio >= 1900 && anio <= anioActual && mes >= 1 && mes <= 12 && dia >= 1 && dia <= 31;
+    }
+    for (let i = 0; i < candidatas.length; i++) {
+      const l = candidatas[i];
+      // Formato AAAA-MM-DD (algunas cédulas lo traen así, ya listo para el input date)
+      let m = l.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+      if (m && esValida(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10))) {
+        return m[1] + '-' + m[2] + '-' + m[3];
+      }
+      m = l.match(/(\d{1,2})[\/\-\s]+([A-Z]{3,4})[\/\-.\s]+(\d{4})/);
+      if (m && meses[m[2].slice(0, 3)]) {
+        const mes = meses[m[2].slice(0, 3)];
+        if (esValida(parseInt(m[3], 10), mes, parseInt(m[1], 10))) {
+          return m[3] + '-' + String(mes).padStart(2, '0') + '-' + m[1].padStart(2, '0');
+        }
+      }
+      m = l.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+      if (m && esValida(parseInt(m[3], 10), parseInt(m[2], 10), parseInt(m[1], 10))) {
+        return m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+      }
+    }
+    return null;
+  }
+  // Ojo: "LUGAR DE NACIMIENTO" también contiene "NACIMIENTO" y en algunas
+  // cédulas aparece ANTES que "FECHA DE NACIMIENTO" — hay que anclar a la
+  // etiqueta de fecha exacta para no quedarse mirando el lugar en vez de la
+  // fecha. Además, el OCR a veces corta "FECHA DE NACIMIENTO" en dos líneas
+  // separadas (ej. "FECHA E" / "NACIMIENTO"), así que no alcanza con buscar
+  // ambas palabras en la misma línea: se busca "FECHA" (que no sea la de
+  // vencimiento/emisión) y se revisa si "NACIMIENTO" aparece ahí mismo o en
+  // las 2 líneas siguientes.
+  let idxNac = -1;
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.indexOf('FECHA') === -1) continue;
+    if (l.indexOf('VENCIMIENTO') !== -1 || l.indexOf('EMISION') !== -1) continue;
+    if (lines.slice(i, i + 3).join(' ').indexOf('NACIMIENTO') !== -1) { idxNac = i; break; }
+  }
+  const fecha = (idxNac !== -1 && buscarFechaEn(lines.slice(idxNac, idxNac + 4))) || buscarFechaEn(lines);
+  if (fecha) resultado.fecha_nacimiento = fecha;
+
+  // Etiquetas conocidas de la cédula ecuatoriana (en cualquiera de sus formatos):
+  // marcan dónde termina un dato y empieza el siguiente.
+  const ETIQUETAS = /REPUBLICA|ECUADOR|CEDULA|IDENTIDAD|NACIONALIDAD|LUGAR|FECHA|SEXO|EMISION|VENCIMIENTO|NUMERO|NUMBER|NUI\b|DOCUMENTO|SURNAME|VALIDEZ|FIRMA|CONDICION|CIUDADAN|REGISTRO|CIVIL|APELLID|NOMBRE/;
+  function esRuido(l) {
+    return !l || /^[\d\W]+$/.test(l) || ETIQUETAS.test(l);
+  }
+  function aTitleCase(s) {
+    return s.toLowerCase().replace(/(^|\s)([a-zñáéíóúü])/g, function (m, p1, p2) { return p1 + p2.toUpperCase(); });
+  }
+
+  // Junta las líneas de datos que siguen a una etiqueta (ej. "APELLIDOS") hasta
+  // toparse con la siguiente etiqueta conocida. Cubre tanto el caso de un solo
+  // apellido/nombre en una línea como el de cada palabra en su propia línea
+  // (formato usado en las cédulas nuevas).
+  function recolectarValor(idxEtiqueta, maxEscaneo) {
+    const partes = [];
+    let ultimaLinea = idxEtiqueta;
+    for (let i = idxEtiqueta + 1; i <= idxEtiqueta + maxEscaneo && i < lines.length; i++) {
+      if (esRuido(lines[i]) || !/^[A-Z\s]+$/.test(lines[i])) break;
+      ultimaLinea = i;
+      // Una "palabra" de 1-2 letras sueltas casi nunca es un nombre/apellido
+      // real — suele ser ruido del OCR (ej. una inicial mal leída antes del
+      // nombre real). Se ignora sin cortar la búsqueda, para no perderse el
+      // dato real que puede venir en la siguiente línea.
+      if (lines[i].replace(/\s/g, '').length < 3) continue;
+      partes.push(rawLines[i]);
+      if (partes.length >= 3) break; // ya es suficiente (ej. nombre + 2 apellidos)
+    }
+    return { valor: partes.length ? aTitleCase(partes.join(' ')) : null, ultimaLinea: ultimaLinea };
+  }
+
+  // Algunas cédulas traen etiquetas separadas ("APELLIDOS" ... "NOMBRES" ...) y otras
+  // una sola etiqueta combinada ("APELLIDOS Y NOMBRES") seguida de las líneas de datos
+  // (primero el/los apellido(s), luego el/los nombre(s)). Cubrimos ambos casos.
+  let idxLineaApellidos = -1;
+  const idxApellidos = lines.findIndex(function (l) { return l.indexOf('APELLID') !== -1; });
+  // "NOMB" en vez de "NOMBRE" completo: el OCR a veces corta la palabra
+  // ("NOMB", "NOMBI") y con "NOMBRE" exacto se perdía la etiqueta aunque el
+  // dato sí estaba ahí.
+  const idxNombres = lines.findIndex(function (l, i) {
+    return l.indexOf('NOMB') !== -1 && l.indexOf('APELLID') === -1 && (idxApellidos === -1 || i > idxApellidos);
+  });
+  if (idxApellidos !== -1) {
+    // Con etiqueta NOMBRES separada, el límite de dónde termina el apellido es esa
+    // etiqueta, así que es seguro juntar varias líneas (cada apellido en su línea).
+    // Con etiqueta combinada "APELLIDOS Y NOMBRES" no hay forma de saber cuántas
+    // líneas son apellido vs nombre, así que tomamos solo 1 línea para cada uno.
+    const r = recolectarValor(idxApellidos, idxNombres !== -1 ? 5 : 1);
+    if (r.valor) { resultado.apellidos = r.valor; idxLineaApellidos = r.ultimaLinea; }
+  }
+  if (idxNombres !== -1 && idxApellidos !== -1) {
+    // Solo se usa "NOMB..." como ancla confiable para "todo lo que sigue es
+    // el nombre" cuando SÍ se encontró "APELLIDOS" por separado. Si
+    // "APELLIDOS" nunca apareció, no hay forma de saber con esta etiqueta
+    // sola dónde termina el apellido y empieza el nombre — se prueba el
+    // respaldo de más abajo en vez de meter todo junto en "nombres".
+    const r = recolectarValor(idxNombres, 5);
+    if (r.valor) resultado.nombres = r.valor;
+  } else if (idxLineaApellidos !== -1) {
+    const r = recolectarValor(idxLineaApellidos, 1);
+    if (r.valor) resultado.nombres = r.valor;
+  }
+
+  if (!resultado.apellidos && !resultado.nombres) {
+    // Último recurso: ni "APELLIDOS" ni "NOMBRES" se pudieron anclar (el OCR
+    // los desfiguró). Casi siempre las 1-2 líneas justo antes de "LUGAR DE
+    // NACIMIENTO" (etiqueta que se lee bien de forma consistente) son el
+    // apellido y el nombre, en ese orden.
+    const idxLugarNac = lines.findIndex(function (l) { return l.indexOf('LUGAR') !== -1 && l.indexOf('NACIMIENTO') !== -1; });
+    if (idxLugarNac !== -1) {
+      const candidatas = [];
+      // Se saltan (no cortan) líneas de ruido sueltas cerca de la etiqueta
+      // (ej. un guion "-" pegado justo antes) — a veces el apellido/nombre
+      // real está un par de líneas más arriba, separado por basura del OCR.
+      for (let i = idxLugarNac - 1; i >= 0 && i >= idxLugarNac - 6 && candidatas.length < 2; i--) {
+        if (esRuido(lines[i]) || !/^[A-Z\s]+$/.test(lines[i]) || lines[i].replace(/\s/g, '').length < 3) continue;
+        candidatas.unshift(rawLines[i]);
+      }
+      if (candidatas.length === 2) {
+        resultado.apellidos = aTitleCase(candidatas[0]);
+        resultado.nombres = aTitleCase(candidatas[1]);
+      } else if (candidatas.length === 1) {
+        resultado.nombres = aTitleCase(candidatas[0]);
+      }
+    } else if (idxNombres !== -1) {
+      // Tampoco hay "LUGAR DE NACIMIENTO": como último intento se usa lo que
+      // se haya podido leer después de "NOMB...", aunque no se pueda separar
+      // del apellido.
+      const r = recolectarValor(idxNombres, 5);
+      if (r.valor) resultado.nombres = r.valor;
+    }
+  }
+
+  return resultado;
+}
+</script>
+<script>
+// Buscador de jugador reutilizable: convierte un <select> gigante (todos los
+// jugadores de la liga) en un campo de texto con autocompletado.
+// Uso: window.initBuscadorJugador(elementoConClaseBuscadorJugador, listaDeJugadores)
+// donde listaDeJugadores es [{id, label, equipo}, ...] y el contenedor tiene
+// dentro un input.buscador-input, un input[type=hidden].buscador-valor y un
+// div.buscador-lista.
+window.initBuscadorJugador = function (raiz, jugadores) {
+  const input = raiz.querySelector('.buscador-input');
+  const valor = raiz.querySelector('.buscador-valor');
+  const lista = raiz.querySelector('.buscador-lista');
+
+  function cerrar() {
+    lista.style.display = 'none';
+    lista.innerHTML = '';
+  }
+
+  function mostrar(items) {
+    lista.innerHTML = '';
+    if (items.length === 0) {
+      const vacio = document.createElement('div');
+      vacio.className = 'buscador-sin-resultados';
+      vacio.textContent = 'Sin resultados.';
+      lista.appendChild(vacio);
+    } else {
+      items.slice(0, 40).forEach(function (j) {
+        const item = document.createElement('div');
+        item.className = 'buscador-item';
+        item.innerHTML = j.label + ' <span class="equipo-chico">— ' + j.equipo + '</span>';
+        item.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          input.value = j.label;
+          valor.value = j.id;
+          cerrar();
+        });
+        lista.appendChild(item);
+      });
+    }
+    lista.style.display = 'block';
+  }
+
+  input.addEventListener('input', function () {
+    valor.value = '';
+    const q = input.value.trim().toLowerCase();
+    if (!q) { cerrar(); return; }
+    mostrar(jugadores.filter(function (j) { return j.label.toLowerCase().includes(q); }));
+  });
+  input.addEventListener('focus', function () {
+    if (input.value.trim()) mostrar(jugadores.filter(function (j) { return j.label.toLowerCase().includes(input.value.trim().toLowerCase()); }));
+  });
+  input.addEventListener('blur', cerrar);
+};
+</script>
+<script>
+// Ordenamiento y filtro genéricos para CUALQUIER tabla con class="tabla-responsive"
+// (incluidas las que se agreguen a futuro: no requiere JS por página). Para
+// desactivar en una tabla puntual: data-sort="off" y/o data-search="off" en el <table>.
+// Para cambiar el texto del buscador: data-search-placeholder="...".
+(function () {
+  function textoCelda(celda) {
+    return (celda.textContent || '').trim().replace(/\s+/g, ' ');
+  }
+
+  function valorOrdenable(celda) {
+    const texto = textoCelda(celda);
+    const soloNumero = texto.replace(/[^0-9.,-]/g, '').replace(',', '.');
+    if (soloNumero && /^-?[0-9]+(\.[0-9]+)?$/.test(soloNumero) && soloNumero.length >= texto.replace(/[^0-9.,-]/g, '').length - 1) {
+      return { esNumero: true, valor: parseFloat(soloNumero) };
+    }
+    return { esNumero: false, valor: texto.toLowerCase() };
+  }
+
+  function habilitarOrden(tabla) {
+    const filaEncabezado = tabla.querySelector('thead tr');
+    if (!filaEncabezado) return;
+    const encabezados = Array.from(filaEncabezado.children);
+    encabezados.forEach(function (th, indice) {
+      if (!th.textContent.trim()) return;
+      th.classList.add('th-ordenable');
+      th.addEventListener('click', function () {
+        const tbody = tabla.querySelector('tbody');
+        if (!tbody) return;
+        const ascendente = th.dataset.dir !== 'asc';
+        encabezados.forEach(function (otro) {
+          delete otro.dataset.dir;
+          otro.classList.remove('th-asc', 'th-desc');
+        });
+        th.dataset.dir = ascendente ? 'asc' : 'desc';
+        th.classList.add(ascendente ? 'th-asc' : 'th-desc');
+
+        const filas = Array.from(tbody.querySelectorAll(':scope > tr')).filter(function (fila) {
+          return fila.children.length > indice;
+        });
+        filas.sort(function (a, b) {
+          const va = valorOrdenable(a.children[indice]);
+          const vb = valorOrdenable(b.children[indice]);
+          let cmp;
+          if (va.esNumero && vb.esNumero) {
+            cmp = va.valor - vb.valor;
+          } else {
+            cmp = String(va.valor).localeCompare(String(vb.valor), 'es');
+          }
+          return ascendente ? cmp : -cmp;
+        });
+        filas.forEach(function (fila) { tbody.appendChild(fila); });
+      });
+    });
+  }
+
+  function habilitarFiltro(tabla) {
+    const tbody = tabla.querySelector('tbody');
+    if (!tbody) return;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tabla-buscador-auto';
+    input.placeholder = tabla.dataset.searchPlaceholder || 'Buscar en esta tabla...';
+    tabla.parentNode.insertBefore(input, tabla);
+
+    const mensajeVacio = document.createElement('p');
+    mensajeVacio.textContent = tabla.dataset.emptyMessage || 'No se encontró ningún resultado con esa búsqueda.';
+    mensajeVacio.style.cssText = 'display:none; color:#888; text-align:center; padding:16px 0;';
+    tabla.parentNode.insertBefore(mensajeVacio, tabla.nextSibling);
+
+    input.addEventListener('input', function () {
+      const q = input.value.trim().toLowerCase();
+      let visibles = 0;
+      Array.from(tbody.querySelectorAll(':scope > tr')).forEach(function (fila) {
+        const coincide = !q || fila.textContent.toLowerCase().includes(q);
+        fila.style.display = coincide ? '' : 'none';
+        if (coincide) visibles++;
+      });
+      mensajeVacio.style.display = (q && visibles === 0) ? 'block' : 'none';
+    });
+  }
+
+  function mejorarTablas() {
+    document.querySelectorAll('table.tabla-responsive').forEach(function (tabla) {
+      if (tabla.dataset.enhanced === '1') return;
+      tabla.dataset.enhanced = '1';
+      if (tabla.dataset.sort !== 'off') habilitarOrden(tabla);
+      if (tabla.dataset.search !== 'off') habilitarFiltro(tabla);
+    });
+  }
+
+  mejorarTablas();
+  window.mejorarTablasDatos = mejorarTablas;
+})();
+</script>
+{% block extra_scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+
+<p><a href="{{ url_for('inscripcion.importar_jugadores') }}">&larr; Importar otro archivo</a></p>
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white;">
+  <h1 style="margin:0; font-size:1.4rem;">📥 Resultado de la importación</h1>
+</div>
+
+<div class="card">
+  <div style="display:flex; gap:24px; flex-wrap:wrap; font-size:1rem;">
+    <span>📄 Filas leídas: <strong>{{ total_filas }}</strong></span>
+    <span>✅ Jugadores importados: <strong style="color:#1e7d32;">{{ importados }}</strong></span>
+    <span>⏭️ Filas vacías omitidas: <strong>{{ omitidas_vacias }}</strong></span>
+    <span>⚠️ Filas con error: <strong style="color:#c0392b;">{{ errores|length }}</strong></span>
+    {% if pendientes_fecha %}
+    <span>🗓️ Importados sin fecha de nacimiento: <strong style="color:#b45309;">{{ pendientes_fecha|length }}</strong></span>
+    {% endif %}
+  </div>
+</div>
+
+{% if pendientes_fecha %}
+<div class="card">
+  <h2>Importados sin fecha de nacimiento ({{ pendientes_fecha|length }})</h2>
+  <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
+    Ya quedaron en su equipo, pero sin fecha de nacimiento el sistema no puede saber todavía si
+    califican para el campeonato ni si son Juvenil. Complétala desde la ficha de cada jugador en
+    cuanto la tengas — en ese momento se clasifica solo.
+  </p>
+  <ul style="margin:10px 0 0; padding-left:20px; font-size:0.9rem;">
+    {% for p in pendientes_fecha %}
+    <li style="margin-bottom:4px;">{{ p }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+{% if errores %}
+<div class="card">
+  <h2>Filas omitidas por error ({{ errores|length }})</h2>
+  <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
+    Corrige el Excel (o crea el equipo que falte) y vuelve a importar — los jugadores ya
+    cargados no se duplican, así que puedes repetir la importación completa sin problema.
+  </p>
+  <ul style="margin:10px 0 0; padding-left:20px; font-size:0.9rem;">
+    {% for e in errores %}
+    <li style="margin-bottom:4px;">{{ e }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<p>
+  <a href="{{ url_for('inscripcion.jugadores_liga') }}">📋 Ver jugadores de toda la liga</a>
+</p>
+
+{% endblock %}
