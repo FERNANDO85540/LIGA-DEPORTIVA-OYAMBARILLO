@@ -66,6 +66,40 @@ def _jugador_califica(db, fecha_nacimiento, categoria=CATEGORIA_ACTIVA):
     return (date.today().year - anio_nacimiento) >= edad_minima
 
 
+def _validar_cedula_en_torneo(db, cedula, categoria, excluir_id=None):
+    """Un jugador puede inscribirse en varios campeonatos (ej. Sub 45 y Senior),
+    pero en un mismo campeonato solo en UN equipo. Devuelve el error o None."""
+    fila = db.execute(
+        "SELECT id, equipo, division FROM jugadores WHERE cedula = ? AND categoria = ?", (cedula, categoria)
+    ).fetchone()
+    if fila and fila["id"] != excluir_id:
+        serie = f" - {fila['division']}" if fila["division"] else ""
+        return (f"La cédula {cedula} ya está inscrita en el campeonato {categoria}{serie} con el equipo "
+                f"{fila['equipo']}. Un jugador solo puede estar en un equipo por campeonato.")
+    return None
+
+
+def _normalizar_dorsal(numero):
+    numero = (numero or "").strip()
+    return str(int(numero)) if numero.isdigit() else numero.upper()
+
+
+def _validar_dorsal_unico(db, equipo_nombre, categoria, numero_camiseta, excluir_id=None):
+    """No puede haber dos jugadores con el mismo número de camiseta en un equipo
+    ("7" y "07" se consideran el mismo). Sin número no se valida."""
+    dorsal = _normalizar_dorsal(numero_camiseta)
+    if not dorsal:
+        return None
+    for fila in db.execute(
+        "SELECT id, nombres, apellidos, numero_camiseta FROM jugadores WHERE equipo = ? AND categoria = ?",
+        (equipo_nombre, categoria),
+    ).fetchall():
+        if fila["id"] != excluir_id and _normalizar_dorsal(fila["numero_camiseta"]) == dorsal:
+            return (f"El dorsal {numero_camiseta.strip()} ya lo usa {fila['apellidos']} {fila['nombres']} "
+                    f"en {equipo_nombre}. Elige otro número.")
+    return None
+
+
 def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacimiento, categoria,
                        numero_camiseta="", foto=None, cedula_frontal=None, cedula_reverso=None,
                        omitir_validacion_edad=False):
@@ -84,6 +118,13 @@ def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacim
                            "ni nació en 1982 (Juvenil). No corresponde a ningún campeonato de esta liga.")
         return None, (f"Cédula no califica: el campeonato {categoria} exige {edad_minima} años cumplidos "
                        "este año. No corresponde a este campeonato.")
+
+    error = _validar_cedula_en_torneo(db, cedula, categoria)
+    if error:
+        return None, error
+    error = _validar_dorsal_unico(db, equipo_nombre, categoria, numero_camiseta)
+    if error:
+        return None, error
 
     count = db.execute(
         "SELECT COUNT(*) c FROM jugadores WHERE equipo = ? AND categoria = ?",
@@ -119,7 +160,7 @@ def _insertar_jugador(db, equipo_nombre, cedula, nombres, apellidos, fecha_nacim
         return cur.lastrowid, None
     except IntegrityError:
         db.rollback()
-        return None, f"Ya existe un jugador registrado con la cédula {cedula}."
+        return None, f"La cédula {cedula} ya está inscrita en el campeonato {categoria}."
 
 
 def _ordenar_por_numero_camiseta(jugadores):
@@ -130,3 +171,18 @@ def _ordenar_por_numero_camiseta(jugadores):
         valor = int(numero) if numero.isdigit() else 9999
         return (valor, j["apellidos"] or "", j["nombres"] or "")
     return sorted(jugadores, key=clave)
+
+
+def _jugadores_que_ya_jugaron(db, jugador_ids):
+    """Ids (de entre `jugador_ids`) que ya disputaron al menos un partido:
+    marcados como "Participó" en una hoja de Vocalía o con goles registrados."""
+    ids = [int(i) for i in jugador_ids]
+    if not ids:
+        return set()
+    marcas = ",".join("?" * len(ids))
+    filas = db.execute(
+        f"""SELECT jugador_id FROM vocalia_asistencia WHERE participo = 1 AND jugador_id IN ({marcas})
+            UNION SELECT jugador_id FROM goles WHERE jugador_id IN ({marcas})""",
+        (*ids, *ids),
+    ).fetchall()
+    return {f["jugador_id"] for f in filas}

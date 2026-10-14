@@ -3,6 +3,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from app.database import get_db
 from app.decorators import calificacion_required
+from app.utils import formatear_fecha_hora
 
 bp = Blueprint("comision", __name__)
 
@@ -26,15 +27,19 @@ def comision_modulo():
             "numero_camiseta": int(numero) if numero.isdigit() else None,
             "cedula": j.get("cedula"), "nombres": j.get("nombres"), "apellidos": j.get("apellidos"),
             "calificado": bool(j.get("calificado")),
+            "reemplazo": bool(j.get("reemplazo_solicitado")),
+            "inscrito": formatear_fecha_hora(j.get("fecha_registro")),
         })
     total = len(jugadores)
     calificados = sum(1 for j in jugadores if j["calificado"])
+    reemplazos = sum(1 for j in jugadores if j["reemplazo"])
 
     return render_template(
         "comision/comision_modulo.html",
         jugadores=jugadores,
         total=total,
         calificados=calificados,
+        reemplazos=reemplazos,
     )
 
 

@@ -14,24 +14,26 @@
 
 <div class="card">
   <p style="font-size:0.8rem; color:#888; margin:0 0 12px;">
-    Útil para revisar si un jugador ya está inscrito en otro equipo antes de registrarlo.
+    Útil para revisar si un jugador ya está inscrito en otro equipo antes de registrarlo. Un jugador puede estar
+    en un equipo por campeonato (ej. Sub 45 y Senior). Fecha de inscripción en hora de Ecuador.
   </p>
-  <div style="overflow-x:auto;">
+  <div class="tabla-scroll">
     <table id="tablaLiga" class="tabla-responsive" data-search-placeholder="Buscar por cédula, nombre, apellido o equipo...">
       <thead>
         <tr>
-          <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>Equipo</th><th>Campeonato</th><th>Estado</th>
+          <th class="col-sec">Cédula</th><th class="col-sec">Nombres</th><th>Apellidos</th><th>Equipo</th><th class="col-sec">Campeonato</th><th class="col-sec">Inscripción</th><th>Estado</th>
         </tr>
       </thead>
       <tbody>
         {% for j in jugadores %}
         <tr>
-          <td data-label="Cédula">{{ j.cedula }}</td>
-          <td data-label="Nombres">{{ j.nombres }}</td>
-          <td data-label="Apellidos">{{ j.apellidos }}</td>
-          <td data-label="Equipo">{{ j.equipo }}</td>
-          <td data-label="Campeonato">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
-          <td data-label="Estado">
+          <td class="col-sec">{{ j.cedula }}</td>
+          <td class="col-sec">{{ j.nombres }}</td>
+          <td>{{ j.apellidos }}</td>
+          <td>{{ j.equipo }}</td>
+          <td class="col-sec">{{ j.categoria }}{% if j.subcategoria == 'Juvenil' %} - Juvenil{% endif %}</td>
+          <td class="col-sec" style="white-space:nowrap;">{{ j.fecha_registro|fecha_hora }}</td>
+          <td>
             {% if j.calificado %}
               <span class="badge badge-ok">✅ Calificado</span>
             {% else %}

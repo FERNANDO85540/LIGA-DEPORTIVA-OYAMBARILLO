@@ -108,6 +108,7 @@
     <span>👥 Total: <strong>{{ total }}</strong></span>
     <span>✅ Calificados: <strong style="color: #1e7d32;">{{ calificados }}</strong></span>
     <span>⏳ Sin calificar: <strong style="color: #b45309;">{{ total - calificados }}</strong></span>
+    {% if reemplazos %}<span>📨 Reemplazos solicitados: <strong style="color: #b45309;">{{ reemplazos }}</strong></span>{% endif %}
     <span style="margin-left:auto; background: #f8fafc; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; border: 1px solid #e2e8f0;">
       🔎 Visibles: <strong id="stat-visibles" style="color:#1e7d32;">0</strong> | ✔️ Seleccionados: <strong id="stat-seleccionados" style="color:#1e7d32;">0</strong>
     </span>
@@ -133,7 +134,7 @@
 </div>
 
 <script>
-const BASE_URL_FICHA = "https://liga-deportiva-oyambarillo.onrender.com/jugador/";
+const BASE_URL_FICHA = "/jugador/";
 const datosJugadores = JSON.parse(document.getElementById('data-jugadores').textContent);
 
 const table = new Tabulator("#grid-comision", {
@@ -211,6 +212,10 @@ const table = new Tabulator("#grid-comision", {
     { title: "Estado", field: "calificado", hozAlign: "center", width: 130,
       formatter: "tickCross",
       headerFilter: "tickCross", headerFilterParams: { tristate: true } },
+    { title: "Reemplazo", field: "reemplazo", hozAlign: "center", width: 120,
+      formatter: (cell) => cell.getValue() ? "📨 Solicitado" : "",
+      headerFilter: "tickCross", headerFilterParams: { tristate: true } },
+    { title: "Inscripción", field: "inscrito", width: 140 },
     { title: "Ficha", field: "id", hozAlign: "center", width: 90, headerSort: false,
       formatter: (cell) => {
         const id = cell.getValue();

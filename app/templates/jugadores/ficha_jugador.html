@@ -21,9 +21,19 @@
   <div style="flex:1; min-width:280px;">
     <h2 style="margin-top: 0; color: #14532d; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">Datos Personales</h2>
     
+    {% if jugador.reemplazo_solicitado %}
+      <div style="background:#fef3c7; border:1px solid #fde68a; color:#92400e; padding:12px; border-radius:8px; font-size:0.9rem;">
+        📨 Hay una <strong>solicitud de reemplazo</strong> para este jugador{% if jugador.reemplazo_fecha %} (enviada el {{ jugador.reemplazo_fecha|fecha_hora }}){% endif %}.
+        {% if session.get('rol') in ('admin', 'calificacion') %}
+        <form method="post" action="{{ url_for('jugadores.atender_reemplazo', jugador_id=jugador.id) }}" style="margin-top:8px;">
+          <button type="submit" style="margin:0; padding:6px 12px; font-size:0.85rem;">✔️ Marcar como atendida</button>
+        </form>
+        {% endif %}
+      </div>
+    {% endif %}
     {% if bloqueado %}
       <p style="background:#fff8e1; border:1px solid #ffe082; color:#6d4c00; padding:12px; border-radius:8px; font-size:0.9rem; line-height: 1.4;">
-        🔒 Este jugador ya fue <strong>calificado</strong> por la Comisión y su ficha está bloqueada. Si necesitas realizar una corrección, contacta a la Comisión de Calificación.
+        🔒 Este jugador ya fue <strong>calificado</strong> por la Comisión y su ficha está bloqueada. Si necesitas realizar una corrección, contacta a la Comisión de Calificación. Si quieres cambiarlo por otro jugador, usa "Solicitud de reemplazo" en la lista de tu equipo (solo si todavía no jugó ningún partido).
       </p>
     {% endif %}
     

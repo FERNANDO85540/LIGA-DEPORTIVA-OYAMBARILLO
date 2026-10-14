@@ -7,7 +7,7 @@ from app.decorators import admin_required, equipo_permitido, login_required
 from app.services.alineaciones import FORMACIONES, _formacion_valida, _guardar_alineacion, _obtener_alineacion
 from app.services.equipos import _renombrar_equipo_cascada
 from app.services.exportacion import _exportar_jugadores_excel
-from app.services.jugadores import _guardar_imagen_subida, _insertar_jugador
+from app.services.jugadores import _guardar_imagen_subida, _insertar_jugador, _jugadores_que_ya_jugaron
 from app.services.liga import (
     _categoria_y_division, _contar_juveniles, _edad_minima_categoria, _limite_juveniles_categoria,
 )
@@ -185,6 +185,7 @@ def detalle_equipo(equipo_id):
         juveniles_count=juveniles_count,
         cupo_maximo_juvenil=_limite_juveniles_categoria(db, equipo["categoria"]),
         partidos_equipo=partidos_equipo,
+        ya_jugaron=_jugadores_que_ya_jugaron(db, [j["id"] for j in jugadores]),
     )
 
 

@@ -850,8 +850,8 @@ document.querySelectorAll('input[type="date"][name="fecha_nacimiento"]').forEach
 
 // Avisa apenas se escribe o se lee (por OCR) una cédula que ya está
 // registrada, en vez de esperar a que el delegado llene todo el formulario
-// y recién ahí se entere al guardar. La base de datos ya lo bloquea de
-// todas formas (cédula única) — esto es solo para avisar más rápido.
+// y recién ahí se entere al guardar. El servidor lo bloquea de todas formas
+// (cédula única por campeonato) — esto es solo para avisar más rápido.
 document.querySelectorAll('input[name="cedula"]').forEach(function (input) {
   if (input.disabled) return;
   const form = input.closest('form');
@@ -869,13 +869,15 @@ document.querySelectorAll('input[name="cedula"]').forEach(function (input) {
     input.style.borderColor = '';
     input.style.background = '';
     aviso.textContent = '';
+    aviso.style.color = '#a13a2f';
   }
 
   function verificar() {
     const cedula = input.value.trim();
     limpiar();
     if (cedula.length < 8) return; // muy corta todavía para consultar
-    fetch('/api/cedula_existe?cedula=' + encodeURIComponent(cedula))
+    fetch('/api/cedula_existe?cedula=' + encodeURIComponent(cedula) +
+          (input.dataset.categoria ? '&categoria=' + encodeURIComponent(input.dataset.categoria) : ''))
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (datos) {
         // Si el campo cambió mientras esperábamos la respuesta, se ignora.
@@ -884,8 +886,21 @@ document.querySelectorAll('input[name="cedula"]').forEach(function (input) {
           cedulaDuplicada = true;
           input.style.borderColor = '#a13a2f';
           input.style.background = '#fdecea';
-          aviso.textContent = '⚠️ Esta cédula ya está registrada: ' + datos.nombres + ' ' + datos.apellidos +
-            ' (equipo ' + datos.equipo + '). No se puede duplicar.';
+          aviso.textContent = '⚠️ Esta cédula ya está inscrita en ' + (datos.categoria || 'este campeonato') + ': ' +
+            datos.nombres + ' ' + datos.apellidos + ' (equipo ' + datos.equipo + '). Solo puede estar en un equipo por campeonato.';
+        } else if (datos.en_otro_torneo) {
+          // Inscrito en otro campeonato: está permitido. Se completan los datos que falten.
+          const otro = datos.en_otro_torneo;
+          aviso.style.color = 'var(--verde-osc)';
+          aviso.textContent = 'ℹ️ Jugador ya inscrito en ' + otro.categoria + ' (equipo ' + otro.equipo +
+            '). Puede jugar también en este campeonato; se completaron sus datos.';
+          [['nombres', otro.nombres], ['apellidos', otro.apellidos], ['fecha_nacimiento', otro.fecha_nacimiento]].forEach(function (par) {
+            const campo = form.querySelector('[name="' + par[0] + '"]');
+            if (campo && !campo.value && par[1]) {
+              campo.value = par[1];
+              campo.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+          });
         }
       })
       .catch(function () {});

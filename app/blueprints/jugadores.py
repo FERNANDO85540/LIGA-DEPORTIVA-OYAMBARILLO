@@ -7,7 +7,10 @@ from config import CAMPOS_FOTO_VALIDOS, SUBCATEGORIAS
 from app.database import get_db
 from app.decorators import calificacion_required, jugador_permitido, login_required
 from app.services.carnets import _carnet_response, _generar_carnet
-from app.services.jugadores import _guardar_imagen_subida, _jugador_califica, _subcategoria_por_nacimiento
+from app.services.jugadores import (
+    _guardar_imagen_subida, _jugador_califica, _jugadores_que_ya_jugaron, _subcategoria_por_nacimiento,
+    _validar_dorsal_unico,
+)
 from app.services.liga import _contar_juveniles, _edad_minima_categoria, _limite_juveniles_categoria
 from app.utils import _calcular_edad, _mayuscula, ahora_ecuador
 
@@ -17,24 +20,31 @@ bp = Blueprint("jugadores", __name__)
 @bp.route("/api/cedula_existe")
 @login_required
 def api_cedula_existe():
-    """Consulta rápida (para avisar en el formulario antes de guardar) si
-    ya existe un jugador registrado con esa cédula, en cualquier equipo —
-    la cédula es única en todo el sistema."""
+    """Consulta rápida (para avisar en el formulario antes de guardar) si la
+    cédula ya está inscrita. Con `categoria`, "existe" significa inscrita en
+    ESE campeonato (no se puede repetir); si solo está en otros campeonatos se
+    devuelven sus datos en `en_otro_torneo` para autocompletar el formulario."""
     cedula = request.args.get("cedula", "").strip()
+    categoria = request.args.get("categoria", "").strip()
     if not cedula:
         return jsonify({"existe": False})
     db = get_db()
-    jugador = db.execute(
-        "SELECT nombres, apellidos, equipo FROM jugadores WHERE cedula = ?", (cedula,)
-    ).fetchone()
-    if not jugador:
-        return jsonify({"existe": False})
-    return jsonify({
-        "existe": True,
-        "nombres": jugador["nombres"],
-        "apellidos": jugador["apellidos"],
-        "equipo": jugador["equipo"],
-    })
+    filas = db.execute(
+        "SELECT nombres, apellidos, equipo, categoria, fecha_nacimiento FROM jugadores WHERE cedula = ? ORDER BY id",
+        (cedula,),
+    ).fetchall()
+    mismo_torneo = [f for f in filas if not categoria or f["categoria"] == categoria]
+    if mismo_torneo:
+        f = mismo_torneo[0]
+        return jsonify({"existe": True, "nombres": f["nombres"], "apellidos": f["apellidos"],
+                        "equipo": f["equipo"], "categoria": f["categoria"]})
+    if filas:
+        f = filas[0]
+        return jsonify({"existe": False, "en_otro_torneo": {
+            "nombres": f["nombres"], "apellidos": f["apellidos"], "equipo": f["equipo"],
+            "categoria": f["categoria"], "fecha_nacimiento": f["fecha_nacimiento"],
+        }})
+    return jsonify({"existe": False})
 
 
 @bp.route("/jugador/<int:jugador_id>", methods=["GET"])
@@ -82,6 +92,12 @@ def actualizar_jugador(jugador_id):
 
     if not _jugador_califica(db, fecha_nacimiento, jugador["categoria"]):
         flash("Cédula no califica: no cumple con la edad mínima de este campeonato.")
+        return redirect(url_for("jugadores.ficha_jugador", jugador_id=jugador_id))
+
+    error_dorsal = _validar_dorsal_unico(db, jugador["equipo"], jugador["categoria"], numero_camiseta,
+                                         excluir_id=jugador_id)
+    if error_dorsal:
+        flash(error_dorsal)
         return redirect(url_for("jugadores.ficha_jugador", jugador_id=jugador_id))
 
     limite_juveniles = _limite_juveniles_categoria(db, jugador["categoria"])
@@ -207,3 +223,48 @@ def eliminar_jugador(jugador_id):
     db.commit()
     flash("Jugador eliminado.", "ok")
     return redirect(url_for("equipos.detalle_equipo", equipo_id=equipo_id))
+
+
+@bp.route("/jugador/<int:jugador_id>/solicitar_reemplazo", methods=["POST"])
+@login_required
+def solicitar_reemplazo(jugador_id):
+    """Un jugador ya calificado (y con carnet) no se puede borrar ni cambiar
+    desde el equipo: el delegado envía una solicitud de reemplazo, que solo
+    levanta una bandera para la Comisión. Solo se permite si el jugador
+    todavía no jugó ningún partido."""
+    db = get_db()
+    jugador = db.execute("SELECT * FROM jugadores WHERE id = ?", (jugador_id,)).fetchone()
+    if not jugador:
+        flash("Jugador no encontrado.")
+        return redirect(url_for("main.index"))
+    if not jugador_permitido(db, jugador):
+        flash("No tienes acceso a ese jugador.")
+        return redirect(url_for("main.index"))
+    equipo = db.execute("SELECT id FROM equipos WHERE nombre = ?", (jugador["equipo"],)).fetchone()
+    destino = url_for("equipos.detalle_equipo", equipo_id=equipo["id"]) if equipo else url_for("main.index")
+
+    if not jugador["calificado"]:
+        flash("Este jugador todavía no está calificado: puedes editarlo o eliminarlo directamente.")
+    elif jugador["reemplazo_solicitado"]:
+        flash("Ya hay una solicitud de reemplazo enviada para este jugador.")
+    elif jugador_id in _jugadores_que_ya_jugaron(db, [jugador_id]):
+        flash("No se puede solicitar el reemplazo: el jugador ya disputó al menos un partido.")
+    else:
+        db.execute(
+            "UPDATE jugadores SET reemplazo_solicitado = 1, reemplazo_fecha = ? WHERE id = ?",
+            (ahora_ecuador().strftime("%Y-%m-%d %H:%M"), jugador_id),
+        )
+        db.commit()
+        flash("Su solicitud ha sido enviada.", "ok")
+    return redirect(destino)
+
+
+@bp.route("/jugador/<int:jugador_id>/reemplazo/atender", methods=["POST"])
+@calificacion_required
+def atender_reemplazo(jugador_id):
+    """La Comisión baja la bandera de reemplazo una vez atendida la solicitud."""
+    db = get_db()
+    db.execute("UPDATE jugadores SET reemplazo_solicitado = 0 WHERE id = ?", (jugador_id,))
+    db.commit()
+    flash("Solicitud de reemplazo marcada como atendida.", "ok")
+    return redirect(request.referrer or url_for("comision.comision_modulo"))
