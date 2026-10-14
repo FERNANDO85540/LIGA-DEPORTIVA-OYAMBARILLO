@@ -240,26 +240,29 @@
   <div style="overflow-x:auto;">
   <table class="tabla-responsive">
     <thead>
-      <tr><th>#</th><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>DG</th><th>Pts</th></tr>
+      <tr>
+        <th class="col-sec col-num">#</th><th>Equipo</th><th class="col-num">PJ</th>
+        <th class="col-sec col-num">G</th><th class="col-sec col-num">E</th><th class="col-sec col-num">P</th>
+        <th class="col-sec col-num">GF</th><th class="col-sec col-num">GC</th>
+        <th class="col-num" title="Gol diferencia">GD</th><th class="col-num">PTS</th>
+      </tr>
     </thead>
     <tbody>
       {% for f in tabla %}
       <tr>
-        <td data-label="#">{{ loop.index }}</td>
-        <td data-label="Equipo">
-          <strong>{{ f.equipo }}</strong>
+        <td class="col-sec col-num">{{ loop.index }}</td>
+        <td><span class="solo-movil">{{ loop.index }}. </span><strong>{{ f.equipo }}</strong>
           {% if f.pts_sancion > 0 %}
             <span style="display: block; font-size: 0.75rem; color: #ef4444; font-weight: bold;">(Sanción: -{{ f.pts_sancion }} pts)</span>
-          {% endif %}
-        </td>
-        <td data-label="PJ">{{ f.pj }}</td>
-        <td data-label="G">{{ f.g }}</td>
-        <td data-label="E">{{ f.e }}</td>
-        <td data-label="P">{{ f.p }}</td>
-        <td data-label="GF">{{ f.gf }}</td>
-        <td data-label="GC">{{ f.gc }}</td>
-        <td data-label="DG">{{ f.dg }}</td>
-        <td data-label="Pts" style="font-size: 1.1rem; color: #1e7d32;"><strong>{{ f.pts }}</strong></td>
+          {% endif %}</td>
+        <td class="col-num">{{ f.pj }}</td>
+        <td class="col-sec col-num">{{ f.g }}</td>
+        <td class="col-sec col-num">{{ f.e }}</td>
+        <td class="col-sec col-num">{{ f.p }}</td>
+        <td class="col-sec col-num">{{ f.gf }}</td>
+        <td class="col-sec col-num">{{ f.gc }}</td>
+        <td class="col-num">{{ f.dg }}</td>
+        <td class="col-num"><strong style="color: #1e7d32;">{{ f.pts }}</strong></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -280,15 +283,18 @@
   <div style="overflow-x:auto;">
   <table class="tabla-responsive" id="tablaGoleadores" data-search-placeholder="Buscar por jugador o equipo...">
     <thead>
-      <tr><th>#</th><th>Jugador</th><th>Equipo</th><th>Goles</th></tr>
+      <tr><th class="col-sec col-num">#</th><th>Jugador</th><th class="col-sec">Equipo</th><th class="col-num">Goles</th></tr>
     </thead>
     <tbody>
       {% for g in goleadores %}
       <tr>
-        <td data-label="#">{{ loop.index }}</td>
-        <td data-label="Jugador">{{ g.apellidos }} {{ g.nombres }}</td>
-        <td data-label="Equipo">{{ g.equipo }}</td>
-        <td data-label="Goles"><strong>{{ g.goles }}</strong></td>
+        <td class="col-sec col-num">{{ loop.index }}</td>
+        <td>
+          <span class="solo-escritorio">{{ g.apellidos }} {{ g.nombres }}</span>
+          <span class="solo-movil" title="{{ g.apellidos }} {{ g.nombres }} ({{ g.equipo }})">{{ loop.index }}. {{ nombre_corto(g.apellidos, g.nombres) }}</span>
+        </td>
+        <td class="col-sec">{{ g.equipo }}</td>
+        <td class="col-num"><strong>{{ g.goles }}</strong></td>
       </tr>
       {% endfor %}
     </tbody>

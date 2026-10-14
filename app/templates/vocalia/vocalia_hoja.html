@@ -114,7 +114,7 @@
 </style>
 
 <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
-  <a href="{{ url_for('vocalia.vocalia_modulo') }}" title="Volver a partidos" style="text-decoration: none; color: #475569; font-size: 1.5rem; transition: transform 0.2s;">
+  <a href="{{ url_for('vocalia.vocalia_modulo', categoria=jornada.categoria, division=jornada.division) if jornada else url_for('vocalia.vocalia_modulo') }}" title="Volver a partidos" style="text-decoration: none; color: #475569; font-size: 1.5rem; transition: transform 0.2s;">
     ⬅️
   </a>
   <a href="{{ url_for('publico.publico_alineaciones', partido_id=partido.id) }}" target="_blank" style="text-decoration: none; font-size: 0.9rem; font-weight: bold; color: #1e7d32; background: #e8f5e9; padding: 6px 12px; border-radius: 20px;">

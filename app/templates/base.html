@@ -205,6 +205,7 @@
     border-radius: 999px;
     font-size: 0.78rem;
     font-weight: 600;
+    white-space: nowrap;
   }
   .badge-ok { background: #e6f4ea; color: var(--verde-osc); }
   .badge-full { background: #fdecea; color: #a13a2f; }
@@ -237,95 +238,30 @@
   .buscador-item .equipo-chico { color: #888; font-size: 0.8rem; }
   .buscador-sin-resultados { padding: 8px 10px; color: #888; font-size: 0.85rem; }
 
-  @media (max-width: 700px) {
-    .tabla-responsive thead { display: none; }
-    .tabla-responsive, .tabla-responsive tbody, .tabla-responsive tr, .tabla-responsive td {
-      display: block;
-      width: 100%;
-    }
-    .tabla-responsive tr {
-      border: 1px solid var(--borde);
-      border-radius: 10px;
-      margin-bottom: 12px;
-      padding: 4px 12px;
-      background: white;
-    }
-    .tabla-responsive td {
-      border-bottom: 1px solid var(--fondo);
-      padding: 8px 0;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
-      text-align: right;
-    }
-    .tabla-responsive td:last-child { border-bottom: none; }
-    .tabla-responsive td::before {
-      content: attr(data-label);
-      font-weight: 600;
-      color: #555;
-      text-align: left;
-      flex-shrink: 0;
-    }
-    .tabla-responsive td.table-actions {
-      justify-content: flex-end;
-    }
-    .tabla-responsive td.table-actions::before { display: none; }
-
-    /* .tabla-compacta: en vez de apilar cada columna en su propia línea
-       (ideal para texto largo), mantiene la forma de tabla real y deja
-       scroll horizontal — mejor para tablas deportivas de columnas cortas
-       (posiciones, goleadores, calendario) donde se necesita comparar
-       varias filas/equipos a la vez sin tanto scroll vertical. */
-    .tabla-responsive.tabla-compacta {
-      display: table;
-      width: auto;
-      min-width: 100%;
-    }
-    .tabla-responsive.tabla-compacta thead {
-      display: table-header-group;
-    }
-    .tabla-responsive.tabla-compacta tbody {
-      display: table-row-group;
-      width: auto;
-    }
-    .tabla-responsive.tabla-compacta tr {
-      display: table-row;
-      width: auto;
-      border: none;
-      margin: 0;
-      padding: 0;
-      background: transparent;
-    }
-    .tabla-responsive.tabla-compacta thead tr {
-      border-bottom: 2px solid #e2e8f0;
-    }
-    .tabla-responsive.tabla-compacta th,
-    .tabla-responsive.tabla-compacta td {
-      display: table-cell;
-      width: auto;
-      padding: 9px 12px;
-      border-bottom: 1px solid var(--fondo);
-      text-align: left;
-      white-space: nowrap;
-      font-size: 0.85rem;
-    }
-    .tabla-responsive.tabla-compacta th {
-      font-weight: 700;
-      color: #334155;
-      background: #f8fafc;
-    }
-    .tabla-responsive.tabla-compacta td::before {
-      content: none;
-    }
-    .tabla-responsive.tabla-compacta td.table-actions {
-      justify-content: flex-start;
-    }
-  }
-
-  .tabla-compacta-wrap {
+  /* Tablas responsivas: en móvil NO se convierten en tarjetas. Se mantiene
+     la tabla real con scroll horizontal y se ocultan las columnas
+     secundarias (class="col-sec") para que quepan las importantes.
+     .solo-movil / .solo-escritorio muestran un contenido u otro según el ancho. */
+  .tabla-scroll, .tabla-compacta-wrap {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+  .tabla-responsive th { white-space: nowrap; }
+  .tabla-responsive .col-num { text-align: center; }
+  .solo-movil { display: none; }
+  .editar-sancion summary { cursor: pointer; color: var(--verde-osc); font-size: 0.85rem; font-weight: 600; }
+  .editar-sancion[open] { min-width: 240px; }
+  .editar-sancion form { margin-top: 6px; }
+
+  @media (max-width: 700px) {
+    main { padding: 0 10px; }
+    .card { padding: 14px; }
+    .tabla-responsive .col-sec { display: none; }
+    .tabla-responsive .solo-movil { display: inline; }
+    .tabla-responsive .solo-escritorio { display: none; }
+    .tabla-responsive th, .tabla-responsive td { padding: 7px 6px; font-size: 0.85rem; }
+    .tabla-responsive td.table-actions { flex-wrap: wrap; }
   }
 
   .tabla-responsive thead th.th-ordenable {
@@ -1442,6 +1378,41 @@ window.initBuscadorJugador = function (raiz, jugadores) {
 
   mejorarTablas();
   window.mejorarTablasDatos = mejorarTablas;
+})();
+</script>
+<script>
+// Mantener el estado al guardar: cada formulario POST lleva un campo oculto
+// "next" con la vista actual (ruta + filtros de campeonato/categoría), para
+// que el servidor vuelva exactamente ahí. Además se guarda la posición de
+// scroll y se restaura al volver a la misma vista, así no hay que buscar de
+// nuevo la jornada/sanción que se estaba editando.
+(function () {
+  const CLAVE = 'liga-scroll';
+  const vistaActual = location.pathname + location.search;
+
+  document.querySelectorAll('form').forEach(function (form) {
+    if ((form.getAttribute('method') || 'get').toLowerCase() !== 'post') return;
+    if (!form.querySelector('input[name="next"]')) {
+      const oculto = document.createElement('input');
+      oculto.type = 'hidden';
+      oculto.name = 'next';
+      oculto.value = vistaActual;
+      form.appendChild(oculto);
+    }
+    form.addEventListener('submit', function () {
+      try {
+        sessionStorage.setItem(CLAVE, JSON.stringify({ vista: vistaActual, y: window.scrollY, t: Date.now() }));
+      } catch (e) {}
+    });
+  });
+
+  try {
+    const guardado = JSON.parse(sessionStorage.getItem(CLAVE) || 'null');
+    sessionStorage.removeItem(CLAVE);
+    if (guardado && guardado.vista === vistaActual && Date.now() - guardado.t < 60000) {
+      window.addEventListener('load', function () { window.scrollTo(0, guardado.y); });
+    }
+  } catch (e) {}
 })();
 </script>
 {% block extra_scripts %}{% endblock %}

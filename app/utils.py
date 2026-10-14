@@ -48,6 +48,13 @@ def _calcular_edad(fecha_nacimiento):
     return edad
 
 
+def nombre_corto(apellidos, nombres):
+    """'PÉREZ GÓMEZ', 'JUAN CARLOS' -> 'PÉREZ J.' (para tablas en celular)."""
+    apellido = (apellidos or "").split()
+    inicial = (nombres or "").strip()[:1]
+    return f"{apellido[0] if apellido else ''} {inicial + '.' if inicial else ''}".strip()
+
+
 def volver_a(url_por_defecto):
     """Redirección "de vuelta a donde estaba el usuario".
 

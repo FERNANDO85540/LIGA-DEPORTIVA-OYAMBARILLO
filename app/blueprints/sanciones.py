@@ -267,7 +267,7 @@ def agregar_catalogo():
 
     if not descripcion_motivo or not cantidad_fechas_suspension.isdigit() or int(cantidad_fechas_suspension) < 1:
         flash("Ingresa la descripción del motivo y una cantidad de fechas de suspensión válida.")
-        return redirect(url_for("sanciones.catalogo_sanciones"))
+        return volver_a(url_for("sanciones.catalogo_sanciones"))
 
     db.execute(
         """INSERT INTO sanciones_catalogo (articulo, descripcion_motivo, cantidad_fechas_suspension,
@@ -276,7 +276,7 @@ def agregar_catalogo():
     )
     db.commit()
     flash("Motivo agregado al catálogo.", "ok")
-    return redirect(url_for("sanciones.catalogo_sanciones"))
+    return volver_a(url_for("sanciones.catalogo_sanciones"))
 
 
 @bp.route("/sanciones/catalogo/<int:catalogo_id>/editar", methods=["POST"])
@@ -291,7 +291,7 @@ def editar_catalogo(catalogo_id):
 
     if not descripcion_motivo or not cantidad_fechas_suspension.isdigit() or int(cantidad_fechas_suspension) < 1:
         flash("Ingresa la descripción del motivo y una cantidad de fechas de suspensión válida.")
-        return redirect(url_for("sanciones.catalogo_sanciones"))
+        return volver_a(url_for("sanciones.catalogo_sanciones"))
 
     if not MOSTRAR_TESORERIA:
         # Los campos de multa no se muestran en el formulario: se conservan los guardados.
@@ -308,7 +308,7 @@ def editar_catalogo(catalogo_id):
     )
     db.commit()
     flash("Motivo del catálogo actualizado.", "ok")
-    return redirect(url_for("sanciones.catalogo_sanciones"))
+    return volver_a(url_for("sanciones.catalogo_sanciones"))
 
 
 @bp.route("/sanciones/catalogo/<int:catalogo_id>/eliminar", methods=["POST"])
@@ -318,4 +318,4 @@ def eliminar_catalogo(catalogo_id):
     db.execute("DELETE FROM sanciones_catalogo WHERE id = ?", (catalogo_id,))
     db.commit()
     flash("Motivo eliminado del catálogo.", "ok")
-    return redirect(url_for("sanciones.catalogo_sanciones"))
+    return volver_a(url_for("sanciones.catalogo_sanciones"))

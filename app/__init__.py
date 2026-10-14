@@ -23,8 +23,9 @@ def create_app(config_extra=None):
     preparar_directorios_de_datos()
     app.teardown_appcontext(close_db)
 
-    from app.utils import formatear_fecha_hora
+    from app.utils import formatear_fecha_hora, nombre_corto
     app.jinja_env.filters["fecha_hora"] = formatear_fecha_hora
+    app.jinja_env.globals["nombre_corto"] = nombre_corto
 
     @app.context_processor
     def _variables_globales():

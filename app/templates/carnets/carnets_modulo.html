@@ -182,6 +182,9 @@ const datosJugadores = JSON.parse(document.getElementById('data-jugadores').text
 const table = new Tabulator("#grid-carnets", {
   data: datosJugadores,
   index: "id",
+  // Recuerda filtros, orden y página tras guardar (la página se recarga).
+  persistence: { headerFilter: true, sort: true, page: true },
+  persistenceID: "carnets",
   layout: "fitColumns",
   responsiveLayout: "collapse", // Responsivo para celulares
   

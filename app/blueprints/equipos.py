@@ -11,7 +11,7 @@ from app.services.jugadores import _guardar_imagen_subida, _insertar_jugador, _j
 from app.services.liga import (
     _categoria_y_division, _contar_juveniles, _edad_minima_categoria, _limite_juveniles_categoria,
 )
-from app.utils import _mayuscula, _to_float
+from app.utils import _mayuscula, _to_float, volver_a
 
 bp = Blueprint("equipos", __name__)
 
@@ -35,7 +35,7 @@ def agregar_equipo():
         except IntegrityError:
             db.rollback()
             flash(f"Ya existe un equipo llamado '{nombre}'.")
-    return redirect(url_for("inscripcion.inscripcion", categoria=categoria, division=division))
+    return volver_a(url_for("inscripcion.inscripcion", categoria=categoria, division=division))
 
 
 @bp.route("/equipos/<int:equipo_id>/renombrar", methods=["POST"])
@@ -54,7 +54,7 @@ def renombrar_equipo(equipo_id):
             except IntegrityError:
                 db.rollback()
                 flash(f"Ya existe un equipo llamado '{nuevo_nombre}'.")
-    return redirect(url_for("inscripcion.inscripcion"))
+    return volver_a(url_for("inscripcion.inscripcion"))
 
 
 @bp.route("/equipos/<int:equipo_id>/eliminar", methods=["POST"])
@@ -72,7 +72,7 @@ def eliminar_equipo(equipo_id):
             db.execute("DELETE FROM equipos WHERE id = ?", (equipo_id,))
             db.commit()
             flash(f"Equipo '{equipo['nombre']}' eliminado.", "ok")
-    return redirect(url_for("inscripcion.inscripcion"))
+    return volver_a(url_for("inscripcion.inscripcion"))
 
 
 @bp.route("/equipos/<int:equipo_id>/credenciales", methods=["POST"])

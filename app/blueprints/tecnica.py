@@ -1,6 +1,6 @@
 """Comisión Técnica: fixture, oficialización de resultados, mesa y deducción de puntos."""
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from flask import Blueprint, flash, render_template, request, url_for
 
 from config import CATEGORIA_ACTIVA, USANDO_POSTGRES
 from app.database import get_db
@@ -8,7 +8,7 @@ from app.decorators import tecnica_required
 from app.services.estadisticas import _calcular_goleadores, _calcular_tabla_posiciones
 from app.services.liga import _categoria_y_division, _categorias_liga, _divisiones_de_categoria
 from app.services.partidos import _categoria_de_partido, _fixture_completo
-from app.utils import ahora_ecuador
+from app.utils import ahora_ecuador, volver_a
 
 bp = Blueprint("tecnica", __name__)
 
@@ -24,7 +24,7 @@ def agregar_jornada():
     fecha = request.form.get("fecha", "").strip()
     if not numero.isdigit():
         flash("Ingresa un número de jornada válido.")
-        return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+        return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
 
     locales = request.form.getlist("equipo_local")
     visitantes = request.form.getlist("equipo_visitante")
@@ -40,10 +40,10 @@ def agregar_jornada():
             continue
         if local == visitante:
             flash("Un equipo no puede jugar contra sí mismo.")
-            return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+            return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
         if local in equipos_usados or visitante in equipos_usados:
             flash("Hay un equipo asignado a más de un partido en la misma jornada.")
-            return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+            return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
         equipos_usados.add(local)
         equipos_usados.add(visitante)
         partidos_validos.append((local, visitante, hora, fecha_partido))
@@ -51,11 +51,11 @@ def agregar_jornada():
     for equipo in descansos:
         if equipo in equipos_usados:
             flash(f"'{equipo}' no puede descansar y jugar en la misma jornada.")
-            return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+            return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
 
     if not partidos_validos and not descansos:
         flash("Agrega al menos un partido o un equipo que descansa.")
-        return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+        return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
 
     returning = " RETURNING id" if USANDO_POSTGRES else ""
     cur = db.execute(
@@ -72,7 +72,7 @@ def agregar_jornada():
         db.execute("INSERT INTO descansos (jornada_id, equipo) VALUES (?, ?)", (jornada_id, equipo))
     db.commit()
     flash(f"Jornada {numero} agregada.", "ok")
-    return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+    return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
 
 
 @bp.route("/tecnica/jornada/<int:jornada_id>/eliminar", methods=["POST"])
@@ -87,7 +87,7 @@ def eliminar_jornada(jornada_id):
     db.execute("DELETE FROM jornadas WHERE id = ?", (jornada_id,))
     db.commit()
     flash("Jornada eliminada.", "ok")
-    return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+    return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
 
 
 @bp.route("/tecnica")
@@ -133,19 +133,19 @@ def registrar_resultado(partido_id):
     categoria, division = _categoria_de_partido(db, partido_id)
     if not partido:
         flash("Partido no encontrado.")
-        return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+        return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
     gl = request.form.get("goles_local", "").strip()
     gv = request.form.get("goles_visitante", "").strip()
     if not gl.isdigit() or not gv.isdigit():
         flash("Ingresa un marcador válido (números).")
-        return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+        return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
     db.execute(
         "UPDATE partidos SET goles_local = ?, goles_visitante = ?, jugado = 1 WHERE id = ?",
         (int(gl), int(gv), partido_id),
     )
     db.commit()
     flash("Resultado registrado.", "ok")
-    return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+    return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
 
 
 @bp.route("/tecnica/partido/<int:partido_id>/quitar_resultado", methods=["POST"])
@@ -159,7 +159,7 @@ def quitar_resultado(partido_id):
     )
     db.commit()
     flash("Resultado eliminado.", "ok")
-    return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+    return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
 
 
 @bp.route("/tecnica/partido/<int:partido_id>/aprobar", methods=["POST"])
@@ -171,7 +171,7 @@ def tecnica_aprobar_partido(partido_id):
     db.execute("UPDATE partidos SET jugado = 1, en_vivo = 0, ganador_escritorio = NULL WHERE id = ?", (partido_id,))
     db.commit()
     flash("Partido oficializado con el resultado de Vocalía.", "ok")
-    return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+    return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
 
 
 @bp.route("/tecnica/partido/<int:partido_id>/escritorio", methods=["POST"])
@@ -185,12 +185,12 @@ def tecnica_ganador_escritorio(partido_id):
     partido = db.execute("SELECT equipo_local, equipo_visitante FROM partidos WHERE id = ?", (partido_id,)).fetchone()
     if ganador not in (partido["equipo_local"], partido["equipo_visitante"]):
         flash("Debes seleccionar un equipo válido.")
-        return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+        return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
         
     db.execute("UPDATE partidos SET jugado = 1, en_vivo = 0, ganador_escritorio = ? WHERE id = ?", (ganador, partido_id))
     db.commit()
     flash(f"Partido resuelto en mesa: 2 - 0 a favor de {ganador}.", "ok")
-    return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+    return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
 
 
 @bp.route("/tecnica/restar_puntos", methods=["POST"])
@@ -205,7 +205,7 @@ def tecnica_restar_puntos():
     
     if not puntos.isdigit() or int(puntos) <= 0 or not motivo:
         flash("Ingresa una cantidad de puntos válida y un motivo.")
-        return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+        return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
         
     db.execute(
         "INSERT INTO puntos_sancion (equipo, categoria, division, puntos_descontar, motivo, fecha) VALUES (?, ?, ?, ?, ?, ?)",
@@ -213,7 +213,7 @@ def tecnica_restar_puntos():
     )
     db.commit()
     flash(f"Se restaron {puntos} puntos a {equipo}.", "ok")
-    return redirect(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
+    return volver_a(url_for("tecnica.tecnica_modulo", categoria=categoria, division=division))
 
 
 @bp.route("/tecnica/restar_puntos/<int:sancion_id>/eliminar", methods=["POST"])
@@ -225,5 +225,5 @@ def tecnica_eliminar_resta_puntos(sancion_id):
         db.execute("DELETE FROM puntos_sancion WHERE id = ?", (sancion_id,))
         db.commit()
         flash("Penalización de puntos eliminada. La tabla ha sido recalculada.", "ok")
-        return redirect(url_for("tecnica.tecnica_modulo", categoria=sancion["categoria"], division=sancion["division"]))
-    return redirect(url_for("tecnica.tecnica_modulo"))
+        return volver_a(url_for("tecnica.tecnica_modulo", categoria=sancion["categoria"], division=sancion["division"]))
+    return volver_a(url_for("tecnica.tecnica_modulo"))
