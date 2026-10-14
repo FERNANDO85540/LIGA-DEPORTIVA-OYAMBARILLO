@@ -1,0 +1,306 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+  <h1 style="margin:0; font-size:1.6rem;">⚽ Comisión Técnica</h1>
+  <p style="margin:6px 0 0; opacity:0.95;">Aprobación de resultados, tabla de posiciones y deducción de puntos.</p>
+</div>
+
+{% set categoria_endpoint = 'tecnica.tecnica_modulo' %}
+{% include "partials/_categoria_cards.html" %}
+{% include "partials/_division_cards.html" %}
+
+<div class="card">
+  <h2>Agregar jornada — {{ categoria }}{% if division %} - {{ division }}{% endif %}</h2>
+  <form method="post" action="{{ url_for('tecnica.agregar_jornada') }}">
+    <input type="hidden" name="categoria" value="{{ categoria }}">
+    <input type="hidden" name="division" value="{{ division }}">
+    <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
+      <div>
+        <label>Número de jornada</label>
+        <input type="number" name="numero" value="{{ siguiente_numero }}" required style="width:120px;">
+      </div>
+      <div style="flex:1; min-width:200px;">
+        <label>Rango de fechas de la jornada (opcional)</label>
+        <input type="text" name="fecha" placeholder="ej. 19 y 20 de septiembre">
+      </div>
+    </div>
+
+    <h3 style="margin-top:20px; margin-bottom:6px; font-size:1rem;">Partidos de esta jornada</h3>
+    <p style="font-size:0.8rem; color:#888; margin:0 0 10px;">Deja vacías las filas que no uses.</p>
+    
+    {% for i in range(equipos|length // 2 if equipos|length // 2 > 0 else 1) %}
+    <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px; background:#f8fafc; padding:10px; border-radius:6px; border:1px solid #e2e8f0;">
+      <div style="flex:1; min-width:160px;">
+        <label style="margin-top: 0;">Equipo local</label>
+        <select name="equipo_local">
+          <option value="">-- Equipo --</option>
+          {% for e in equipos %}<option value="{{ e.nombre }}">{{ e.nombre }}</option>{% endfor %}
+        </select>
+      </div>
+      <div style="text-align:center; padding-bottom:10px; font-weight:700; color:#888;">VS</div>
+      <div style="flex:1; min-width:160px;">
+        <label style="margin-top: 0;">Equipo visitante</label>
+        <select name="equipo_visitante">
+          <option value="">-- Equipo --</option>
+          {% for e in equipos %}<option value="{{ e.nombre }}">{{ e.nombre }}</option>{% endfor %}
+        </select>
+      </div>
+      <div style="min-width:150px;">
+        <label style="margin-top: 0;">Fecha del partido</label>
+        <input type="date" name="fecha_partido">
+      </div>
+      <div style="min-width:120px;">
+        <label style="margin-top: 0;">Hora (opc.)</label>
+        <input type="time" name="hora">
+      </div>
+    </div>
+    {% endfor %}
+
+    <h3 style="margin-top:20px; margin-bottom:6px; font-size:1rem;">Equipos que descansan esta jornada</h3>
+    <div class="cupos-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));">
+      {% for e in equipos %}
+      <label style="display:flex; align-items:center; gap:6px; font-weight:400; margin:0; border:1px solid var(--borde); border-radius:8px; padding:8px 10px; cursor: pointer;">
+        <input type="checkbox" name="descansos" value="{{ e.nombre }}" style="width:auto; cursor: pointer;"> {{ e.nombre }}
+      </label>
+      {% endfor %}
+    </div>
+
+    <button type="submit" style="margin-top: 20px;">Guardar jornada</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Resultados por jornada</h2>
+  <p style="font-size:0.85rem; color:#64748b; margin-top:-10px; margin-bottom: 20px;">
+    La Comisión Técnica aprueba el resultado que registró Vocalía, o en caso de sanción, da la victoria por mesa (2-0).
+  </p>
+  
+  {% if not jornadas %}
+    <p style="color:#888;">Todavía no hay jornadas creadas.</p>
+  {% endif %}
+  
+  {% for item in jornadas %}
+  <div style="border:1px solid #cbd5e1; border-radius:8px; padding:15px; margin-bottom:20px; background: white;">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 10px; margin-bottom: 15px;">
+      <strong style="font-size: 1.1rem;">Jornada {{ item.jornada.numero }}{% if item.jornada.fecha %} — {{ item.jornada.fecha }}{% endif %}</strong>
+      <form method="post" action="{{ url_for('tecnica.eliminar_jornada', jornada_id=item.jornada.id) }}" onsubmit="return confirm('¿Eliminar esta jornada completa?');" style="margin:0;">
+        <button type="submit" class="btn-del" style="background: white;">🗑️ Eliminar jornada</button>
+      </form>
+    </div>
+    
+    {% if not item.partidos %}
+      <p style="color:#888; font-size:0.85rem; margin:8px 0 0;">Sin partidos en esta jornada.</p>
+    {% endif %}
+    
+{% for p in item.partidos %}
+    <div style="padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 10px; background: {% if p.jugado %}#f0fdf4{% else %}#f8fafc{% endif %};">
+      
+      <!-- Fila Superior: Equipos y Estado -->
+      <div style="display:flex; justify-content: space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div style="font-size: 1.1rem; font-weight: bold; color: #1e293b; display: flex; align-items: center; gap: 10px;">
+          <span>{{ p.equipo_local }}</span>
+          
+         <!-- LÓGICA DE MOSTRAR EL RESULTADO O EL VS -->
+        {% if p.ganador_escritorio %}
+           <!-- Si se ganó por escritorio, el resultado es 2-0 fijo -->
+           <span style="background: white; padding: 2px 10px; border-radius: 12px; font-weight: 900; color: #b91c1c; border: 1px solid #fca5a5; font-size: 1rem;">
+             {{ 2 if p.ganador_escritorio == p.equipo_local else 0 }} - {{ 2 if p.ganador_escritorio == p.equipo_visitante else 0 }}
+           </span>
+        {% elif p.goles_local is not none %}
+           <!-- Si el vocal ya guardó datos (aunque sea 0-0), muestra el marcador real -->
+           <span style="background: white; padding: 2px 10px; border-radius: 12px; font-weight: 900; color: #14532d; border: 1px solid #cbd5e1; font-size: 1rem;">
+             {{ p.goles_local }} - {{ p.goles_visitante }}
+           </span>
+        {% else %}
+           <span style="color: #cbd5e1; font-size: 0.9rem;">VS</span>
+        {% endif %}
+
+          <span>{{ p.equipo_visitante }}</span>
+        </div>
+        
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <!-- Botón para ver la hoja de vocalía -->
+          <a href="{{ url_for('vocalia.vocalia_hoja', partido_id=p.id) }}" target="_blank" style="text-decoration: none;">
+            <button type="button" style="margin:0; padding: 4px 10px; font-size: 0.8rem; background: #3b82f6; color: white;">👁️ Ver Hoja de Partido</button>
+          </a>
+
+          {% if p.jugado %}
+            <span class="badge badge-ok">✅ Oficializado</span>
+          {% else %}
+            <span class="badge" style="background:#e2e8f0; color:#475569;">⏳ Pendiente de Vocalía</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Fila Inferior: Acciones de la Comisión Técnica -->
+      <div style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed #cbd5e1; display: flex; gap: 15px; flex-wrap: wrap; align-items: center;">
+        
+        {% if p.jugado %}
+          <div style="flex: 1;">
+            {% if p.ganador_escritorio %}
+              <div style="color: #b91c1c; font-weight: bold;">⚖️ Resuelto en Mesa: 2 - 0 a favor de {{ p.ganador_escritorio }}</div>
+              <p style="font-size: 0.8rem; margin: 2px 0 0; color: #64748b;">(Goles no adjudicables a jugadores)</p>
+            {% else %}
+              <div style="color: #15803d; font-weight: bold;">⚽ Resultado Oficial de Cancha aprobado</div>
+            {% endif %}
+          </div>
+          <form method="post" action="{{ url_for('tecnica.quitar_resultado', partido_id=p.id) }}" onsubmit="return confirm('¿Quitar la oficialización de este resultado?');" style="margin:0;">
+            <button type="submit" class="btn-del" style="background: white; padding: 6px 12px;">Deshacer Oficialización</button>
+          </form>
+        {% else %}
+          <!-- Acciones cuando el partido aún no es oficial -->
+          <form method="post" action="{{ url_for('tecnica.tecnica_aprobar_partido', partido_id=p.id) }}" style="margin:0;">
+            <button type="submit" style="padding:8px 15px; background: #1e7d32; font-weight: bold; margin: 0;">✅ Oficializar Resultado de Vocalía</button>
+          </form>
+          
+          <span style="color: #94a3b8;">ó</span>
+          
+          <form method="post" action="{{ url_for('tecnica.tecnica_ganador_escritorio', partido_id=p.id) }}" style="display: flex; gap: 8px; align-items: center; margin:0; background: #fef2f2; border: 1px solid #fca5a5; padding: 5px 10px; border-radius: 6px;">
+            <label style="margin: 0; color: #b91c1c; font-weight: bold; font-size: 0.85rem;">Sanción (Mesa 2-0) a favor de:</label>
+            <select name="ganador_escritorio" style="padding: 4px; border: 1px solid #fca5a5; border-radius: 4px;">
+              <option value="{{ p.equipo_local }}">{{ p.equipo_local }}</option>
+              <option value="{{ p.equipo_visitante }}">{{ p.equipo_visitante }}</option>
+            </select>
+            <button type="submit" style="padding:6px 12px; font-size: 0.85rem; background: #b91c1c; margin: 0;">Ejecutar Sanción</button>
+          </form>
+        {% endif %}
+      </div>
+
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+
+<!-- NUEVA SECCIÓN: DEDUCCIÓN DE PUNTOS -->
+<div class="card" style="border: 2px solid #fca5a5;">
+  <h2 style="color: #b91c1c;">⚖️ Sanciones: Deducción de Puntos</h2>
+  <p style="font-size:0.85rem; color:#64748b; margin-top:-6px;">
+    Aplica pérdida de puntos directos en la tabla de posiciones por dictamen de la Comisión de Penas.
+  </p>
+  
+  <form method="post" action="{{ url_for('tecnica.tecnica_restar_puntos') }}" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; background: #fef2f2; padding: 15px; border-radius: 8px;">
+    <input type="hidden" name="categoria" value="{{ categoria }}">
+    <input type="hidden" name="division" value="{{ division }}">
+    
+    <div>
+      <label style="margin-top: 0; color: #7f1d1d;">Equipo a sancionar</label>
+      <select name="equipo" required style="width: 200px;">
+        <option value="">Selecciona equipo...</option>
+        {% for e in equipos %}<option value="{{ e.nombre }}">{{ e.nombre }}</option>{% endfor %}
+      </select>
+    </div>
+    
+    <div>
+      <label style="margin-top: 0; color: #7f1d1d;">Puntos a restar</label>
+      <input type="number" name="puntos" min="1" placeholder="Ej: 3" required style="width: 100px;">
+    </div>
+    
+    <div style="flex: 1; min-width: 250px;">
+      <label style="margin-top: 0; color: #7f1d1d;">Motivo / Dictamen Oficial</label>
+      <input type="text" name="motivo" placeholder="Ej: Multa económica no pagada, agresión a árbitro..." required>
+    </div>
+    
+    <button type="submit" style="margin: 0; background: #b91c1c; font-weight: bold;">Restar Puntos</button>
+  </form>
+
+  {% if sanciones_puntos %}
+  <table class="tabla-responsive" style="margin-top: 15px; width: 100%; border-collapse: collapse;">
+    <thead>
+      <tr style="background: #fef2f2;">
+        <th style="padding: 8px;">Fecha</th>
+        <th style="padding: 8px;">Equipo</th>
+        <th style="padding: 8px; text-align: center;">Pts Restados</th>
+        <th style="padding: 8px;">Motivo</th>
+        <th style="padding: 8px;">Acción</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in sanciones_puntos %}
+      <tr style="border-bottom: 1px solid #fee2e2;">
+        <td data-label="Fecha" style="padding: 8px; font-size: 0.85rem; color: #64748b;">{{ s.fecha.split(' ')[0] }}</td>
+        <td data-label="Equipo" style="padding: 8px; font-weight: bold; color: #7f1d1d;">{{ s.equipo }}</td>
+        <td data-label="Pts Restados" style="padding: 8px; text-align: center; font-weight: bold; color: #b91c1c;">-{{ s.puntos_descontar }}</td>
+        <td data-label="Motivo" style="padding: 8px; font-size: 0.9rem;">{{ s.motivo }}</td>
+        <td data-label="Acción" style="padding: 8px;">
+          <form method="post" action="{{ url_for('tecnica.tecnica_eliminar_resta_puntos', sancion_id=s.id) }}" onsubmit="return confirm('¿Eliminar esta penalización? Los puntos regresarán al equipo.');" style="margin:0;">
+            <button type="submit" class="btn-del" style="padding:4px 8px; font-size:0.8rem; background: white;">Deshacer</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Tabla de posiciones</h2>
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive">
+    <thead>
+      <tr>
+        <th class="col-sec col-num">#</th><th>Equipo</th><th class="col-num">PJ</th>
+        <th class="col-sec col-num">G</th><th class="col-sec col-num">E</th><th class="col-sec col-num">P</th>
+        <th class="col-sec col-num">GF</th><th class="col-sec col-num">GC</th>
+        <th class="col-num" title="Gol diferencia">GD</th><th class="col-num">PTS</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in tabla %}
+      <tr>
+        <td class="col-sec col-num">{{ loop.index }}</td>
+        <td><span class="solo-movil">{{ loop.index }}. </span><strong>{{ f.equipo }}</strong>
+          {% if f.pts_sancion > 0 %}
+            <span style="display: block; font-size: 0.75rem; color: #ef4444; font-weight: bold;">(Sanción: -{{ f.pts_sancion }} pts)</span>
+          {% endif %}</td>
+        <td class="col-num">{{ f.pj }}</td>
+        <td class="col-sec col-num">{{ f.g }}</td>
+        <td class="col-sec col-num">{{ f.e }}</td>
+        <td class="col-sec col-num">{{ f.p }}</td>
+        <td class="col-sec col-num">{{ f.gf }}</td>
+        <td class="col-sec col-num">{{ f.gc }}</td>
+        <td class="col-num">{{ f.dg }}</td>
+        <td class="col-num"><strong style="color: #1e7d32;">{{ f.pts }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p style="font-size:0.8rem; color:#888; margin-top:8px;">Calculada automáticamente (3 pts por victoria, 1 por empate). Los triunfos por mesa otorgan 3 puntos y un marcador de 2-0.</p>
+</div>
+
+<!-- (Aquí mantienes intacta la tabla de goleadores que ya tenías) -->
+<div class="card">
+  <h2>Goleadores</h2>
+  <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
+    Se calcula solo a partir de los goles registrados en las hojas de Vocalía de cada partido.
+  </p>
+  {% if not goleadores %}
+    <p style="color:#888;">Todavía no hay goles registrados.</p>
+  {% else %}
+  <div style="overflow-x:auto;">
+  <table class="tabla-responsive" id="tablaGoleadores" data-search-placeholder="Buscar por jugador o equipo...">
+    <thead>
+      <tr><th class="col-sec col-num">#</th><th>Jugador</th><th class="col-sec">Equipo</th><th class="col-num">Goles</th></tr>
+    </thead>
+    <tbody>
+      {% for g in goleadores %}
+      <tr>
+        <td class="col-sec col-num">{{ loop.index }}</td>
+        <td>
+          <span class="solo-escritorio">{{ g.apellidos }} {{ g.nombres }}</span>
+          <span class="solo-movil" title="{{ g.apellidos }} {{ g.nombres }} ({{ g.equipo }})">{{ loop.index }}. {{ nombre_corto(g.apellidos, g.nombres) }}</span>
+        </td>
+        <td class="col-sec">{{ g.equipo }}</td>
+        <td class="col-num"><strong>{{ g.goles }}</strong></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}
