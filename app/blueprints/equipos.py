@@ -7,7 +7,9 @@ from app.decorators import admin_required, equipo_permitido, login_required
 from app.services.alineaciones import FORMACIONES, _formacion_valida, _guardar_alineacion, _obtener_alineacion
 from app.services.equipos import _renombrar_equipo_cascada
 from app.services.exportacion import _exportar_jugadores_excel
-from app.services.jugadores import _guardar_imagen_subida, _insertar_jugador, _jugadores_que_ya_jugaron
+from app.services.jugadores import (
+    _guardar_imagen_subida, _insertar_jugador, _jugadores_que_ya_jugaron, _ordenar_por_numero_camiseta,
+)
 from app.services.liga import (
     _categoria_y_division, _contar_juveniles, _edad_minima_categoria, _limite_juveniles_categoria,
 )
@@ -144,10 +146,12 @@ def detalle_equipo(equipo_id):
         flash("No tienes acceso a ese equipo.")
         return redirect(url_for("main.index"))
 
-    jugadores = db.execute(
-        "SELECT * FROM jugadores WHERE equipo = ? AND categoria = ? ORDER BY CAST(numero_camiseta AS INTEGER)",
+    # Se ordena en Python: en PostgreSQL, CAST(numero_camiseta AS INTEGER) falla
+    # (Internal Server Error) si algún jugador tiene el dorsal vacío o no numérico.
+    jugadores = _ordenar_por_numero_camiseta(db.execute(
+        "SELECT * FROM jugadores WHERE equipo = ? AND categoria = ?",
         (equipo["nombre"], equipo["categoria"]),
-    ).fetchall()
+    ).fetchall())
     saldo = equipo["valor_inscripcion"] - equipo["abono"]
     juveniles_count = _contar_juveniles(db, equipo["nombre"], equipo["categoria"])
 

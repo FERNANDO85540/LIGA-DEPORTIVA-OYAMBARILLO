@@ -145,3 +145,17 @@ def test_migracion_desde_esquema_viejo(app):
     except sqlite3.IntegrityError:
         pass
     conn.close()
+
+
+def test_detalle_equipo_con_jugador_sin_dorsal(db, client):
+    """Un jugador sin dorsal no debe tumbar la ficha del equipo (en PostgreSQL
+    el ORDER BY CAST(numero_camiseta AS INTEGER) daba Internal Server Error)."""
+    login_admin(client)
+    equipo_id = _equipo(db, "ALFA")
+    _inscribir(client, equipo_id, "1700000001", dorsal="10")
+    _inscribir(client, equipo_id, "1700000002", dorsal="")
+    _inscribir(client, equipo_id, "1700000003", dorsal="2")
+    respuesta = client.get(f"/equipo/{equipo_id}")
+    assert respuesta.status_code == 200
+    html = respuesta.get_data(as_text=True)
+    assert html.index("1700000003") < html.index("1700000001") < html.index("1700000002")
