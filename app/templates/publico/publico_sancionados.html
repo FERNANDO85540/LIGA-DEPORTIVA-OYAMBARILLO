@@ -30,7 +30,7 @@
       {% for s in sancionados %}
       {% set e = estados[s.id] %}
       <tr>
-        <td><strong>{{ s.j_apellidos }} {{ s.j_nombres }}</strong><span class="solo-movil" style="display:block; font-size:0.75rem; color:#64748b;">{{ s.j_equipo }}</span></td>
+        <td><strong>{{ s.j_apellidos }} {{ s.j_nombres }}</strong><span class="sub-movil">{{ s.j_equipo }}</span></td>
         <td class="col-sec">{{ s.j_equipo }}</td>
         <td class="col-sec">{{ s.motivo or '-' }}</td>
         <td class="col-num">{{ s.jornadas_sancionado }}</td>

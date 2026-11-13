@@ -5,11 +5,14 @@ from flask import Blueprint, flash, jsonify, redirect, render_template, request,
 
 from config import CAMPOS_FOTO_VALIDOS, SUBCATEGORIAS
 from app.database import get_db
-from app.decorators import calificacion_required, jugador_permitido, login_required
+from app.decorators import (
+    calificacion_required, cedula_editable, ficha_bloqueada, ficha_jugador_permitida, jugador_permitido,
+    login_required,
+)
 from app.services.carnets import _carnet_response, _generar_carnet
 from app.services.jugadores import (
     _guardar_imagen_subida, _jugador_califica, _jugadores_que_ya_jugaron, _subcategoria_por_nacimiento,
-    _validar_dorsal_unico,
+    _validar_cedula_en_torneo, _validar_dorsal_unico,
 )
 from app.services.liga import _contar_juveniles, _edad_minima_categoria, _limite_juveniles_categoria
 from app.utils import _calcular_edad, _mayuscula, ahora_ecuador
@@ -26,13 +29,16 @@ def api_cedula_existe():
     devuelven sus datos en `en_otro_torneo` para autocompletar el formulario."""
     cedula = request.args.get("cedula", "").strip()
     categoria = request.args.get("categoria", "").strip()
+    # Al corregir la cédula desde la ficha, el propio jugador no cuenta como duplicado.
+    excluir = request.args.get("excluir", "").strip()
+    excluir_id = int(excluir) if excluir.isdigit() else None
     if not cedula:
         return jsonify({"existe": False})
     db = get_db()
-    filas = db.execute(
-        "SELECT nombres, apellidos, equipo, categoria, fecha_nacimiento FROM jugadores WHERE cedula = ? ORDER BY id",
+    filas = [f for f in db.execute(
+        "SELECT id, nombres, apellidos, equipo, categoria, fecha_nacimiento FROM jugadores WHERE cedula = ? ORDER BY id",
         (cedula,),
-    ).fetchall()
+    ).fetchall() if f["id"] != excluir_id]
     mismo_torneo = [f for f in filas if not categoria or f["categoria"] == categoria]
     if mismo_torneo:
         f = mismo_torneo[0]
@@ -55,7 +61,7 @@ def ficha_jugador(jugador_id):
     if not jugador:
         flash("Jugador no encontrado.")
         return redirect(url_for("main.index"))
-    if not jugador_permitido(db, jugador):
+    if not ficha_jugador_permitida(db, jugador):
         flash("No tienes acceso a ese jugador.")
         return redirect(url_for("main.index"))
     edad = _calcular_edad(jugador["fecha_nacimiento"])
@@ -64,7 +70,7 @@ def ficha_jugador(jugador_id):
     edad_minima = _edad_minima_categoria(db, jugador["categoria"])
     return render_template(
         "jugadores/ficha_jugador.html", jugador=jugador, edad=edad, subcategorias=SUBCATEGORIAS, equipo_id=equipo_id,
-        edad_minima=edad_minima,
+        edad_minima=edad_minima, bloqueado=ficha_bloqueada(jugador), cedula_editable=cedula_editable(jugador),
     )
 
 
@@ -76,13 +82,25 @@ def actualizar_jugador(jugador_id):
     if not jugador:
         flash("Jugador no encontrado.")
         return redirect(url_for("main.index"))
-    if not jugador_permitido(db, jugador):
+    if not ficha_jugador_permitida(db, jugador):
         flash("No tienes acceso a ese jugador.")
         return redirect(url_for("main.index"))
 
-    if jugador["calificado"] and session.get("rol") != "admin":
+    if ficha_bloqueada(jugador):
         flash("Este jugador ya fue calificado y no se puede modificar. Contacta a la Comisión de Calificación.")
         return redirect(url_for("jugadores.ficha_jugador", jugador_id=jugador_id))
+
+    # Cédula: editable solo si está Pendiente o con Solicitud de Reemplazo.
+    cedula = (request.form.get("cedula") or "").strip() or jugador["cedula"]
+    cambia_cedula = cedula != jugador["cedula"]
+    if cambia_cedula:
+        if not cedula_editable(jugador):
+            flash("La cédula de un jugador calificado está bloqueada. Solo se puede cambiar con una Solicitud de Reemplazo en curso.")
+            return redirect(url_for("jugadores.ficha_jugador", jugador_id=jugador_id))
+        error_cedula = _validar_cedula_en_torneo(db, cedula, jugador["categoria"], excluir_id=jugador_id)
+        if error_cedula:
+            flash(error_cedula)
+            return redirect(url_for("jugadores.ficha_jugador", jugador_id=jugador_id))
 
     nombres = _mayuscula(request.form.get("nombres", "")) or jugador["nombres"]
     apellidos = _mayuscula(request.form.get("apellidos", "")) or jugador["apellidos"]
@@ -119,13 +137,24 @@ def actualizar_jugador(jugador_id):
     )
 
     db.execute(
-        """UPDATE jugadores SET nombres = ?, apellidos = ?, fecha_nacimiento = ?, subcategoria = ?,
+        """UPDATE jugadores SET cedula = ?, nombres = ?, apellidos = ?, fecha_nacimiento = ?, subcategoria = ?,
            numero_camiseta = ?, foto = ?, cedula_frontal = ?, cedula_reverso = ?, documentos_fecha = ? WHERE id = ?""",
-        (nombres, apellidos, fecha_nacimiento, subcategoria, numero_camiseta, foto_nombre,
+        (cedula, nombres, apellidos, fecha_nacimiento, subcategoria, numero_camiseta, foto_nombre,
          cedula_frontal, cedula_reverso, documentos_fecha, jugador_id),
     )
+    reemplazo_ejecutado = cambia_cedula and jugador["calificado"] and jugador["reemplazo_solicitado"]
+    if reemplazo_ejecutado:
+        # Es otra persona: la solicitud queda atendida y el nuevo jugador vuelve
+        # a Pendiente para que la Comisión lo califique y se le imprima su carnet.
+        db.execute(
+            "UPDATE jugadores SET calificado = 0, reemplazo_solicitado = 0, carnet_impreso = 0 WHERE id = ?",
+            (jugador_id,),
+        )
     db.commit()
-    flash("Ficha del jugador actualizada.", "ok")
+    if reemplazo_ejecutado:
+        flash("Reemplazo registrado: el jugador quedó Pendiente de calificación por la Comisión.", "ok")
+    else:
+        flash("Ficha del jugador actualizada.", "ok")
     return redirect(url_for("jugadores.ficha_jugador", jugador_id=jugador_id))
 
 
@@ -141,11 +170,11 @@ def quitar_foto_jugador(jugador_id, campo):
     if not jugador:
         flash("Jugador no encontrado.")
         return redirect(url_for("main.index"))
-    if not jugador_permitido(db, jugador):
+    if not ficha_jugador_permitida(db, jugador):
         flash("No tienes acceso a ese jugador.")
         return redirect(url_for("main.index"))
 
-    if jugador["calificado"] and session.get("rol") != "admin":
+    if ficha_bloqueada(jugador):
         flash("Este jugador ya fue calificado y no se puede modificar. Contacta a la Comisión de Calificación.")
         return redirect(url_for("jugadores.ficha_jugador", jugador_id=jugador_id))
 

@@ -3,6 +3,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from app.database import IntegrityError, get_db
 from app.decorators import admin_required
+from app.services.fases import config_fases, guardar_config_fases
 from app.services.liga import _categorias_liga
 
 bp = Blueprint("categorias", __name__)
@@ -28,7 +29,15 @@ def categorias_modulo():
                 (f["nombre"], d["nombre"]),
             ).fetchone()["c"]
             divisiones.append({"fila": d, "equipos_count": d_equipos_count})
-        categorias.append({"fila": f, "equipos_count": equipos_count, "divisiones": divisiones})
+        # Parámetros de fases: uno por serie (o uno solo si no tiene series).
+        torneos = [
+            {"division": d, "equipos_count": c, "config": config_fases(db, f["nombre"], d)}
+            for d, c in (
+                [(x["fila"]["nombre"], x["equipos_count"]) for x in divisiones] if divisiones
+                else [("", equipos_count)]
+            )
+        ]
+        categorias.append({"fila": f, "equipos_count": equipos_count, "divisiones": divisiones, "torneos": torneos})
     return render_template("categorias/categorias_modulo.html", categorias=categorias)
 
 
@@ -97,6 +106,7 @@ def eliminar_categoria(categoria_id):
         return redirect(url_for("categorias.categorias_modulo"))
 
     db.execute("DELETE FROM divisiones WHERE categoria = ?", (categoria["nombre"],))
+    db.execute("DELETE FROM config_fases WHERE categoria = ?", (categoria["nombre"],))
     db.execute("DELETE FROM categorias WHERE id = ?", (categoria_id,))
     db.commit()
     flash(f"Campeonato '{categoria['nombre']}' eliminado.", "ok")
@@ -148,6 +158,49 @@ def eliminar_division(division_id):
         return redirect(url_for("categorias.categorias_modulo"))
 
     db.execute("DELETE FROM divisiones WHERE id = ?", (division_id,))
+    db.execute("DELETE FROM config_fases WHERE categoria = ? AND division = ?", (division["categoria"], division["nombre"]))
     db.commit()
     flash(f"Categoría '{division['nombre']}' eliminada.", "ok")
+    return redirect(url_for("categorias.categorias_modulo"))
+
+
+def _entero_o_none(valor):
+    valor = (valor or "").strip()
+    return int(valor) if valor.isdigit() else None
+
+
+@bp.route("/categorias/config_fases", methods=["POST"])
+@admin_required
+def guardar_config_fases_torneo():
+    """Parámetros de fases de un torneo (campeonato + serie): cupos a la
+    Liguilla Final, si hay Liguilla de No Descenso (y cuántos equipos; vacío =
+    todos los restantes) y cupos a Finales desde la Liguilla Final."""
+    db = get_db()
+    categoria = request.form.get("categoria", "")
+    division = request.form.get("division", "")
+    if categoria not in _categorias_liga(db):
+        flash("Campeonato no encontrado.")
+        return redirect(url_for("categorias.categorias_modulo"))
+    if division and not db.execute(
+        "SELECT 1 FROM divisiones WHERE categoria = ? AND nombre = ?", (categoria, division)
+    ).fetchone():
+        flash("Categoría no encontrada.")
+        return redirect(url_for("categorias.categorias_modulo"))
+
+    cupos_final = _entero_o_none(request.form.get("cupos_liguilla_final"))
+    tiene_descenso = request.form.get("tiene_liguilla_descenso") == "1"
+    cupos_descenso = _entero_o_none(request.form.get("cupos_liguilla_descenso"))
+    cupos_finales = _entero_o_none(request.form.get("cupos_finales"))
+    for valor in (cupos_final, cupos_descenso, cupos_finales):
+        if valor is not None and valor < 2:
+            flash("Cada fase necesita al menos 2 equipos (deja vacío si no aplica).")
+            return redirect(url_for("categorias.categorias_modulo"))
+    if tiene_descenso and cupos_final is None:
+        flash("Para tener Liguilla de No Descenso define primero los cupos a la Liguilla Final.")
+        return redirect(url_for("categorias.categorias_modulo"))
+
+    guardar_config_fases(db, categoria, division, cupos_final, tiene_descenso, cupos_descenso, cupos_finales)
+    db.commit()
+    nombre = f"{categoria} - {division}" if division else categoria
+    flash(f"Parámetros de fases de {nombre} guardados.", "ok")
     return redirect(url_for("categorias.categorias_modulo"))

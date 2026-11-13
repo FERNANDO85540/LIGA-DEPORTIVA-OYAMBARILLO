@@ -15,7 +15,6 @@
   </p>
 </div>
 
-{% set bloqueado = jugador.calificado and session.get('rol') != 'admin' %}
 
 <div class="card" style="display:flex; gap:24px; flex-wrap:wrap; padding: 20px; border-radius: 8px;">
   <div style="flex:1; min-width:280px;">
@@ -39,7 +38,19 @@
     
     <form method="post" action="{{ url_for('jugadores.actualizar_jugador', jugador_id=jugador.id) }}" enctype="multipart/form-data">
       <label>Cédula</label>
-      <input type="text" value="{{ jugador.cedula }}" disabled style="background:#f1f5f9; color: #64748b; font-weight: bold;">
+      {% if cedula_editable and not bloqueado %}
+      <input type="text" name="cedula" value="{{ jugador.cedula }}" required maxlength="20" style="font-weight: bold;"
+             data-categoria="{{ jugador.categoria }}" data-excluir-id="{{ jugador.id }}">
+      <p style="font-size:0.78rem; color:#64748b; margin:2px 0 0;">
+        {% if jugador.calificado and jugador.reemplazo_solicitado %}
+          📨 Reemplazo en curso: puedes ingresar la cédula y los datos del nuevo jugador. Al guardar, quedará Pendiente de calificación.
+        {% else %}
+          Editable mientras el jugador esté Pendiente de calificación. No puede repetirse en este campeonato.
+        {% endif %}
+      </p>
+      {% else %}
+      <input type="text" value="{{ jugador.cedula }}" disabled title="Bloqueada: el jugador ya está calificado" style="background:#f1f5f9; color: #64748b; font-weight: bold;">
+      {% endif %}
 
       <label>Nombres</label>
       <input type="text" name="nombres" value="{{ jugador.nombres }}" required {% if bloqueado %}disabled{% endif %}>

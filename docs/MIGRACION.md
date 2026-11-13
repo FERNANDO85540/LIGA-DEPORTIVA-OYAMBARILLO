@@ -25,6 +25,7 @@ así que aunque se olvide el paso manual, siempre queda una copia del estado pre
 | `2026_10_cedula_unica_por_torneo` | Quita el `UNIQUE` global de `jugadores.cedula` (en SQLite reconstruye la tabla conservando ids y el contador) y crea el índice único `(cedula, categoria)` |
 | `2026_10_fecha_registro_hora_ecuador` | Convierte `jugadores.fecha_registro` de la hora del servidor (UTC en Render) a la de America/Guayaquil |
 | `2026_10_quitar_estado_en_vivo` | Deja `partidos.en_vivo = 0` (la columna se conserva) |
+| `2026_11_fases_y_ajuste_de_puntos` | Agrega `jornadas.fase_id` (NULL = Fase Regular), `puntos_sancion.fase_id` y `puntos_sancion.puntos_ajuste` (copia `-puntos_descontar`; la columna vieja se conserva). Las tablas `fases`, `fase_equipos` y `config_fases` se crean vacías. No modifica datos de la Fase Regular |
 
 ## Rollback
 

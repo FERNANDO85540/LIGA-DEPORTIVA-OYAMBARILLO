@@ -443,6 +443,42 @@ def init_db():
         )
     """)
 
+    # Fases de campeonato (Liguilla Final, Liguilla de No Descenso, Finales).
+    # La Fase Regular NO tiene fila aquí: son las jornadas con fase_id NULL,
+    # así todo lo histórico sigue siendo Fase Regular sin tocarlo.
+    db.execute(f"""
+        CREATE TABLE IF NOT EXISTS fases (
+            id {tipo_id},
+            categoria TEXT NOT NULL,
+            division TEXT NOT NULL DEFAULT '',
+            tipo TEXT NOT NULL,
+            nombre TEXT NOT NULL,
+            orden INTEGER NOT NULL DEFAULT 1,
+            fase_origen_id INTEGER,
+            fecha TEXT NOT NULL
+        )
+    """)
+    db.execute(f"""
+        CREATE TABLE IF NOT EXISTS fase_equipos (
+            id {tipo_id},
+            fase_id INTEGER NOT NULL,
+            equipo TEXT NOT NULL,
+            posicion_origen INTEGER
+        )
+    """)
+    # Parámetros de fases por torneo (campeonato + serie/división).
+    db.execute(f"""
+        CREATE TABLE IF NOT EXISTS config_fases (
+            id {tipo_id},
+            categoria TEXT NOT NULL,
+            division TEXT NOT NULL DEFAULT '',
+            cupos_liguilla_final INTEGER,
+            tiene_liguilla_descenso INTEGER NOT NULL DEFAULT 0,
+            cupos_liguilla_descenso INTEGER,
+            cupos_finales INTEGER
+        )
+    """)
+
     _normalizar_mayusculas_existentes(db)
     db.commit()
 
@@ -493,6 +529,7 @@ MIGRACIONES = [
     "2026_10_cedula_unica_por_torneo",
     "2026_10_fecha_registro_hora_ecuador",
     "2026_10_quitar_estado_en_vivo",
+    "2026_11_fases_y_ajuste_de_puntos",
 ]
 
 
@@ -537,6 +574,7 @@ def _aplicar_migraciones(db):
         "2026_10_cedula_unica_por_torneo": _migrar_cedula_unica_por_torneo,
         "2026_10_fecha_registro_hora_ecuador": _migrar_fecha_registro_hora_ecuador,
         "2026_10_quitar_estado_en_vivo": _migrar_quitar_estado_en_vivo,
+        "2026_11_fases_y_ajuste_de_puntos": _migrar_fases_y_ajuste_de_puntos,
     }
     for nombre in MIGRACIONES:
         if nombre in aplicadas:
@@ -611,3 +649,22 @@ def _migrar_fecha_registro_hora_ecuador(db):
 def _migrar_quitar_estado_en_vivo(db):
     """El estado "en vivo" se eliminó del sistema: ningún partido queda marcado así."""
     db.execute("UPDATE partidos SET en_vivo = 0 WHERE en_vivo = 1")
+
+
+def _migrar_fases_y_ajuste_de_puntos(db):
+    """Soporte de fases (Liguillas y Finales) y "Ajuste de Puntos" con signo.
+
+    - jornadas.fase_id: NULL = Fase Regular (todas las jornadas existentes
+      quedan, sin cambios, en la Fase Regular).
+    - puntos_sancion.puntos_ajuste: valor con signo (negativo = sanción,
+      positivo = bonificación). Las deducciones existentes se copian como
+      negativas; la columna vieja puntos_descontar se conserva.
+    - puntos_sancion.fase_id: fase a la que aplica el ajuste (NULL = Regular)."""
+    if "fase_id" not in _columnas_existentes(db, "jornadas"):
+        db.execute("ALTER TABLE jornadas ADD COLUMN fase_id INTEGER")
+    pcols = _columnas_existentes(db, "puntos_sancion")
+    if "fase_id" not in pcols:
+        db.execute("ALTER TABLE puntos_sancion ADD COLUMN fase_id INTEGER")
+    if "puntos_ajuste" not in pcols:
+        db.execute("ALTER TABLE puntos_sancion ADD COLUMN puntos_ajuste INTEGER")
+    db.execute("UPDATE puntos_sancion SET puntos_ajuste = -puntos_descontar WHERE puntos_ajuste IS NULL")

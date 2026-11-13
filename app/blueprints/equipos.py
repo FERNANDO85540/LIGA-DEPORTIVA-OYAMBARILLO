@@ -6,6 +6,7 @@ from app.database import IntegrityError, get_db
 from app.decorators import admin_required, equipo_permitido, login_required
 from app.services.alineaciones import FORMACIONES, _formacion_valida, _guardar_alineacion, _obtener_alineacion
 from app.services.equipos import _renombrar_equipo_cascada
+from app.services.estadisticas import _goles_por_jugador, _tarjetas_por_jugador
 from app.services.exportacion import _exportar_jugadores_excel
 from app.services.jugadores import (
     _guardar_imagen_subida, _insertar_jugador, _jugadores_que_ya_jugaron, _ordenar_por_numero_camiseta,
@@ -155,6 +156,12 @@ def detalle_equipo(equipo_id):
     saldo = equipo["valor_inscripcion"] - equipo["abono"]
     juveniles_count = _contar_juveniles(db, equipo["nombre"], equipo["categoria"])
 
+    nombres_fase = {
+        f["id"]: f["nombre"] for f in db.execute(
+            "SELECT id, nombre FROM fases WHERE categoria = ? AND division = ?",
+            (equipo["categoria"], equipo["division"]),
+        ).fetchall()
+    }
     partidos_equipo = []
     for jr in db.execute(
         "SELECT * FROM jornadas WHERE categoria = ? AND division = ? ORDER BY numero, id",
@@ -173,10 +180,11 @@ def detalle_equipo(equipo_id):
             partidos_equipo.append({
                 "jornada": jr, "rival": rival, "local": local,
                 "hora": partido["hora"], "fecha": partido["fecha"],
-                "partido_id": partido["id"],
+                "partido_id": partido["id"], "fase": nombres_fase.get(jr["fase_id"]),
             })
         elif descansa:
-            partidos_equipo.append({"jornada": jr, "rival": None, "local": None, "hora": None, "fecha": None, "partido_id": None})
+            partidos_equipo.append({"jornada": jr, "rival": None, "local": None, "hora": None, "fecha": None,
+                                    "partido_id": None, "fase": nombres_fase.get(jr["fase_id"])})
 
     return render_template(
         "equipos/detalle_equipo.html",
@@ -191,6 +199,43 @@ def detalle_equipo(equipo_id):
         partidos_equipo=partidos_equipo,
         ya_jugaron=_jugadores_que_ya_jugaron(db, [j["id"] for j in jugadores]),
     )
+
+
+@bp.route("/equipo/<int:equipo_id>/estadisticas", methods=["GET"])
+@login_required
+def estadisticas_equipo(equipo_id):
+    """Mis Estadísticas (privado: delegado del equipo o admin). Goles y
+    tarjetas salen de las MISMAS funciones que alimentan la tabla pública de
+    Goleadores y el módulo de Acumulación de Tarjetas de Penas, acumulados en
+    todas las fases del campeonato."""
+    db = get_db()
+    equipo = db.execute("SELECT * FROM equipos WHERE id = ?", (equipo_id,)).fetchone()
+    if not equipo:
+        flash("Equipo no encontrado.")
+        return redirect(url_for("main.index"))
+    if not equipo_permitido(equipo_id):
+        flash("No tienes acceso a las estadísticas de ese equipo.")
+        return redirect(url_for("main.index"))
+
+    jugadores = _ordenar_por_numero_camiseta(db.execute(
+        "SELECT id, nombres, apellidos, numero_camiseta FROM jugadores WHERE equipo = ? AND categoria = ?",
+        (equipo["nombre"], equipo["categoria"]),
+    ).fetchall())
+    goles = {
+        f["id"]: f["goles"] or 0
+        for f in _goles_por_jugador(db, equipo["categoria"], equipo["division"], equipo=equipo["nombre"])
+    }
+    tarjetas = _tarjetas_por_jugador(db, [j["id"] for j in jugadores])
+    filas = [
+        {
+            "numero_camiseta": j["numero_camiseta"] or "-", "apellidos": j["apellidos"], "nombres": j["nombres"],
+            "goles": goles.get(j["id"], 0), "amarillas": tarjetas[j["id"]]["amarillas"],
+            "rojas": tarjetas[j["id"]]["rojas"],
+        }
+        for j in jugadores
+    ]
+    totales = {k: sum(f[k] for f in filas) for k in ("goles", "amarillas", "rojas")}
+    return render_template("equipos/estadisticas_equipo.html", equipo=equipo, filas=filas, totales=totales)
 
 
 @bp.route("/equipo/<int:equipo_id>/partido/<int:partido_id>/alineacion", methods=["GET"])

@@ -108,3 +108,24 @@ def jugador_permitido(db, jugador):
         return True
     fila = db.execute("SELECT id FROM equipos WHERE nombre = ?", (jugador["equipo"],)).fetchone()
     return fila is not None and session.get("equipo_id") == fila["id"]
+
+
+def ficha_jugador_permitida(db, jugador):
+    """La ficha del jugador la ven/editan el delegado de su equipo, el admin y
+    la Comisión de Calificación (que corrige datos y ejecuta reemplazos)."""
+    return session.get("rol") == "calificacion" or jugador_permitido(db, jugador)
+
+
+def cedula_editable(jugador):
+    """La cédula solo se puede corregir mientras el jugador está Pendiente (no
+    calificado) o tiene una Solicitud de Reemplazo en curso. Calificado y sin
+    reemplazo, queda bloqueada para todos los roles."""
+    return not jugador["calificado"] or bool(jugador["reemplazo_solicitado"])
+
+
+def ficha_bloqueada(jugador):
+    """Datos de la ficha bloqueados: calificado y sin reemplazo en curso,
+    salvo para admin y Comisión de Calificación."""
+    if session.get("rol") in ("admin", "calificacion"):
+        return False
+    return bool(jugador["calificado"]) and not jugador["reemplazo_solicitado"]
