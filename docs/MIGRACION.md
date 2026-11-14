@@ -26,6 +26,7 @@ así que aunque se olvide el paso manual, siempre queda una copia del estado pre
 | `2026_10_fecha_registro_hora_ecuador` | Convierte `jugadores.fecha_registro` de la hora del servidor (UTC en Render) a la de America/Guayaquil |
 | `2026_10_quitar_estado_en_vivo` | Deja `partidos.en_vivo = 0` (la columna se conserva) |
 | `2026_11_fases_y_ajuste_de_puntos` | Agrega `jornadas.fase_id` (NULL = Fase Regular), `puntos_sancion.fase_id` y `puntos_sancion.puntos_ajuste` (copia `-puntos_descontar`; la columna vieja se conserva). Las tablas `fases`, `fase_equipos` y `config_fases` se crean vacías. No modifica datos de la Fase Regular |
+| `2026_11_cupos_de_fases_iniciales` | Carga los cupos de fases: Senior-Máxima 6 a Liguilla Final + No Descenso con el resto y 4 a Finales; Senior-Primera 6 (2 eliminados) y 4 a Finales; Sub 45 Liguilla de 4. Nombres sin distinguir tildes/mayúsculas; no pisa configuraciones hechas a mano |
 
 ## Rollback
 

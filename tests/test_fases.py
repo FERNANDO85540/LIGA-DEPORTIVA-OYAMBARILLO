@@ -320,3 +320,31 @@ def test_calificacion_puede_abrir_la_ficha(db, client):
     jugador = _jugador(db, client)
     login(client, "comision", "c")
     assert client.get(f"/jugador/{jugador}").status_code == 200
+
+
+def test_migracion_carga_cupos_iniciales_sin_pisar_los_manuales(app):
+    ruta = os.path.join(DATA_DIR, "liga.db")
+    conn = sqlite3.connect(ruta)
+    conn.execute("DELETE FROM migraciones WHERE nombre = '2026_11_cupos_de_fases_iniciales'")
+    conn.execute("DELETE FROM config_fases")
+    conn.execute("INSERT INTO divisiones (categoria, nombre) VALUES ('Senior', 'MÁXIMA'), ('Senior', 'Primera')")
+    # Primera ya configurada a mano: se respeta.
+    conn.execute("INSERT INTO config_fases (categoria, division, cupos_liguilla_final, tiene_liguilla_descenso) "
+                 "VALUES ('Senior', 'Primera', 8, 0)")
+    conn.commit()
+    conn.close()
+
+    from app import create_app
+    create_app({"TESTING": True})
+    conn = sqlite3.connect(ruta)
+    filas = {
+        (f[0], f[1]): f[2:] for f in conn.execute(
+            "SELECT categoria, division, cupos_liguilla_final, tiene_liguilla_descenso, cupos_liguilla_descenso, "
+            "cupos_finales FROM config_fases")
+    }
+    conn.close()
+    assert filas == {
+        ("Senior", "MÁXIMA"): (6, 1, None, 4),
+        ("Senior", "Primera"): (8, 0, None, None),
+        ("Sub 45", ""): (4, 0, None, None),
+    }

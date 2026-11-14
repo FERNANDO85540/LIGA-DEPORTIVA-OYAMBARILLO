@@ -530,6 +530,7 @@ MIGRACIONES = [
     "2026_10_fecha_registro_hora_ecuador",
     "2026_10_quitar_estado_en_vivo",
     "2026_11_fases_y_ajuste_de_puntos",
+    "2026_11_cupos_de_fases_iniciales",
 ]
 
 
@@ -575,6 +576,7 @@ def _aplicar_migraciones(db):
         "2026_10_fecha_registro_hora_ecuador": _migrar_fecha_registro_hora_ecuador,
         "2026_10_quitar_estado_en_vivo": _migrar_quitar_estado_en_vivo,
         "2026_11_fases_y_ajuste_de_puntos": _migrar_fases_y_ajuste_de_puntos,
+        "2026_11_cupos_de_fases_iniciales": _migrar_cupos_de_fases_iniciales,
     }
     for nombre in MIGRACIONES:
         if nombre in aplicadas:
@@ -668,3 +670,47 @@ def _migrar_fases_y_ajuste_de_puntos(db):
     if "puntos_ajuste" not in pcols:
         db.execute("ALTER TABLE puntos_sancion ADD COLUMN puntos_ajuste INTEGER")
     db.execute("UPDATE puntos_sancion SET puntos_ajuste = -puntos_descontar WHERE puntos_ajuste IS NULL")
+
+
+# Cupos de fases acordados por la liga para la temporada 2026:
+# (campeonato, serie): (cupos Liguilla Final, ¿No Descenso?, equipos en No
+# Descenso [None = todos los restantes], cupos a Finales desde la Liguilla)
+CUPOS_FASES_INICIALES = {
+    ("SENIOR", "MAXIMA"): (6, True, None, 4),
+    ("SENIOR", "PRIMERA"): (6, False, None, 4),
+    ("SUB 45", ""): (4, False, None, None),
+}
+
+
+def _normalizar_nombre(texto):
+    import unicodedata
+    sin_tildes = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode()
+    return " ".join(sin_tildes.upper().split())
+
+
+def _migrar_cupos_de_fases_iniciales(db):
+    """Carga una sola vez los cupos de fases de cada torneo (Máxima 6 + No
+    Descenso con el resto, Primera 6 y 2 eliminados, Sub 45 Liguilla de 4).
+    Los nombres se comparan sin tildes ni mayúsculas. No pisa un torneo que ya
+    tenga configuración guardada a mano, y si un campeonato o serie no existe
+    simplemente se omite. Después se edita desde Gestionar Campeonatos."""
+    torneos = [(f["nombre"], "") for f in db.execute("SELECT nombre FROM categorias").fetchall()]
+    torneos += [(f["categoria"], f["nombre"]) for f in db.execute("SELECT categoria, nombre FROM divisiones").fetchall()]
+    con_series = {f["categoria"] for f in db.execute("SELECT DISTINCT categoria FROM divisiones").fetchall()}
+    for categoria, division in torneos:
+        if not division and categoria in con_series:
+            continue  # el campeonato se configura por serie
+        valores = CUPOS_FASES_INICIALES.get((_normalizar_nombre(categoria), _normalizar_nombre(division)))
+        if not valores:
+            continue
+        ya_existe = db.execute(
+            "SELECT 1 FROM config_fases WHERE categoria = ? AND division = ?", (categoria, division)
+        ).fetchone()
+        if ya_existe:
+            continue
+        cupos_final, tiene_descenso, cupos_descenso, cupos_finales = valores
+        db.execute(
+            """INSERT INTO config_fases (categoria, division, cupos_liguilla_final, tiene_liguilla_descenso,
+               cupos_liguilla_descenso, cupos_finales) VALUES (?, ?, ?, ?, ?, ?)""",
+            (categoria, division, cupos_final, 1 if tiene_descenso else 0, cupos_descenso, cupos_finales),
+        )
