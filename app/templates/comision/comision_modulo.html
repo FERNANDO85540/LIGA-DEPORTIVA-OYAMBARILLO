@@ -140,11 +140,16 @@ const datosJugadores = JSON.parse(document.getElementById('data-jugadores').text
 const table = new Tabulator("#grid-comision", {
   data: datosJugadores,
   index: "id",
-  // Recuerda filtros, orden y página tras guardar (la página se recarga).
-  persistence: { headerFilter: true, sort: true, page: true },
-  persistenceID: "comision",
-  layout: "fitColumns",
-  responsiveLayout: "collapse",
+  // Recuerda filtros, orden, página y ANCHO de columnas tras guardar (la
+  // página se recarga): así un ancho ajustado a mano no "rebota" al original.
+  persistence: { headerFilter: true, sort: true, page: true, columns: ["width"] },
+  persistenceID: "comision-v2",
+  // Columnas autoajustadas al contenido y redimensionables a gusto: con
+  // "fitColumns" + "collapse" (y anchos fijos) Tabulator volvía a repartir el
+  // ancho y deshacía el arrastre. Si no caben, la tabla hace scroll horizontal.
+  layout: "fitDataStretch",
+  responsiveLayout: false,
+  columnDefaults: { resizable: true, minWidth: 60 },
   maxHeight: "70vh",
   minHeight: 150,
   placeholder: "No se encontraron jugadores.",
@@ -198,28 +203,30 @@ const table = new Tabulator("#grid-comision", {
 
         return checkbox;
       },
+      field: "_seleccion",
       hozAlign: "center",
       headerSort: false,
       width: 50,
+      resizable: false,
       cellClick: (e, cell) => cell.getRow().toggleSelect()
     },
-    { title: "#", field: "numero_camiseta", hozAlign: "center", width: 70,
+    { title: "#", field: "numero_camiseta", hozAlign: "center", minWidth: 70,
       sorter: "number", headerFilter: "number" },
     { title: "Equipo", field: "equipo", headerFilter: "list",
       headerFilterParams: { valuesLookup: true, clearable: true }, headerFilterLiveFilter: true },
     { title: "Campeonato", field: "campeonato", headerFilter: "list",
       headerFilterParams: { valuesLookup: true, clearable: true } },
-    { title: "Cédula", field: "cedula", headerFilter: "input", width: 120 },
+    { title: "Cédula", field: "cedula", headerFilter: "input", minWidth: 120 },
     { title: "Nombres", field: "nombres", headerFilter: "input" },
     { title: "Apellidos", field: "apellidos", headerFilter: "input" },
-    { title: "Estado", field: "calificado", hozAlign: "center", width: 130,
+    { title: "Estado", field: "calificado", hozAlign: "center", minWidth: 100,
       formatter: "tickCross",
       headerFilter: "tickCross", headerFilterParams: { tristate: true } },
-    { title: "Reemplazo", field: "reemplazo", hozAlign: "center", width: 120,
+    { title: "Reemplazo", field: "reemplazo", hozAlign: "center", minWidth: 110,
       formatter: (cell) => cell.getValue() ? "📨 Solicitado" : "",
       headerFilter: "tickCross", headerFilterParams: { tristate: true } },
-    { title: "Inscripción", field: "inscrito", width: 140 },
-    { title: "Ficha", field: "id", hozAlign: "center", width: 90, headerSort: false,
+    { title: "Inscripción", field: "inscrito", minWidth: 130 },
+    { title: "Ficha", field: "id", hozAlign: "center", minWidth: 80, headerSort: false,
       formatter: (cell) => {
         const id = cell.getValue();
         return `<a href="${BASE_URL_FICHA}${id}" target="_blank" rel="noopener">🔎 Ver</a>`;

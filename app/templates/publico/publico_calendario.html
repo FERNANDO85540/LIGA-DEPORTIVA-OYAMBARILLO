@@ -10,8 +10,10 @@
 {% set categoria_endpoint = 'publico.publico_calendario' %}
 {% include "partials/_categoria_cards.html" %}
 {% include "partials/_division_cards.html" %}
+{% include "partials/_fase_tabs.html" %}
 
 <div class="card">
+  {% if fases|length > 1 %}<h2>{{ fase.icono }} {{ fase.nombre }}</h2>{% endif %}
   {% if not jornadas %}
     <p style="color:#888;">Todavía no se ha publicado el fixture.</p>
   {% endif %}

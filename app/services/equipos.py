@@ -13,3 +13,6 @@ def _renombrar_equipo_cascada(db, nombre_viejo, nombre_nuevo):
     db.execute("UPDATE descansos SET equipo = ? WHERE equipo = ?", (nombre_nuevo, nombre_viejo))
     db.execute("UPDATE alineaciones SET equipo = ? WHERE equipo = ?", (nombre_nuevo, nombre_viejo))
     db.execute("UPDATE vocalia_cambios SET equipo = ? WHERE equipo = ?", (nombre_nuevo, nombre_viejo))
+    db.execute("UPDATE partidos SET ganador_escritorio = ? WHERE ganador_escritorio = ?", (nombre_nuevo, nombre_viejo))
+    db.execute("UPDATE puntos_sancion SET equipo = ? WHERE equipo = ?", (nombre_nuevo, nombre_viejo))
+    db.execute("UPDATE fase_equipos SET equipo = ? WHERE equipo = ?", (nombre_nuevo, nombre_viejo))

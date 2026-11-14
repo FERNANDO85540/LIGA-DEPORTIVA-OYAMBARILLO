@@ -12,7 +12,8 @@ app/
     liga.py               Campeonatos y divisiones
     partidos.py           Fixture
     sanciones.py          Suspensiones, rojas, acumulación de amarillas
-    estadisticas.py       Tabla de posiciones y goleadores
+    fases.py              Fases (Regular, Liguilla Final, No Descenso, Finales) y su configuración
+    estadisticas.py       Tabla de posiciones por fase, goleadores y tarjetas por jugador (fuente única)
     jugadores.py          Inscripción y validaciones
     carnets.py            Generación de carnets (Pillow)
     exportacion.py / importacion.py   Excel
@@ -47,3 +48,18 @@ Cubren las reglas de negocio: suspensiones contadas solo sobre partidos jugados,
 fecha de inicio manual, levantar sanciones, acumulación de 5 amarillas en ambos
 sentidos, exclusividad de cédula por torneo, dorsal único, solicitud de reemplazo,
 hora de Ecuador, redirección segura de vuelta a la vista y la migración del esquema viejo.
+
+## Fases de campeonato
+
+- La **Fase Regular** es implícita: las jornadas con `fase_id` NULL (todo lo histórico).
+- Las demás fases viven en `fases` + `fase_equipos`; sus jornadas llevan `jornadas.fase_id`
+  y sus ajustes `puntos_sancion.fase_id`, así cada tabla arranca de cero.
+- Parámetros por torneo (campeonato + serie) en `config_fases`, editables en Gestionar Campeonatos.
+- La Comisión Técnica genera la fase siguiente desde la tabla de la fase actual (propuesta
+  editable). La fase de origen no se modifica.
+- Goles y tarjetas no dependen de la fase: se acumulan en todo el campeonato. Por eso las
+  jornadas de una fase nueva continúan la numeración (las suspensiones y la acumulación de
+  amarillas se ordenan por número de jornada).
+- **Ajuste de Puntos** (`puntos_sancion.puntos_ajuste`): negativo = sanción, positivo = bonificación.
+- `_goles_por_jugador` / `_tarjetas_por_jugador` alimentan Goleadores, Acumulación de Tarjetas
+  y "Mis Estadísticas" (`/equipo/<id>/estadisticas`), para que siempre coincidan.

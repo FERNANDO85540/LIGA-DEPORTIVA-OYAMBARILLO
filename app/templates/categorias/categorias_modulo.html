@@ -86,6 +86,43 @@
     </div>
     <button type="submit" style="padding:6px 12px; font-size:0.85rem;">Agregar categoría</button>
   </form>
+
+  <h3 style="margin-top:24px; margin-bottom:8px; font-size:1rem;">🏁 Fases del campeonato (Liguillas y Finales)</h3>
+  <p style="font-size:0.8rem; color:#888; margin:0 0 10px;">
+    Al terminar la Fase Regular, la Comisión Técnica genera las liguillas con esta clasificación propuesta (puede corregirla antes de confirmar).
+    Ejemplos: Máxima (10 equipos) → 6 a Liguilla Final y los 4 restantes a No Descenso · Primera (8) → 6 a Liguilla Final, 2 eliminados ·
+    Sub 45 (7) → 4 a la Liguilla. Deja vacío lo que no aplique.
+  </p>
+  {% for t in c.torneos %}
+  <form method="post" action="{{ url_for('categorias.guardar_config_fases_torneo') }}" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:10px;">
+    <input type="hidden" name="categoria" value="{{ c.fila.nombre }}">
+    <input type="hidden" name="division" value="{{ t.division }}">
+    <div style="min-width:120px;">
+      <strong style="color:var(--verde-osc);">{{ t.division or c.fila.nombre }}</strong>
+      <span style="display:block; font-size:0.75rem; color:#888;">{{ t.equipos_count }} equipo(s)</span>
+    </div>
+    <div>
+      <label style="margin-top:0;">Cupos a Liguilla Final</label>
+      <input type="number" name="cupos_liguilla_final" min="2" value="{{ t.config.cupos_liguilla_final if t.config.cupos_liguilla_final is not none else '' }}" placeholder="ej. 6" style="width:110px;">
+    </div>
+    <div>
+      <label style="margin-top:0;">¿Liguilla de No Descenso?</label>
+      <select name="tiene_liguilla_descenso" style="width:110px;">
+        <option value="0" {% if not t.config.tiene_liguilla_descenso %}selected{% endif %}>No</option>
+        <option value="1" {% if t.config.tiene_liguilla_descenso %}selected{% endif %}>Sí</option>
+      </select>
+    </div>
+    <div>
+      <label style="margin-top:0;">Equipos en No Descenso</label>
+      <input type="number" name="cupos_liguilla_descenso" min="2" value="{{ t.config.cupos_liguilla_descenso if t.config.cupos_liguilla_descenso is not none else '' }}" placeholder="Todos los restantes" style="width:150px;">
+    </div>
+    <div>
+      <label style="margin-top:0;">Cupos a Finales (desde la Liguilla)</label>
+      <input type="number" name="cupos_finales" min="2" value="{{ t.config.cupos_finales if t.config.cupos_finales is not none else '' }}" placeholder="ej. 4" style="width:110px;">
+    </div>
+    <button type="submit" style="padding:6px 12px; font-size:0.85rem; margin:0;">Guardar fases</button>
+  </form>
+  {% endfor %}
 </div>
 {% endfor %}
 

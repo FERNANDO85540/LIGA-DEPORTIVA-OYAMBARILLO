@@ -26,6 +26,7 @@
     
     <div style="background: #f1f5f9; padding: 10px 15px; border-radius: 6px; margin: -15px -15px 15px -15px; border-bottom: 1px solid #cbd5e1;">
       <strong style="font-size: 1.1rem; color: #0f172a;">Jornada {{ item.jornada.numero }}</strong>
+      {% if item.fase_nombre != 'Fase Regular' %}<span class="badge" style="background:#dcfce7; color:#14532d; margin-left:6px;">{{ item.fase_nombre }}</span>{% endif %}
       {% if item.jornada.fecha %}<span style="color: #475569; margin-left: 8px;">— {{ item.jornada.fecha }}</span>{% endif %}
     </div>
 

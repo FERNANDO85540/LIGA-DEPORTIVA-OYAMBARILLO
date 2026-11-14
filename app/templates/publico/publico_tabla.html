@@ -10,8 +10,10 @@
 {% set categoria_endpoint = 'publico.publico_tabla' %}
 {% include "partials/_categoria_cards.html" %}
 {% include "partials/_division_cards.html" %}
+{% include "partials/_fase_tabs.html" %}
 
 <div class="card">
+  {% if fases|length > 1 %}<h2>{{ fase.icono }} {{ fase.nombre }}</h2>{% endif %}
   <div class="tabla-scroll">
   <table class="tabla-responsive" data-search="off">
     <thead>
@@ -26,7 +28,7 @@
       {% for f in tabla %}
       <tr>
         <td class="col-sec col-num">{{ loop.index }}</td>
-        <td><span class="solo-movil">{{ loop.index }}. </span><strong>{{ f.equipo }}</strong></td>
+        <td><span class="solo-movil">{{ loop.index }}. </span><strong>{{ f.equipo }}</strong>{% if f.pts_ajuste %}<span style="display:block; font-size:0.72rem; color:{{ '#b91c1c' if f.pts_ajuste < 0 else '#15803d' }};">{{ 'Ajuste' if f.pts_ajuste < 0 else 'Bonificación' }}: {{ '%+d' % f.pts_ajuste }} pts</span>{% endif %}</td>
         <td class="col-num">{{ f.pj }}</td>
         <td class="col-sec col-num">{{ f.g }}</td>
         <td class="col-sec col-num">{{ f.e }}</td>
@@ -44,6 +46,7 @@
 
 <div class="card">
   <h2>⚽ Goleadores</h2>
+  {% if fases|length > 1 %}<p style="font-size:0.8rem; color:#888; margin-top:-6px;">Acumulado de todas las fases del campeonato.</p>{% endif %}
   {% if not goleadores %}
     <p style="color:#888;">Todavía no hay goles registrados.</p>
   {% else %}
@@ -59,6 +62,7 @@
         <td>
           <span class="solo-escritorio">{{ g.apellidos }} {{ g.nombres }}</span>
           <span class="solo-movil" title="{{ g.apellidos }} {{ g.nombres }} ({{ g.equipo }})">{{ loop.index }}. {{ nombre_corto(g.apellidos, g.nombres) }}</span>
+          <span class="sub-movil">{{ g.equipo }}</span>
         </td>
         <td class="col-sec">{{ g.equipo }}</td>
         <td class="col-num"><strong>{{ g.goles }}</strong></td>

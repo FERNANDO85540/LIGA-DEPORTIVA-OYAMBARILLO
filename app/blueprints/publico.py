@@ -4,6 +4,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from config import CATEGORIA_ACTIVA
 from app.database import get_db
 from app.services.estadisticas import _calcular_goleadores, _calcular_tabla_posiciones
+from app.services.fases import fase_seleccionada
 from app.services.liga import _categoria_y_division, _categorias_liga, _divisiones_de_categoria
 from app.services.partidos import _fixture_completo
 from app.services.sanciones import estado_sancion
@@ -93,10 +94,12 @@ def publico_tabla():
     categoria, division = _categoria_y_division(
         db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
     )
-    tabla = _calcular_tabla_posiciones(db, categoria, division)
+    fase, fases = fase_seleccionada(db, categoria, division, request.args.get("fase", ""))
+    tabla = _calcular_tabla_posiciones(db, categoria, division, fase)
+    # Goleadores: acumulados en todas las fases (no dependen de la fase elegida).
     goleadores = _calcular_goleadores(db, categoria, division)
     return render_template(
-        "publico/publico_tabla.html", tabla=tabla, goleadores=goleadores, categoria=categoria,
+        "publico/publico_tabla.html", tabla=tabla, goleadores=goleadores, categoria=categoria, fase=fase, fases=fases,
         categorias_liga=_categorias_liga(db), division=division, divisiones=_divisiones_de_categoria(db, categoria),
     )
 
@@ -107,9 +110,10 @@ def publico_calendario():
     categoria, division = _categoria_y_division(
         db, request.args.get("categoria", CATEGORIA_ACTIVA), request.args.get("division", "")
     )
-    jornadas = _fixture_completo(db, categoria, division)
+    fase, fases = fase_seleccionada(db, categoria, division, request.args.get("fase", ""))
+    jornadas = _fixture_completo(db, categoria, division, fase)
     return render_template(
-        "publico/publico_calendario.html", jornadas=jornadas, categoria=categoria,
+        "publico/publico_calendario.html", jornadas=jornadas, categoria=categoria, fase=fase, fases=fases,
         categorias_liga=_categorias_liga(db), division=division, divisiones=_divisiones_de_categoria(db, categoria),
     )
 

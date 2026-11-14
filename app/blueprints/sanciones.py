@@ -8,7 +8,8 @@ from config import CATEGORIA_ACTIVA, MOSTRAR_TESORERIA
 from app.database import get_db
 from app.decorators import sanciones_required
 from app.services.liga import _categoria_y_division, _categorias_liga, _divisiones_de_categoria
-from app.services.sanciones import _amarillas_validas_agrupadas, _rojas_pendientes_de_sancion, estado_sancion
+from app.services.estadisticas import _tarjetas_por_jugador
+from app.services.sanciones import _rojas_pendientes_de_sancion, estado_sancion
 from app.utils import _to_float, ahora_ecuador, volver_a
 
 bp = Blueprint("sanciones", __name__)
@@ -70,29 +71,17 @@ def sanciones_acumulacion():
     ).fetchall()
     jugadores_map = {j["id"]: j for j in jugadores}
     
-    todas_validas = _amarillas_validas_agrupadas(db)
-    validas_por_jugador = {jid: tarjetas for jid, tarjetas in todas_validas.items() if jid in jugadores_map}
-    
-    todas_tarjetas = db.execute("SELECT jugador_id, tipo, valor_multa FROM tarjetas").fetchall()
-    rojas_count = {}
-    multas_total = {}
-    for t in todas_tarjetas:
-        if t["jugador_id"] in jugadores_map:
-            multas_total[t["jugador_id"]] = multas_total.get(t["jugador_id"], 0) + (t["valor_multa"] or 0)
-            if t["tipo"] == "roja":
-                rojas_count[t["jugador_id"]] = rojas_count.get(t["jugador_id"], 0) + 1
-
-    jugadores_con_tarjetas = set(validas_por_jugador) | set(rojas_count)
+    # Misma fuente que "Mis Estadísticas" de cada equipo (_tarjetas_por_jugador).
+    conteo = _tarjetas_por_jugador(db, jugadores_map.keys())
     acumulado = []
-    for jid in jugadores_con_tarjetas:
-        j = jugadores_map.get(jid)
-        if not j: continue
-        validas = len(validas_por_jugador.get(jid, []))
-        rojas = rojas_count.get(jid, 0)
+    for jid, c in conteo.items():
+        if not (c["amarillas"] or c["rojas"]):
+            continue
+        j = jugadores_map[jid]
         acumulado.append({
             "nombres": j["nombres"], "apellidos": j["apellidos"], "equipo": j["equipo"],
-            "amarillas_validas": validas, "rojas": rojas, "total": validas + rojas,
-            "multas": multas_total.get(jid, 0),
+            "amarillas_validas": c["amarillas"], "rojas": c["rojas"], "total": c["amarillas"] + c["rojas"],
+            "multas": c["multas"],
         })
     acumulado.sort(key=lambda x: x["total"], reverse=True)
 

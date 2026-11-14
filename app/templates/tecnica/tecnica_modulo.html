@@ -3,18 +3,41 @@
 
 <div class="card" style="text-align:center; background: linear-gradient(135deg, #1e7d32, #14532d); color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
   <h1 style="margin:0; font-size:1.6rem;">⚽ Comisión Técnica</h1>
-  <p style="margin:6px 0 0; opacity:0.95;">Aprobación de resultados, tabla de posiciones y deducción de puntos.</p>
+  <p style="margin:6px 0 0; opacity:0.95;">Aprobación de resultados, fases del campeonato, tablas de posiciones y ajuste de puntos.</p>
 </div>
 
 {% set categoria_endpoint = 'tecnica.tecnica_modulo' %}
 {% include "partials/_categoria_cards.html" %}
 {% include "partials/_division_cards.html" %}
+{% include "partials/_fase_tabs.html" %}
+
+{% if fase.id %}
+<div class="card" style="border-left: 4px solid var(--verde);">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+    <div>
+      <h2 style="margin:0;">{{ fase.icono }} {{ fase.nombre }}</h2>
+      <p style="margin:4px 0 0; font-size:0.85rem; color:#64748b;">
+        {{ equipos|length }} equipos: {% for e in equipos %}{{ e.nombre }}{% if not loop.last %}, {% endif %}{% endfor %}
+      </p>
+    </div>
+    {% if puede_eliminarse %}
+    <form method="post" action="{{ url_for('tecnica.eliminar_fase', fase_id=fase.id) }}" onsubmit="return confirm('¿Eliminar {{ fase.nombre }}? Solo se puede porque aún no tiene jornadas. La Fase Regular no se modifica.');" style="margin:0;">
+      <button type="submit" class="btn-del" style="background:white;">🗑️ Deshacer esta fase</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 
 <div class="card">
-  <h2>Agregar jornada — {{ categoria }}{% if division %} - {{ division }}{% endif %}</h2>
+  <h2>Agregar jornada — {{ categoria }}{% if division %} - {{ division }}{% endif %} · {{ fase.nombre }}</h2>
+  {% if fase.id %}
+  <p style="font-size:0.8rem; color:#888; margin:-6px 0 10px;">La numeración continúa la del campeonato (ej. si la Fase Regular terminó en la jornada 9, la liguilla empieza en la 10) para que las suspensiones y la acumulación de tarjetas sigan su curso.</p>
+  {% endif %}
   <form method="post" action="{{ url_for('tecnica.agregar_jornada') }}">
     <input type="hidden" name="categoria" value="{{ categoria }}">
     <input type="hidden" name="division" value="{{ division }}">
+    <input type="hidden" name="fase" value="{{ fase.clave }}">
     <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:flex-end;">
       <div>
         <label>Número de jornada</label>
@@ -71,7 +94,7 @@
 </div>
 
 <div class="card">
-  <h2>Resultados por jornada</h2>
+  <h2>Resultados por jornada — {{ fase.nombre }}</h2>
   <p style="font-size:0.85rem; color:#64748b; margin-top:-10px; margin-bottom: 20px;">
     La Comisión Técnica aprueba el resultado que registró Vocalía, o en caso de sanción, da la victoria por mesa (2-0).
   </p>
@@ -173,58 +196,61 @@
   {% endfor %}
 </div>
 
-<!-- NUEVA SECCIÓN: DEDUCCIÓN DE PUNTOS -->
-<div class="card" style="border: 2px solid #fca5a5;">
-  <h2 style="color: #b91c1c;">⚖️ Sanciones: Deducción de Puntos</h2>
+<!-- AJUSTE DE PUNTOS (sanción o bonificación), propio de cada fase -->
+<div class="card" style="border: 2px solid #fcd34d;">
+  <h2 style="color: #92400e;">⚖️ Ajuste de Puntos — {{ fase.nombre }}</h2>
   <p style="font-size:0.85rem; color:#64748b; margin-top:-6px;">
-    Aplica pérdida de puntos directos en la tabla de posiciones por dictamen de la Comisión de Penas.
+    Usa un valor <strong style="color:#b91c1c;">negativo</strong> para restar puntos (sanción de la Comisión de Penas) o
+    <strong style="color:#15803d;">positivo</strong> para sumar (bonificación, ej. puntos obtenidos en la fase previa al entrar a una liguilla).
+    El ajuste solo afecta la tabla de esta fase.
   </p>
-  
-  <form method="post" action="{{ url_for('tecnica.tecnica_restar_puntos') }}" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; background: #fef2f2; padding: 15px; border-radius: 8px;">
+
+  <form method="post" action="{{ url_for('tecnica.tecnica_ajuste_puntos') }}" style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end; background: #fffbeb; padding: 15px; border-radius: 8px;">
     <input type="hidden" name="categoria" value="{{ categoria }}">
     <input type="hidden" name="division" value="{{ division }}">
-    
+    <input type="hidden" name="fase" value="{{ fase.clave }}">
+
     <div>
-      <label style="margin-top: 0; color: #7f1d1d;">Equipo a sancionar</label>
+      <label style="margin-top: 0; color: #78350f;">Equipo</label>
       <select name="equipo" required style="width: 200px;">
         <option value="">Selecciona equipo...</option>
         {% for e in equipos %}<option value="{{ e.nombre }}">{{ e.nombre }}</option>{% endfor %}
       </select>
     </div>
-    
+
     <div>
-      <label style="margin-top: 0; color: #7f1d1d;">Puntos a restar</label>
-      <input type="number" name="puntos" min="1" placeholder="Ej: 3" required style="width: 100px;">
+      <label style="margin-top: 0; color: #78350f;">Ajuste (±)</label>
+      <input type="number" name="puntos" step="1" placeholder="Ej: -3 ó 2" required style="width: 110px;">
     </div>
-    
+
     <div style="flex: 1; min-width: 250px;">
-      <label style="margin-top: 0; color: #7f1d1d;">Motivo / Dictamen Oficial</label>
-      <input type="text" name="motivo" placeholder="Ej: Multa económica no pagada, agresión a árbitro..." required>
+      <label style="margin-top: 0; color: #78350f;">Motivo / Dictamen Oficial</label>
+      <input type="text" name="motivo" placeholder="Ej: Agresión a árbitro (-3) · Bonificación por 1.er lugar (+2)" required>
     </div>
-    
-    <button type="submit" style="margin: 0; background: #b91c1c; font-weight: bold;">Restar Puntos</button>
+
+    <button type="submit" style="margin: 0; background: #b45309; font-weight: bold;">Aplicar ajuste</button>
   </form>
 
-  {% if sanciones_puntos %}
+  {% if ajustes_puntos %}
   <table class="tabla-responsive" style="margin-top: 15px; width: 100%; border-collapse: collapse;">
     <thead>
-      <tr style="background: #fef2f2;">
+      <tr style="background: #fffbeb;">
         <th style="padding: 8px;">Fecha</th>
         <th style="padding: 8px;">Equipo</th>
-        <th style="padding: 8px; text-align: center;">Pts Restados</th>
+        <th style="padding: 8px; text-align: center;">Ajuste</th>
         <th style="padding: 8px;">Motivo</th>
         <th style="padding: 8px;">Acción</th>
       </tr>
     </thead>
     <tbody>
-      {% for s in sanciones_puntos %}
-      <tr style="border-bottom: 1px solid #fee2e2;">
+      {% for s in ajustes_puntos %}
+      <tr style="border-bottom: 1px solid #fef3c7;">
         <td data-label="Fecha" style="padding: 8px; font-size: 0.85rem; color: #64748b;">{{ s.fecha.split(' ')[0] }}</td>
-        <td data-label="Equipo" style="padding: 8px; font-weight: bold; color: #7f1d1d;">{{ s.equipo }}</td>
-        <td data-label="Pts Restados" style="padding: 8px; text-align: center; font-weight: bold; color: #b91c1c;">-{{ s.puntos_descontar }}</td>
+        <td data-label="Equipo" style="padding: 8px; font-weight: bold;">{{ s.equipo }}</td>
+        <td data-label="Ajuste" style="padding: 8px; text-align: center; font-weight: bold; color: {{ '#b91c1c' if s.ajuste < 0 else '#15803d' }};">{{ '%+d' % s.ajuste }}</td>
         <td data-label="Motivo" style="padding: 8px; font-size: 0.9rem;">{{ s.motivo }}</td>
         <td data-label="Acción" style="padding: 8px;">
-          <form method="post" action="{{ url_for('tecnica.tecnica_eliminar_resta_puntos', sancion_id=s.id) }}" onsubmit="return confirm('¿Eliminar esta penalización? Los puntos regresarán al equipo.');" style="margin:0;">
+          <form method="post" action="{{ url_for('tecnica.tecnica_eliminar_ajuste_puntos', ajuste_id=s.id) }}" onsubmit="return confirm('¿Eliminar este ajuste? La tabla de {{ fase.nombre }} se recalculará.');" style="margin:0;">
             <button type="submit" class="btn-del" style="padding:4px 8px; font-size:0.8rem; background: white;">Deshacer</button>
           </form>
         </td>
@@ -236,7 +262,7 @@
 </div>
 
 <div class="card">
-  <h2>Tabla de posiciones</h2>
+  <h2>Tabla de posiciones — {{ fase.nombre }}</h2>
   <div style="overflow-x:auto;">
   <table class="tabla-responsive">
     <thead>
@@ -252,8 +278,10 @@
       <tr>
         <td class="col-sec col-num">{{ loop.index }}</td>
         <td><span class="solo-movil">{{ loop.index }}. </span><strong>{{ f.equipo }}</strong>
-          {% if f.pts_sancion > 0 %}
-            <span style="display: block; font-size: 0.75rem; color: #ef4444; font-weight: bold;">(Sanción: -{{ f.pts_sancion }} pts)</span>
+          {% if f.pts_ajuste < 0 %}
+            <span style="display: block; font-size: 0.75rem; color: #ef4444; font-weight: bold;">(Ajuste: {{ f.pts_ajuste }} pts)</span>
+          {% elif f.pts_ajuste > 0 %}
+            <span style="display: block; font-size: 0.75rem; color: #15803d; font-weight: bold;">(Bonificación: +{{ f.pts_ajuste }} pts)</span>
           {% endif %}</td>
         <td class="col-num">{{ f.pj }}</td>
         <td class="col-sec col-num">{{ f.g }}</td>
@@ -268,14 +296,59 @@
     </tbody>
   </table>
   </div>
-  <p style="font-size:0.8rem; color:#888; margin-top:8px;">Calculada automáticamente (3 pts por victoria, 1 por empate). Los triunfos por mesa otorgan 3 puntos y un marcador de 2-0.</p>
+  <p style="font-size:0.8rem; color:#888; margin-top:8px;">Calculada automáticamente (3 pts por victoria, 1 por empate) solo con los partidos y ajustes de {{ fase.nombre }}. Los triunfos por mesa otorgan 3 puntos y un marcador de 2-0.</p>
 </div>
+
+{% if destinos %}
+<div class="card" style="border: 2px solid #86efac;">
+  <h2 style="color:#14532d;">🏁 Generar siguiente fase desde {{ fase.nombre }}</h2>
+  <p style="font-size:0.85rem; color:#64748b; margin-top:-6px;">
+    Se propone la clasificación según los parámetros del campeonato
+    {% if fase.tipo == 'regular' %}
+      ({% if config.cupos_liguilla_final is not none %}{{ config.cupos_liguilla_final }} a Liguilla Final{% else %}sin cupos configurados{% endif %}{% if config.tiene_liguilla_descenso %}, {{ config.cupos_liguilla_descenso if config.cupos_liguilla_descenso is not none else 'el resto' }} a Liguilla de No Descenso{% endif %})
+    {% else %}
+      ({% if config.cupos_finales is not none %}{{ config.cupos_finales }} a Finales{% else %}sin cupos configurados{% endif %})
+    {% endif %}.
+    Confirma o corrige el destino de cada equipo. La tabla y los partidos de {{ fase.nombre }} <strong>no se modifican</strong>;
+    cada fase nueva arranca su tabla desde cero y goles y tarjetas siguen acumulándose.
+    {% if session.get('rol') == 'admin' %}Los cupos se configuran en <a href="{{ url_for('categorias.categorias_modulo') }}">Gestionar Campeonatos</a>.{% endif %}
+  </p>
+  <form method="post" action="{{ url_for('tecnica.generar_fase') }}" onsubmit="return confirm('¿Generar la(s) nueva(s) fase(s) con esta clasificación?');">
+    <input type="hidden" name="categoria" value="{{ categoria }}">
+    <input type="hidden" name="division" value="{{ division }}">
+    <input type="hidden" name="fase" value="{{ fase.clave }}">
+    <div class="tabla-scroll">
+    <table class="tabla-responsive" data-search="off" data-sort="off">
+      <thead><tr><th class="col-num">#</th><th>Equipo</th><th class="col-num">PTS</th><th>Pasa a</th></tr></thead>
+      <tbody>
+        {% for f in tabla %}
+        <tr>
+          <td class="col-num">{{ loop.index }}</td>
+          <td><strong>{{ f.equipo }}</strong><input type="hidden" name="equipo" value="{{ f.equipo }}"></td>
+          <td class="col-num">{{ f.pts }}</td>
+          <td>
+            <select name="destino" style="min-width:190px; margin:0;">
+              <option value="">— Eliminado / sin participación —</option>
+              {% for clave, nombre in destinos %}
+              <option value="{{ clave }}" {% if propuesta.get(f.equipo) == clave %}selected{% endif %}>{{ nombre }}</option>
+              {% endfor %}
+            </select>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <button type="submit" style="background:#14532d; font-weight:bold;">🏁 Generar fase(s)</button>
+  </form>
+</div>
+{% endif %}
 
 <!-- (Aquí mantienes intacta la tabla de goleadores que ya tenías) -->
 <div class="card">
   <h2>Goleadores</h2>
   <p style="font-size:0.8rem; color:#888; margin-top:-6px;">
-    Se calcula solo a partir de los goles registrados en las hojas de Vocalía de cada partido.
+    Se calcula solo a partir de los goles registrados en las hojas de Vocalía de cada partido y se acumula en todas las fases del campeonato.
   </p>
   {% if not goleadores %}
     <p style="color:#888;">Todavía no hay goles registrados.</p>
