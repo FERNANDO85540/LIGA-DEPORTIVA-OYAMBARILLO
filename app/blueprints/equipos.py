@@ -238,11 +238,11 @@ def estadisticas_equipo(equipo_id):
     totales = {k: sum(f[k] for f in filas) for k in ("goles", "amarillas", "rojas")}
     # Partidos del equipo con hoja de Vocalía (no la suma de participaciones).
     totales["partidos"] = db.execute(
-        """SELECT COUNT(DISTINCT va.partido_id) FROM vocalia_asistencia va
+        """SELECT COUNT(DISTINCT va.partido_id) AS partidos FROM vocalia_asistencia va
            JOIN jugadores j ON j.id = va.jugador_id
            WHERE va.participo = 1 AND j.equipo = ? AND j.categoria = ?""",
         (equipo["nombre"], equipo["categoria"]),
-    ).fetchone()[0]
+    ).fetchone()["partidos"]
     return render_template("equipos/estadisticas_equipo.html", equipo=equipo, filas=filas, totales=totales)
 
 

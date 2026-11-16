@@ -5,7 +5,7 @@ import sqlite3
 
 from app.services.estadisticas import _calcular_goleadores, _calcular_tabla_posiciones
 from app.services.fases import fase_seleccionada
-from tests.conftest import DATA_DIR, login, login_admin
+from tests.conftest import DATA_DIR, insertar, login, login_admin, solo_sqlite
 
 def _texto(respuesta):
     """HTML con los mensajes flash legibles (base.html los escapa con tojson)."""
@@ -25,22 +25,22 @@ def _torneo(db, equipos=EQUIPOS, categoria="Senior", division="Máxima"):
     jugadores = {}
     for i, nombre in enumerate(equipos):
         db.execute("INSERT INTO equipos (nombre, categoria, division) VALUES (?, ?, ?)", (nombre, categoria, division))
-        jugadores[nombre] = db.execute(
+        jugadores[nombre] = insertar(db, 
             "INSERT INTO jugadores (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, division, "
             "numero_camiseta, fecha_registro) VALUES (?, 'N', ?, '1975-01-01', ?, ?, ?, ?, '2026-01-01 10:00')",
             (f"17{i:08d}", nombre, nombre, categoria, division, str(i + 1)),
-        ).lastrowid
+        )
     numero = 0
     for i in range(len(equipos)):
         for j in range(i + 1, len(equipos)):
             numero += 1
-            jornada = db.execute(
+            jornada = insertar(db, 
                 "INSERT INTO jornadas (numero, categoria, division) VALUES (?, ?, ?)", (numero, categoria, division)
-            ).lastrowid
-            partido = db.execute(
+            )
+            partido = insertar(db, 
                 "INSERT INTO partidos (jornada_id, equipo_local, equipo_visitante, jugado) VALUES (?, ?, ?, 1)",
                 (jornada, equipos[i], equipos[j]),
-            ).lastrowid
+            )
             db.execute("INSERT INTO goles (jugador_id, partido_id, cantidad, fecha) VALUES (?, ?, 1, '2026-01-01')",
                        (jugadores[equipos[i]], partido))
     db.commit()
@@ -147,8 +147,8 @@ def test_sub45_liguilla_de_4_y_finales_desde_la_liguilla(db, client):
 
     html = client.get(f"/tecnica?categoria=Sub 45&fase={final_id}").get_data(as_text=True)
     assert "Generar siguiente fase" not in html  # todavía no se jugó nada en la liguilla
-    jornada = db.execute("INSERT INTO jornadas (numero, categoria, division, fase_id) VALUES (99, 'Sub 45', '', ?)",
-                         (final_id,)).lastrowid
+    jornada = insertar(db, "INSERT INTO jornadas (numero, categoria, division, fase_id) VALUES (99, 'Sub 45', '', ?)",
+                         (final_id,))
     db.execute("INSERT INTO partidos (jornada_id, equipo_local, equipo_visitante, jugado) VALUES (?, 'A1', 'A2', 1)",
                (jornada,))
     db.commit()
@@ -190,6 +190,7 @@ def test_ajuste_de_puntos_por_fase_positivo_y_negativo(db, client):
     assert "Bonificación: +2 pts" in html and "Ajuste de Puntos" in html
 
 
+@solo_sqlite
 def test_migracion_deduccion_vieja_pasa_a_ajuste_negativo(app):
     ruta = os.path.join(DATA_DIR, "liga.db")
     conn = sqlite3.connect(ruta)
@@ -313,7 +314,8 @@ def test_reemplazo_permite_cambiar_cedula_y_vuelve_a_pendiente(db, client):
     assert "Reemplazo registrado" in html
     fila = db.execute("SELECT cedula, nombres, calificado, reemplazo_solicitado, carnet_impreso FROM jugadores "
                       "WHERE id = ?", (jugador,)).fetchone()
-    assert tuple(fila) == ("1799999999", "PEDRO", 0, 0, 0)
+    columnas = ("cedula", "nombres", "calificado", "reemplazo_solicitado", "carnet_impreso")
+    assert tuple(fila[c] for c in columnas) == ("1799999999", "PEDRO", 0, 0, 0)
 
 
 def test_calificacion_puede_abrir_la_ficha(db, client):
@@ -322,6 +324,7 @@ def test_calificacion_puede_abrir_la_ficha(db, client):
     assert client.get(f"/jugador/{jugador}").status_code == 200
 
 
+@solo_sqlite
 def test_migracion_carga_cupos_iniciales_sin_pisar_los_manuales(app):
     ruta = os.path.join(DATA_DIR, "liga.db")
     conn = sqlite3.connect(ruta)
