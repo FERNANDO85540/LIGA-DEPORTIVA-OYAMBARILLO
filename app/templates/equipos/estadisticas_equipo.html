@@ -10,6 +10,7 @@
 
 <div class="card">
   <div style="display:flex; gap:18px; flex-wrap:wrap; font-size:0.95rem; color:#4b5563; margin-bottom:6px;">
+    <span>🏟️ Partidos jugados: <strong style="color:#1d4ed8;">{{ totales.partidos }}</strong></span>
     <span>⚽ Goles: <strong style="color:#14532d;">{{ totales.goles }}</strong></span>
     <span>🟨 Amarillas: <strong style="color:#b45309;">{{ totales.amarillas }}</strong></span>
     <span>🟥 Rojas: <strong style="color:#b91c1c;">{{ totales.rojas }}</strong></span>
@@ -17,7 +18,8 @@
   <p style="font-size:0.8rem; color:#888; margin:0 0 8px;">
     Acumulado de todo el campeonato (todas las fases). Los datos salen de las hojas de Vocalía, igual que la tabla
     pública de Goleadores y la Acumulación de Tarjetas de la Comisión de Penas. Las dos amarillas de una expulsión
-    por doble amarilla no se cuentan como amarillas (se cuenta la roja).
+    por doble amarilla no se cuentan como amarillas (se cuenta la roja). <strong>PJ</strong> = partidos jugados:
+    partidos en los que el jugador fue marcado como "Participó" en la hoja de Vocalía (o anotó gol).
   </p>
   {% if not filas %}
     <p style="color:#888;">Este equipo todavía no tiene jugadores inscritos.</p>
@@ -27,6 +29,7 @@
     <thead>
       <tr>
         <th class="col-num">N°</th><th>Jugador</th>
+        <th class="col-num" title="Partidos jugados (participaciones)">🏟️ PJ</th>
         <th class="col-num">⚽ Goles</th><th class="col-num">🟨 TA</th><th class="col-num">🟥 TR</th>
       </tr>
     </thead>
@@ -35,6 +38,7 @@
       <tr>
         <td class="col-num">{{ f.numero_camiseta }}</td>
         <td><strong>{{ f.apellidos }} {{ f.nombres }}</strong></td>
+        <td class="col-num" style="color:#1d4ed8; font-weight:600;" data-pj>{{ f.partidos }}</td>
         <td class="col-num"><strong>{{ f.goles }}</strong></td>
         <td class="col-num" style="color:#b45309; font-weight:600;">{{ f.amarillas }}</td>
         <td class="col-num" style="color:#b91c1c; font-weight:600;">{{ f.rojas }}</td>
