@@ -133,6 +133,34 @@ def _calcular_goleadores(db, categoria=CATEGORIA_ACTIVA, division="", limite=10)
     return filas[:limite] if limite else filas
 
 
+def _partidos_jugados_por_jugador(db, jugador_ids):
+    """Partidos jugados (participaciones) acumulados en todas las fases por
+    jugador. Cuenta cada partido una sola vez si el jugador fue marcado como
+    "Participó" en la hoja de Vocalía o tiene goles registrados en él (mismo
+    criterio que `_jugadores_que_ya_jugaron`).
+
+    Devuelve {jugador_id: n}."""
+    ids = [int(i) for i in jugador_ids]
+    resultado = {jid: 0 for jid in ids}
+    if not ids:
+        return resultado
+    marcas = ",".join("?" * len(ids))
+    filas = db.execute(
+        f"""SELECT jugador_id, COUNT(*) AS partidos FROM (
+                SELECT jugador_id, partido_id FROM vocalia_asistencia
+                 WHERE participo = 1 AND partido_id IS NOT NULL AND jugador_id IN ({marcas})
+                UNION
+                SELECT jugador_id, partido_id FROM goles
+                 WHERE partido_id IS NOT NULL AND jugador_id IN ({marcas})
+            ) participaciones
+            GROUP BY jugador_id""",
+        (*ids, *ids),
+    ).fetchall()
+    for f in filas:
+        resultado[f["jugador_id"]] = f["partidos"]
+    return resultado
+
+
 def _tarjetas_por_jugador(db, jugador_ids):
     """Tarjetas acumuladas (todas las fases) por jugador, con las mismas reglas
     del módulo de Acumulación de Tarjetas de Penas: las dos amarillas de una

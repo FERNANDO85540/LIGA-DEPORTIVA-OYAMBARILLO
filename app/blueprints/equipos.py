@@ -6,7 +6,7 @@ from app.database import IntegrityError, get_db
 from app.decorators import admin_required, equipo_permitido, login_required
 from app.services.alineaciones import FORMACIONES, _formacion_valida, _guardar_alineacion, _obtener_alineacion
 from app.services.equipos import _renombrar_equipo_cascada
-from app.services.estadisticas import _goles_por_jugador, _tarjetas_por_jugador
+from app.services.estadisticas import _goles_por_jugador, _partidos_jugados_por_jugador, _tarjetas_por_jugador
 from app.services.exportacion import _exportar_jugadores_excel
 from app.services.jugadores import (
     _guardar_imagen_subida, _insertar_jugador, _jugadores_que_ya_jugaron, _ordenar_por_numero_camiseta,
@@ -226,15 +226,23 @@ def estadisticas_equipo(equipo_id):
         for f in _goles_por_jugador(db, equipo["categoria"], equipo["division"], equipo=equipo["nombre"])
     }
     tarjetas = _tarjetas_por_jugador(db, [j["id"] for j in jugadores])
+    partidos = _partidos_jugados_por_jugador(db, [j["id"] for j in jugadores])
     filas = [
         {
             "numero_camiseta": j["numero_camiseta"] or "-", "apellidos": j["apellidos"], "nombres": j["nombres"],
-            "goles": goles.get(j["id"], 0), "amarillas": tarjetas[j["id"]]["amarillas"],
+            "partidos": partidos[j["id"]], "goles": goles.get(j["id"], 0), "amarillas": tarjetas[j["id"]]["amarillas"],
             "rojas": tarjetas[j["id"]]["rojas"],
         }
         for j in jugadores
     ]
     totales = {k: sum(f[k] for f in filas) for k in ("goles", "amarillas", "rojas")}
+    # Partidos del equipo con hoja de Vocalía (no la suma de participaciones).
+    totales["partidos"] = db.execute(
+        """SELECT COUNT(DISTINCT va.partido_id) FROM vocalia_asistencia va
+           JOIN jugadores j ON j.id = va.jugador_id
+           WHERE va.participo = 1 AND j.equipo = ? AND j.categoria = ?""",
+        (equipo["nombre"], equipo["categoria"]),
+    ).fetchone()[0]
     return render_template("equipos/estadisticas_equipo.html", equipo=equipo, filas=filas, totales=totales)
 
 

@@ -348,3 +348,27 @@ def test_migracion_carga_cupos_iniciales_sin_pisar_los_manuales(app):
         ("Senior", "Primera"): (8, 0, None, None),
         ("Sub 45", ""): (4, 0, None, None),
     }
+
+
+def test_mis_estadisticas_muestran_partidos_jugados(db, client):
+    from app.services.estadisticas import _partidos_jugados_por_jugador
+
+    jugadores, _ = _torneo(db, ["ALFA", "BETA"], categoria="Sub 45", division="")
+    alfa = db.execute("SELECT id FROM equipos WHERE nombre = 'ALFA'").fetchone()["id"]
+    db.execute("UPDATE equipos SET usuario = 'alfa', clave = '1234' WHERE id = ?", (alfa,))
+    jid = jugadores["ALFA"]
+    # Participó en 300 y 301 (301 repetido), no participó en 302, y anotó en 303 sin marca de asistencia.
+    for partido, participo in ((300, 1), (301, 1), (301, 1), (302, 0)):
+        db.execute("INSERT INTO vocalia_asistencia (partido_id, jugador_id, participo) VALUES (?, ?, ?)",
+                   (partido, jid, participo))
+    db.execute("INSERT INTO goles (jugador_id, partido_id, cantidad, fecha) VALUES (?, 300, 1, '2026')", (jid,))
+    db.execute("INSERT INTO goles (jugador_id, partido_id, cantidad, fecha) VALUES (?, 303, 1, '2026')", (jid,))
+    db.commit()
+
+    pj = _partidos_jugados_por_jugador(db, [jid, jugadores["BETA"]])
+    assert pj[jid] == 4  # 300, 301, 303 + el partido del gol que crea _torneo
+
+    login(client, "alfa", "1234")
+    html = client.get(f"/equipo/{alfa}/estadisticas").get_data(as_text=True)
+    assert "PJ" in html and "Partidos jugados" in html
+    assert 'data-pj>4</td>' in html
