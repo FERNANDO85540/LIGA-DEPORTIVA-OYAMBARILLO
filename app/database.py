@@ -89,7 +89,7 @@ class CursorWrapper:
     def lastrowid(self):
         if USANDO_POSTGRES:
             try:
-                return self.cur.fetchone()[0]
+                return self.cur.fetchone()["id"]
             except Exception:
                 return None
         return self.cur.lastrowid

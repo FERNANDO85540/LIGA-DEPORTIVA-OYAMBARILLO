@@ -1,5 +1,5 @@
 from app.services.sanciones import _generar_sanciones_por_acumulacion, _jugador_suspendido, estado_sancion
-from tests.conftest import login, login_admin
+from tests.conftest import insertar, login, login_admin
 
 
 def _liga(db, jornadas=4, descansa_beta_en=None):
@@ -9,34 +9,34 @@ def _liga(db, jornadas=4, descansa_beta_en=None):
         db.execute("INSERT INTO equipos (nombre, categoria, division) VALUES (?, 'Sub 45', '')", (nombre,))
     ids = {}
     for equipo, cedula in (("ALFA", "1000000001"), ("BETA", "1000000002")):
-        cur = db.execute(
+        ids[equipo] = insertar(
+            db,
             "INSERT INTO jugadores (cedula, nombres, apellidos, fecha_nacimiento, equipo, categoria, division, "
             "numero_camiseta, fecha_registro) VALUES (?, 'N', ?, '1975-01-01', ?, 'Sub 45', '', '1', '2026-01-01 10:00')",
             (cedula, equipo, equipo),
         )
-        ids[equipo] = cur.lastrowid
     partidos = {}
     for n in range(1, jornadas + 1):
-        jornada_id = db.execute(
+        jornada_id = insertar(db, 
             "INSERT INTO jornadas (numero, categoria, division) VALUES (?, 'Sub 45', '')", (n,)
-        ).lastrowid
+        )
         if n == descansa_beta_en:
             db.execute("INSERT INTO descansos (jornada_id, equipo) VALUES (?, 'BETA')", (jornada_id,))
             continue
-        partidos[n] = db.execute(
+        partidos[n] = insertar(db, 
             "INSERT INTO partidos (jornada_id, equipo_local, equipo_visitante, fecha) VALUES (?, 'ALFA', 'BETA', ?)",
             (jornada_id, f"2026-09-0{n}"),
-        ).lastrowid
+        )
     db.commit()
     return ids, partidos
 
 
 def _sancionar(db, jugador_id, partidos, desde_jornada, origen="manual"):
-    sid = db.execute(
+    sid = insertar(db, 
         "INSERT INTO sanciones (jugador_id, motivo, jornadas_sancionado, jornada_desde_numero, categoria, division, "
         "fecha, origen) VALUES (?, 'Agresión', ?, ?, 'Sub 45', '', '2026-09-01 10:00', ?)",
         (jugador_id, partidos, desde_jornada, origen),
-    ).lastrowid
+    )
     db.commit()
     return db.execute("SELECT * FROM sanciones WHERE id = ?", (sid,)).fetchone()
 

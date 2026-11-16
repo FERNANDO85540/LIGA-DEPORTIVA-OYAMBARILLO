@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 
 from app.utils import ahora_ecuador, nombre_corto
-from tests.conftest import DATA_DIR, login, login_admin
+from tests.conftest import DATA_DIR, login, login_admin, solo_sqlite
 
 
 def _equipo(db, nombre, categoria="Sub 45", division=""):
@@ -51,7 +51,7 @@ def test_dorsal_unico_por_equipo(db, client):
 
     jugador = db.execute("SELECT id FROM jugadores WHERE cedula = '1700000003'").fetchone()["id"]
     client.post(f"/jugador/{jugador}/actualizar", data={"nombres": "Juan", "numero_camiseta": "7"})
-    assert db.execute("SELECT numero_camiseta FROM jugadores WHERE id = ?", (jugador,)).fetchone()[0] == "8"
+    assert db.execute("SELECT numero_camiseta FROM jugadores WHERE id = ?", (jugador,)).fetchone()["numero_camiseta"] == "8"
 
 
 def _jugador_calificado(db, client):
@@ -72,7 +72,7 @@ def test_solicitud_de_reemplazo(db, client):
     assert "Solicitud de reemplazo" in client.get(f"/equipo/{alfa}").get_data(as_text=True)
     html = client.post(f"/jugador/{jugador}/solicitar_reemplazo", follow_redirects=True).get_data(as_text=True)
     assert "Su solicitud ha sido enviada" in html
-    assert db.execute("SELECT reemplazo_solicitado FROM jugadores").fetchone()[0] == 1
+    assert db.execute("SELECT reemplazo_solicitado FROM jugadores").fetchone()["reemplazo_solicitado"] == 1
 
 
 def test_reemplazo_bloqueado_si_ya_jugo(db, client):
@@ -82,14 +82,14 @@ def test_reemplazo_bloqueado_si_ya_jugo(db, client):
     assert "Ya jugó" in client.get(f"/equipo/{alfa}").get_data(as_text=True)
     html = client.post(f"/jugador/{jugador}/solicitar_reemplazo", follow_redirects=True).get_data(as_text=True)
     assert "ya disput" in html
-    assert db.execute("SELECT reemplazo_solicitado FROM jugadores").fetchone()[0] == 0
+    assert db.execute("SELECT reemplazo_solicitado FROM jugadores").fetchone()["reemplazo_solicitado"] == 0
 
 
 def test_fecha_de_inscripcion_en_hora_de_ecuador(db, client):
     login_admin(client)
     alfa = _equipo(db, "ALFA")
     _inscribir(client, alfa, "1700000001")
-    guardada = datetime.strptime(db.execute("SELECT fecha_registro FROM jugadores").fetchone()[0], "%Y-%m-%d %H:%M")
+    guardada = datetime.strptime(db.execute("SELECT fecha_registro FROM jugadores").fetchone()["fecha_registro"], "%Y-%m-%d %H:%M")
     quito = datetime.now(timezone(timedelta(hours=-5))).replace(tzinfo=None)
     assert abs((guardada - quito).total_seconds()) < 120
     assert guardada.strftime("%d/%m/%Y %H:%M") in client.get(f"/equipo/{alfa}").get_data(as_text=True)
@@ -108,6 +108,7 @@ def test_nombre_corto():
     assert nombre_corto("PÉREZ GÓMEZ", "JUAN CARLOS") == "PÉREZ J."
 
 
+@solo_sqlite
 def test_migracion_desde_esquema_viejo(app):
     """Base con el esquema anterior (cédula UNIQUE global): se respalda, se migra
     y luego permite la misma cédula en otro campeonato."""
